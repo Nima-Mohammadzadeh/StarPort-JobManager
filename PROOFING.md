@@ -17,9 +17,10 @@ top: **Jobs & proofs**, **Proof**, **Queue** and **Settings**.
 
 ## Jobs & proofs
 
-The first tab lists Job Manager's jobs with each one's proof state. **Needs a proof** (the default)
-shows jobs with no proof, a proof that isn't approved yet, or an approved proof the job has since
-changed; **All jobs** shows everything. Search by customer, ticket, part #, PO or UPC.
+The first tab lists Job Manager's open jobs (not archived or cancelled) with each one's proof state.
+**Needs a proof** (the default) shows jobs with no proof, a proof that isn't approved yet, or an
+approved proof the job has since changed; **All open jobs** shows them all. Search by ticket, job #,
+customer, item or UPC.
 **Start proof** creates the proof from the job; **Open proof** opens the existing one.
 
 ## Sync with the job
