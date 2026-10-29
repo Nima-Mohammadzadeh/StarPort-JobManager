@@ -35,6 +35,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_qc_sheet, qc_html, _safe_name)
 import serial_store as SS
+import backup
 from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
@@ -142,6 +143,7 @@ def init_db():
     add_col("job_rolls", "started_by", "started_by TEXT")
     add_col("job_rolls", "paused_at", "paused_at TEXT")
     add_col("job_rolls", "paused_by", "paused_by TEXT")
+    add_col("job_rolls", "printer", "printer TEXT")
     add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
@@ -165,6 +167,19 @@ def init_db():
     print(f"  [DB]   ready → {DB_PATH}")
 
 
+DEFAULT_PRINTERS = "Printer 1\nPrinter 2\nPrinter 3\nPrinter 4"
+
+
+def clean_printers(raw) -> str:
+    """One printer name per line (commas also split), trimmed, no repeats, at most 24 names."""
+    seen, out = set(), []
+    for part in re.split(r"[\n,;]+", str(raw or "")):
+        name = " ".join(part.split())[:30]
+        if name and name.lower() not in seen:
+            seen.add(name.lower()); out.append(name)
+    return "\n".join(out[:24])
+
+
 def get_setting(key, default=""):
     conn = get_db()
     row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
@@ -180,10 +195,11 @@ def get_settings() -> dict:
         "btw_template_dir":      s.get("btw_template_dir") or DEFAULT_TEMPLATE_DIR,
         "default_overage_pct":   s.get("default_overage_pct", "0"),
         "backup_dir":            s.get("backup_dir", ""),
-        "backup_interval_hours": int(s.get("backup_interval_hours", "12") or 12),
+        "backup_interval_hours": int(s.get("backup_interval_hours", "6") or 6),
         "backup_auto":           s.get("backup_auto", "1") == "1",
         "backup_keep":           int(s.get("backup_keep", "60") or 60),
         "rewind_base_url":       s.get("rewind_base_url", ""),
+        "printers":              s.get("printers", DEFAULT_PRINTERS),
     }
 
 
@@ -778,6 +794,65 @@ def api_roll_update(job_id, roll_number):
                       (data.get("note") or "").strip()[:2000])
 
 
+@app.route("/api/jobs/<int:job_id>/rolls/<int:roll_number>/printer", methods=["POST"])
+def api_roll_printer(job_id, roll_number):
+    """Put a roll on a printer (or take it off). Assigning a roll that hasn't started also starts it,
+    so an encoder only has to say which printer they are loading it on."""
+    data = request.get_json(silent=True) or {}
+    printer = " ".join(str(data.get("printer") or "").split())[:30]
+    who = (data.get("operator") or "").strip()[:40] or actor()
+    conn = get_db()
+    job = _load_job(conn, job_id)
+    if not job:
+        conn.close(); return err("Job not found", 404)
+    ensure_rolls(conn, job)
+    row = conn.execute("SELECT status, printer FROM job_rolls WHERE job_id=? AND roll_number=?",
+                       (job_id, roll_number)).fetchone()
+    if not row:
+        conn.close(); return err("Roll not found", 404)
+    if row["status"] in ("complete", "verified"):
+        conn.close(); return err("This roll is done. Reopen it before changing its printer.", 400)
+    ts = now_str()
+    if printer:
+        if row["status"] == "pending":
+            conn.execute("""UPDATE job_rolls SET printer=?, status='running', started_at=?, started_by=?
+                            WHERE job_id=? AND roll_number=?""", (printer, ts, who, job_id, roll_number))
+            if job["status"] == "Pending":
+                conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+        else:
+            conn.execute("UPDATE job_rolls SET printer=? WHERE job_id=? AND roll_number=?",
+                         (printer, job_id, roll_number))
+        msg = f"{job_label(job)}: roll {roll_number} on {printer}"
+    else:
+        conn.execute("UPDATE job_rolls SET printer=NULL WHERE job_id=? AND roll_number=?", (job_id, roll_number))
+        msg = f"{job_label(job)}: roll {roll_number} taken off {row['printer'] or 'its printer'}"
+    conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
+    log_activity(conn, "roll_start", job_id, msg + _roll_progress(conn, job_id), who)
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "printer": printer or None})
+
+
+@app.route("/api/printers")
+def api_printers():
+    """The configured printers and what each one is running right now (for the printer board)."""
+    names = [n for n in get_settings()["printers"].split("\n") if n.strip()]
+    conn = get_db()
+    busy = [dict(r) for r in conn.execute("""
+        SELECT r.printer, r.job_id, r.roll_number, r.quantity, r.status, r.started_by, r.started_at,
+               j.customer, j.job_ticket, j.job_number, j.qty_db, j.upc,
+               (SELECT COALESCE(SUM(x.quantity), 0) FROM job_rolls x
+                 WHERE x.job_id = r.job_id AND x.roll_number < r.roll_number) AS rec_before,
+               (SELECT COALESCE(SUM(x.quantity), 0) FROM job_rolls x WHERE x.job_id = r.job_id) AS job_total
+        FROM job_rolls r JOIN jobs j ON j.id = r.job_id
+        WHERE r.printer IS NOT NULL AND r.printer != '' AND r.status IN ('running', 'paused')
+          AND j.archived_at IS NULL
+        ORDER BY r.started_at""")]
+    conn.close()
+    known = {n.lower() for n in names}
+    extra = sorted({b["printer"] for b in busy if b["printer"].lower() not in known})
+    return jsonify({"printers": names + extra, "busy": busy})
+
+
 @app.route("/api/jobs/<int:job_id>/rolls/bulk", methods=["POST"])
 def api_rolls_bulk(job_id):
     """Set any selection of rolls to pending / running / complete in one go."""
@@ -844,7 +919,7 @@ def _set_rolls(job_id, nums, status, who, note=""):
             words.append("paused")
         else:
             conn.execute("""UPDATE job_rolls SET status='pending', started_at=NULL, started_by=NULL,
-                paused_at=NULL, paused_by=NULL, completed_at=NULL, completed_by=NULL
+                paused_at=NULL, paused_by=NULL, completed_at=NULL, completed_by=NULL, printer=NULL
                 WHERE job_id=? AND roll_number=?""", (job_id, n))
             words.append("reset to not started")
         changed.append(n)
@@ -954,7 +1029,7 @@ def api_floor():
         SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.due_date,
                j.label_size, j.inlay_type, j.upc, j.created_at, j.notes, {ROLL_SUMMARY},
                (SELECT MIN(roll_number) FROM job_rolls r WHERE r.job_id=j.id AND r.status='pending') AS next_roll,
-               (SELECT GROUP_CONCAT(roll_number || ':' || COALESCE(started_by, ''), ',') FROM job_rolls r
+               (SELECT GROUP_CONCAT(roll_number || ':' || COALESCE(started_by, '') || ':' || COALESCE(printer, ''), ',') FROM job_rolls r
                   WHERE r.job_id=j.id AND r.status='running') AS running_rolls,
                (SELECT COUNT(*) FROM job_rolls r WHERE r.job_id=j.id AND r.status='paused') AS paused_count,
                (SELECT COUNT(*) FROM job_notes n WHERE n.job_id=j.id) AS note_count,
@@ -1860,12 +1935,14 @@ def api_thumb_put(tid):
 def api_settings_save():
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
-               "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url"}
+               "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers"}
     conn = get_db()
     for k, v in data.items():
         if k in allowed:
             if k == "backup_auto":
                 v = "1" if v in (True, "1", 1, "true") else "0"
+            if k == "printers":
+                v = clean_printers(v)
             conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, str(v).strip()))
     conn.commit(); conn.close()
     SS.set_journal_dir(get_settings()["backup_dir"])
@@ -1895,86 +1972,76 @@ def _list_backups(bdir):
         return []
 
 
-def verify_backup(path):
-    """Open a backup the way a restore would: check the zip, extract local.db to a temp file,
-    run SQLite's integrity check and count what is inside."""
-    out = {"file": os.path.basename(path), "checked_at": now_str(), "ok": False}
-    tmp = conn = None
+verify_backup = backup.verify_backup        # kept under this name for the routes below
+FAILED_KEEP = 10                           # failed zips kept for inspection
+
+
+def _unique_name(bdir, label=""):
+    base = f"backup_{datetime.now():%Y-%m-%d_%H-%M-%S}{'_' + label if label else ''}"
+    name, n = f"{base}.zip", 2
+    while os.path.exists(os.path.join(bdir, name)) or os.path.exists(os.path.join(bdir, "failed_" + name)):
+        name, n = f"{base}_{n}.zip", n + 1
+    return name
+
+
+def _clean_parts(bdir):
+    """Remove half-written zips left by a crash or a dropped share (older than an hour)."""
     try:
-        with zipfile.ZipFile(path) as z:
-            names = z.namelist()
-            out["zip_ok"] = z.testzip() is None
-            out["registry_files"] = sum(1 for n in names if n.startswith("serial_registry/") and n.endswith(".txt"))
-            out["has_config"] = "config.ini" in names
-            if "local.db" not in names:
-                out["error"] = "local.db is missing from the backup"
-                return out
-            fd, tmp = tempfile.mkstemp(suffix=".db"); os.close(fd)
-            with z.open("local.db") as src, open(tmp, "wb") as dst:
-                shutil.copyfileobj(src, dst)
-        conn = sqlite3.connect(tmp)
-        out["integrity"] = conn.execute("PRAGMA integrity_check").fetchone()[0]
-        out["jobs"] = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-        try:
-            out["serial_ranges"] = conn.execute("SELECT COUNT(*) FROM serial_allocations").fetchone()[0]
-        except sqlite3.Error:
-            out["serial_ranges"] = None
-        out["ok"] = bool(out["zip_ok"]) and out["integrity"] == "ok"
-    except Exception as e:
-        out["error"] = str(e)
-    finally:
-        if conn:
-            conn.close()
-        if tmp:
-            try: os.remove(tmp)
-            except OSError: pass
-    return out
+        for f in os.listdir(bdir):
+            fp = os.path.join(bdir, f)
+            if f.endswith(".part") and time.time() - os.path.getmtime(fp) > 3600:
+                os.remove(fp)
+    except OSError:
+        pass
 
 
 def make_backup(label=""):
-    """Zip of the database, serial registry, template previews and config.ini, checked by
-    opening the copy of the database inside it. Old zips beyond the keep count are removed."""
+    """Snapshot zip of every data source the app owns (see backup.py), written under a
+    temporary name and checked before it gets its real name. A zip that fails the check is
+    renamed failed_backup_*.zip: kept for inspection, never treated as a good backup, and
+    it never causes older good backups to be removed."""
     s = get_settings()
     bdir = backup_dir_effective(s)
     with _backup_lock:
+        part = None
         try:
             os.makedirs(bdir, exist_ok=True)
-            name = f"backup_{datetime.now():%Y-%m-%d_%H-%M-%S}{'_' + label if label else ''}.zip"
-            path = os.path.join(bdir, name)
-            fd, tmp = tempfile.mkstemp(suffix=".db"); os.close(fd)
-            try:
-                src, dst = sqlite3.connect(DB_PATH), sqlite3.connect(tmp)
-                src.backup(dst); dst.close(); src.close()
-                with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-                    z.write(tmp, "local.db")
-                    for folder, arc in ((SERIAL_REGISTRY_DIR, "serial_registry"), (THUMBNAIL_DIR, "template_thumbnails")):
-                        if os.path.isdir(folder):
-                            for f in os.listdir(folder):
-                                fp = os.path.join(folder, f)
-                                if os.path.isfile(fp) and not f.endswith(".lock"):
-                                    z.write(fp, f"{arc}/{f}")
-                    if os.path.isfile(CONFIG_INI):
-                        z.write(CONFIG_INI, "config.ini")
-                    z.writestr("manifest.json", json.dumps(
-                        {"created_at": datetime.now().isoformat(), "app_version": APP_VERSION,
-                         "db_path": DB_PATH, "registry_dir": SERIAL_REGISTRY_DIR}, indent=2))
-            finally:
-                os.remove(tmp)
-            check = verify_backup(path)
-            _backup_state.update(last_file=name, verify=check)
-            result = {"file": name, "size_kb": round(os.path.getsize(path) / 1024, 1), "verify": check}
+            _clean_parts(bdir)
+            if SS.registry_ok(force=True)[0]:          # bring the serial records in step first
+                _log_conflicts(SS.sync_pending()["conflicts"])
+                SS.repair_all()
+            name = _unique_name(bdir, label)
+            part = os.path.join(bdir, f".{name}.part")
+            backup.write_snapshot(part, db_path=DB_PATH, registry_dir=SERIAL_REGISTRY_DIR,
+                                  thumbnail_dir=THUMBNAIL_DIR, config_ini=CONFIG_INI,
+                                  journal_path=SS.journal_path(), job_folder_base=Z_DRIVE_BASE,
+                                  app_version=APP_VERSION, serial_lock=SS._lock)
+            check = backup.verify_backup(part)
+            check["file"] = name
             if check["ok"]:
-                _backup_state.update(last_ok_at=time.time(), last_error=None)
+                os.replace(part, os.path.join(bdir, name)); part = None
+                _backup_state.update(last_file=name, verify=check, last_ok_at=time.time(), last_error=None)
                 for old in _list_backups(bdir)[:-max(s["backup_keep"], 5)]:
                     try: os.remove(os.path.join(bdir, old))
                     except OSError: pass
-                return {"success": True, **result}
-            msg = "The backup was written but failed its check: " + str(check.get("error") or check.get("integrity") or "zip error")
-            _backup_state.update(last_error=msg, last_error_at=time.time())
-            return {"success": False, "error": msg, **result}
+                return {"success": True, "file": name, "verify": check,
+                        "size_kb": round(os.path.getsize(os.path.join(bdir, name)) / 1024, 1)}
+            failed = "failed_" + name
+            check["file"] = failed
+            os.replace(part, os.path.join(bdir, failed)); part = None
+            for old in sorted(f for f in os.listdir(bdir) if f.startswith("failed_backup_"))[:-FAILED_KEEP]:
+                try: os.remove(os.path.join(bdir, old))
+                except OSError: pass
+            msg = "The backup was written but failed its check: " + str(check.get("error") or "zip error")
+            _backup_state.update(verify=check, last_error=msg, last_error_at=time.time())
+            return {"success": False, "error": msg, "file": failed, "verify": check}
         except Exception as e:
             _backup_state.update(last_error=str(e), last_error_at=time.time())
             return {"success": False, "error": str(e)}
+        finally:
+            if part and os.path.exists(part):
+                try: os.remove(part)
+                except OSError: pass
 
 
 def _dir_ok(d):

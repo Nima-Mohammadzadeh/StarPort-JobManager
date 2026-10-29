@@ -6,10 +6,16 @@
 <title>Job Manager</title>
 <style>
 :root{
-  --canvas:#EEF1F0; --surface:#FFFFFF; --sunk:#F6F8F7; --ink:#1B2A2E; --muted:#5E6E72;
-  --line:#D3DADB; --line-strong:#B4BEC0; --blue:#1F4E79; --blue-soft:#E3ECF4;
-  --green:#2F7D4F; --green-soft:#E2F1E7; --amber:#A8670F; --amber-soft:#FBEFD9;
-  --red:#A23B3B; --red-soft:#F7E3E3; --violet:#5B4B8A; --violet-soft:#ECE8F5;
+  /* Palette: cool teal-grey neutrals carry ~90% of the screen; teal means "click me / selected";
+     semantic hues are kept at similar lightness so no status shouts louder than another:
+     blue = in progress, amber = waiting (blue's complement, so active vs waiting is obvious),
+     violet = held, green = done, red = problem. Every text/background pair is at least 4.5:1. */
+  --canvas:#E9F0F0; --surface:#FFFFFF; --sunk:#F2F7F7; --ink:#10252A; --muted:#4F6569;
+  --line:#D1DDDF; --line-strong:#AEC0C3;
+  --accent:#0F766E; --accent-dark:#0B5A54; --accent-soft:#DDF1EE;   /* teal: buttons, links, focus, selection */
+  --blue:#2563A8; --blue-bright:#4A8FD8; --blue-soft:#E3EEF9;       /* blue: work in progress */
+  --green:#2A7430; --green-soft:#E3F2E4; --amber:#9A5B00; --amber-soft:#FCEFD2;
+  --red:#B3322B; --red-soft:#F9E2E0; --violet:#5E48A8; --violet-soft:#ECE8F7;
   --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
   --data:Consolas,"Cascadia Mono","SFMono-Regular",Menlo,monospace;
   --r:6px;
@@ -19,44 +25,50 @@
 html,body{margin:0;height:100%}
 body{font:14px/1.45 var(--sans);color:var(--ink);background:var(--canvas)}
 button,input,select,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* ── Header ── */
-header{display:flex;align-items:center;gap:28px;padding:0 24px;height:56px;background:var(--ink);color:#fff;position:sticky;top:0;z-index:20}
-.brand{font-weight:650;font-size:16px;letter-spacing:.01em;display:flex;align-items:center;gap:10px}
-.brand svg{width:22px;height:22px}
-nav{display:flex;gap:2px;height:100%}
-nav button{background:none;border:0;color:#B9C6C9;padding:0 14px;height:100%;cursor:pointer;border-bottom:3px solid transparent;font-weight:500}
-nav button:hover{color:#fff}
-nav button.on{color:#fff;border-bottom-color:#7FB3E0}
+/* ── Side navigation (always open; icons only on narrow screens) + slim top bar ── */
+:root{--sw:284px}
+@media (max-width:900px){:root{--sw:76px}.sidenav .lbl,.brand .bt{display:none}}
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--ink);color:#fff;z-index:30;display:flex;flex-direction:column;padding:12px 12px 14px;transition:width .18s ease;overflow:hidden}
+.brand{font-weight:650;font-size:21px;letter-spacing:.01em;display:flex;align-items:center;gap:14px;height:56px;padding:0 12px;margin-bottom:12px;white-space:nowrap}
+.brand svg{width:30px;height:30px;flex:none;color:#5ED0C2}
+.sidenav nav{display:flex;flex-direction:column;gap:2px}
+.sidenav nav button{display:flex;align-items:center;gap:16px;width:100%;height:57px;padding:0 15px;background:none;border:0;border-radius:11px;color:#B4C9C8;cursor:pointer;font-weight:550;font-size:18px;white-space:nowrap;text-align:left;position:relative}
+.sidenav nav button svg{width:28px;height:28px;flex:none}
+.sidenav nav button:hover{background:#1D3C3E;color:#fff}
+.sidenav nav button.on{background:#17423F;color:#fff}
+.sidenav nav button.on::before{content:"";position:absolute;left:-12px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#5ED0C2}
+.nav-sep{height:1px;background:#2B4648;margin:10px 6px}
+.app{margin-left:var(--sw);transition:margin-left .18s ease;min-width:0;container:app/inline-size}
+header{display:flex;align-items:center;gap:16px;padding:0 18px;height:56px;background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);position:sticky;top:0;z-index:20}
+.crumb{font-weight:650;font-size:16px}
+.bar h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
-.conn{font-size:12px;color:#B9C6C9;margin-right:8px}
-.conn.bad{color:#F2B8B8}
+.conn{font-size:12px;color:var(--muted);margin-right:8px}
+.conn.bad{color:var(--red);font-weight:600}
 
 /* ── Buttons & fields ── */
 .btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r);padding:7px 14px;cursor:pointer;font-weight:550;white-space:nowrap}
 .btn:hover{background:var(--sunk)}
-.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
-.btn.primary:hover{background:#183E61}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-dark)}
 .btn.danger{color:var(--red);border-color:#DDB4B4}
 .btn.quiet{border-color:transparent;background:transparent}
 .btn.quiet:hover{background:var(--sunk)}
 .btn.sm{padding:4px 10px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:default}
-header .btn{border-color:#3A4D52;background:#26393E;color:#fff}
-header .btn:hover{background:#30464C}
-header .btn.primary{background:#2E6BA3;border-color:#2E6BA3}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
 label.f span.hint{font-weight:400;font-size:12px;order:3}
 input.i,select.i,textarea.i{border:1px solid var(--line-strong);border-radius:var(--r);padding:7px 10px;background:#fff;color:var(--ink);width:100%}
-input.i:focus,select.i:focus,textarea.i:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px var(--blue-soft)}
+input.i:focus,select.i:focus,textarea.i:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
 input.i.bad{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
 textarea.i{resize:vertical;min-height:56px}
 .data{font-family:var(--data);font-variant-numeric:tabular-nums}
 
 /* ── Layout ── */
-main{padding:22px 24px 60px;max-width:1720px;margin:0 auto}
+main{padding:20px 18px 60px;max-width:2200px;margin:0 auto}
 .view{display:none}.view.on{display:block}
 .bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .bar h1{font-size:20px;margin:0 12px 0 0;font-weight:650}
@@ -75,8 +87,8 @@ table.jobs{width:100%;border-collapse:collapse}
 .jobs th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:9px 9px;border-bottom:1px solid var(--line);background:var(--sunk);position:sticky;top:0;white-space:nowrap}
 .jobs td{padding:9px 9px;border-bottom:1px solid #E7ECEC;vertical-align:middle}
 .jobs tbody tr{cursor:pointer}
-.jobs tbody tr:hover{background:#F3F7FA}
-.jobs tbody tr.sel{background:var(--blue-soft)}
+.jobs tbody tr:hover{background:#E9F3F2}
+.jobs tbody tr.sel{background:var(--accent-soft)}
 .jobs td.num{text-align:right}
 .jobs .tk{font-size:16px;font-weight:700;color:#0A1417;line-height:1.2}
 .jobs td.cust{font-size:15px;font-weight:600;color:#0A1417;line-height:1.25}
@@ -88,10 +100,10 @@ table.jobs{width:100%;border-collapse:collapse}
 
 /* Roll strip — the thing that mirrors the paper roll tracker */
 .strip{display:flex;gap:2px;align-items:center}
-.minibar{width:110px;height:8px;border-radius:2px;background:#DCE2E3;overflow:hidden}
+.minibar{width:110px;height:8px;border-radius:2px;background:#D9E0E6;overflow:hidden}
 .minibar i{display:block;height:100%;background:var(--green)}
 .jobs td.nw{white-space:nowrap}
-.strip i{width:9px;height:12px;border-radius:2px;background:#DCE2E3;display:block}
+.strip i{width:9px;height:12px;border-radius:2px;background:#D9E0E6;display:block}
 .strip i.d{background:var(--green)}
 .strip .more{font-size:11.5px;color:var(--muted);margin-left:4px}
 .strip-label{font-size:12px;color:var(--muted);margin-top:2px}
@@ -127,13 +139,13 @@ table.jobs{width:100%;border-collapse:collapse}
 /* Roll grid in drawer */
 .rolls{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
 .roll{border:1px solid var(--line-strong);border-radius:5px;background:#fff;padding:6px 4px 5px;text-align:center;cursor:pointer;line-height:1.2}
-.roll:hover{border-color:var(--blue)}
+.roll:hover{border-color:var(--accent)}
 .roll b{display:block;font-size:15px}
 .roll small{font-size:11px;color:var(--muted);font-family:var(--data)}
 .roll.d{background:var(--green);border-color:var(--green);color:#fff}
 .roll.d small{color:#D6EEDD}
 .roll-meta{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
-.progress{height:6px;background:#E1E7E8;border-radius:3px;overflow:hidden;margin-bottom:12px}
+.progress{height:6px;background:#D9E0E6;border-radius:3px;overflow:hidden;margin-bottom:12px}
 .progress i{display:block;height:100%;background:var(--green)}
 .rolldetail{margin-top:10px;font-size:13px;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:none}
 .rolldetail.on{display:block}
@@ -162,7 +174,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .col-title{font-size:14px;font-weight:650;margin:0 0 2px}
 .fieldmsg{font-size:12.5px;min-height:18px}
 .fieldmsg.ok{color:var(--green)} .fieldmsg.bad{color:var(--red)}
-.fieldmsg a{color:var(--blue);cursor:pointer;text-decoration:underline}
+.fieldmsg a{color:var(--accent);cursor:pointer;text-decoration:underline}
 .summary{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13.5px}
 .summary .row{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
 .summary .row span:first-child{color:var(--muted)}
@@ -178,7 +190,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .tpl-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;font-size:13.5px}
 .tstat{font-size:12.5px;margin-left:auto;text-align:right}
 .tstat.ok{color:var(--green);font-weight:600}.tstat.warn{color:var(--amber);font-weight:600}.tstat.muted{color:var(--muted)}
-.tlist label.sel{background:var(--blue-soft)}
+.tlist label.sel{background:var(--accent-soft)}
 .why{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:6px}
 .why i{font-style:normal;font-size:11px;padding:0 6px;border-radius:3px;background:var(--sunk);border:1px solid var(--line);color:var(--muted)}
 .why i.k{background:var(--green-soft);border-color:#B9DCC5;color:var(--green)}
@@ -188,7 +200,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .bgrid th{font-weight:600;color:var(--muted);text-align:left;padding:4px 3px;font-size:12px;white-space:nowrap}
 .bgrid td{padding:2px 3px}
 .bgrid input{width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 6px;background:#fff}
-.bgrid input:focus{border-color:var(--blue);outline:none}
+.bgrid input:focus{border-color:var(--accent);outline:none}
 .bgrid input.bad{border-color:var(--red);background:#FFF7F7}
 .bgrid td.res{font-size:12px;min-width:150px}
 .bgrid td.res.ok{color:var(--green)} .bgrid td.res.bad{color:var(--red)}
@@ -205,6 +217,21 @@ table.jobs{width:100%;border-collapse:collapse}
 
 /* Settings */
 .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;max-width:860px}
+/* settings: section list on the left, one compact section at a time */
+.set-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}
+.set-nav{position:sticky;top:76px;display:flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
+.set-nav button{text-align:left;border:0;background:none;padding:10px 12px;border-radius:7px;font-size:15px;font-weight:600;color:var(--muted);cursor:pointer}
+.set-nav button:hover{background:var(--sunk);color:var(--ink)}
+.set-nav button.on{background:var(--accent-soft);color:var(--accent-dark)}
+.set-body{min-width:0}
+#v-settings .panel{display:none;max-width:none;padding:14px 18px;margin-bottom:12px}
+#v-settings .panel.show{display:block}
+#v-settings .panel h2{font-size:17px;margin-bottom:8px}
+#v-settings .stack{gap:10px}
+details.more{margin:0 0 10px}
+details.more summary{cursor:pointer;color:var(--accent);font-size:13px;font-weight:600;width:max-content}
+details.more p.d{margin:6px 0 0}
+@container app (max-width:900px){.set-layout{grid-template-columns:1fr}.set-nav{position:static;flex-direction:row;flex-wrap:wrap}}
 .panel h2{font-size:16px;margin:0 0 4px;font-weight:650}
 .panel p.d{margin:0 0 14px;color:var(--muted);font-size:13px}
 .blist{font-size:13px;margin-top:12px;max-height:200px;overflow:auto}
@@ -233,9 +260,9 @@ table.jobs{width:100%;border-collapse:collapse}
 .fi{display:block;width:100%;text-align:left;background:none;border:0;border-left:3px solid var(--line);padding:7px 12px 7px 11px;cursor:pointer;font-size:13px;line-height:1.35}
 .fi:hover{background:var(--sunk)}
 .fi .meta{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
-.fi.k-created,.fi.k-upload,.fi.k-template{border-left-color:var(--blue)}
+.fi.k-created,.fi.k-upload,.fi.k-template{border-left-color:var(--accent)}
 .fi.k-roll{border-left-color:var(--green)}
-.fi.k-roll_start{border-left-color:#4F8FCB}
+.fi.k-roll_start{border-left-color:var(--blue-bright)}
 .fi.k-roll_pause{border-left-color:#C98A1B}
 .fi.k-roll_undo,.fi.k-edited,.fi.k-archived,.fi.k-import{border-left-color:var(--line-strong)}
 .fi.k-note{border-left-color:#8BA3A8}
@@ -255,14 +282,14 @@ table.jobs{width:100%;border-collapse:collapse}
 #floor-cards{overflow:auto;display:flex;flex-direction:column;gap:6px;padding:2px}
 .fc{background:#fff;border:1px solid var(--line);border-radius:7px;padding:9px 11px;cursor:pointer;text-align:left;width:100%}
 .fc:hover{border-color:var(--line-strong)}
-.fc.on{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft)}
+.fc.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .fc .t{display:flex;align-items:center;gap:8px}
 .fc .t b{font-size:14.5px}
 .fc .t .pill{margin-left:auto;font-size:11.5px}
 .fc .c{font-size:13px;margin-top:1px}
 .fc .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fc .p{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12px;color:var(--muted)}
-.fc .bar{flex:1;height:5px;background:#E1E7E8;border-radius:3px;overflow:hidden}
+.fc .bar{flex:1;height:5px;background:#D9E0E6;border-radius:3px;overflow:hidden}
 .fc .bar i{display:block;height:100%;background:var(--green)}
 .flag{display:inline-block;color:var(--amber);font-weight:600;font-size:12px;margin-top:5px}
 .work{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:420px}
@@ -281,7 +308,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .imp p{margin:4px 0 0;white-space:pre-wrap}
 .ticketnote{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:9px 12px;margin-bottom:14px;font-size:13.5px;white-space:pre-wrap}
 .ticketnote b{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
-.next{border:2px solid var(--blue);border-radius:9px;padding:14px 16px;margin-bottom:14px}
+.next{border:2px solid var(--accent);border-radius:9px;padding:14px 16px;margin-bottom:14px}
 .next .lbl{font-size:13px;color:var(--muted)}
 .next .big{font-size:26px;font-weight:700;line-height:1.15;margin:2px 0 8px}
 .next .big small{font-size:15px;font-weight:500;color:var(--muted)}
@@ -293,7 +320,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .next.done{border-color:var(--green);background:var(--green-soft)}
 .roll .dot{display:block;width:6px;height:6px;border-radius:50%;background:var(--amber);margin:2px auto 0}
 .roll.d .dot{background:#FFE29A}
-.roll.nx{border:2px solid var(--blue)}
+.roll.nx{border:2px solid var(--accent)}
 .composer{border:1px solid var(--line-strong);border-radius:7px;padding:8px;margin-bottom:12px;background:#fff}
 .composer textarea{border:0;width:100%;resize:vertical;min-height:54px;outline:none;font:inherit}
 .composer .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #EEF1F1;padding-top:8px}
@@ -313,21 +340,21 @@ table.jobs{width:100%;border-collapse:collapse}
 .uprow{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .uprow select{width:auto;padding:4px 8px}
 
-@media (max-width:1650px){.hide-lg{display:none}}
-@media (max-width:1280px){.with-feed{grid-template-columns:1fr}.feed{position:static;max-height:420px}.hide-md{display:none}}
+@container app (max-width:1650px){.hide-lg{display:none}}
+@container app (max-width:1280px){.with-feed{grid-template-columns:1fr}.feed{position:static;max-height:420px}.hide-md{display:none}}
 @media (max-width:1100px){.w-body{grid-template-columns:1fr}}
-@media (max-width:900px){.floor{grid-template-columns:1fr}.floor-list{position:static;max-height:none}#floor-cards{max-height:300px}}
+@container app (max-width:900px){.floor{grid-template-columns:1fr}.floor-list{position:static;max-height:none}#floor-cards{max-height:300px}}
 
 /* roll tracking: one roll at a time */
-.strip i.r,.minibar i.r,.fc .bar i.r,.stack-bar i.r{background:#4F8FCB}
-.strip i.p,.minibar i.p,.stack-bar i.p,.fc .bar i.p{background:#D9A440}
+.strip i.r,.minibar i.r,.fc .bar i.r,.stack-bar i.r{background:var(--blue-bright)}
+.strip i.p,.minibar i.p,.stack-bar i.p,.fc .bar i.p{background:#E0A93B}
 .minibar,.fc .bar,.stack-bar{display:flex}
 .rsum{display:flex;gap:14px;font-size:13px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
-.rsum b{color:var(--ink)} .rsum .r-run b{color:#2F6EA8} .rsum .r-pause b{color:var(--amber)}
-.stack-bar{height:7px;background:#E1E7E8;border-radius:4px;overflow:hidden;margin-bottom:10px}
+.rsum b{color:var(--ink)} .rsum .r-run b{color:var(--blue)} .rsum .r-pause b{color:var(--amber)}
+.stack-bar{height:7px;background:#D9E0E6;border-radius:4px;overflow:hidden;margin-bottom:10px}
 .stack-bar i.d{background:var(--green)}
 .alldone{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--green-soft);border:1px solid #B9DCC5;border-radius:7px;padding:9px 12px;margin-bottom:10px;font-size:13.5px}
-.runners{font-size:12px;color:#2F6EA8;margin-top:4px}
+.runners{font-size:12px;color:var(--blue);margin-top:4px}
 .pausers{font-size:12px;color:var(--amber);margin-top:2px}
 .w-top{padding:14px 20px 0}
 .w-body2{display:grid;grid-template-columns:minmax(230px,320px) minmax(0,1fr);gap:20px;padding:14px 20px 18px;align-items:start}
@@ -338,39 +365,179 @@ table.jobs{width:100%;border-collapse:collapse}
 .ri .st{font-size:12.5px;font-weight:600}
 .ri .ser{font-size:11.5px;color:var(--muted);grid-column:2}
 .ri .dot{position:absolute;right:8px;top:8px;width:7px;height:7px;border-radius:50%;background:var(--amber)}
-.ri.s-running{border-left-color:#4F8FCB}.ri.s-running .st{color:#2F6EA8}
-.ri.s-paused{border-left-color:#D9A440;background:#FFFBF2}.ri.s-paused .st{color:var(--amber)}
+.ri.s-running{border-left-color:var(--blue-bright)}.ri.s-running .st{color:var(--blue)}
+.ri.s-paused{border-left-color:#E0A93B;background:#FFFBF2}.ri.s-paused .st{color:var(--amber)}
 .ri.s-done{border-left-color:var(--green)}.ri.s-done .st{color:var(--green)}
 .ri.s-pending .st{color:var(--muted)}
 .ri.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink)}
 .w-roll{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fff;position:sticky;top:66px}
-.rp-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.rp-title{flex:1;display:flex;align-items:center;justify-content:center;gap:10px}
-.rp-title h3{margin:0;font-size:22px;font-weight:700}
-.rp-title h3 span{font-size:14px;font-weight:500;color:var(--muted)}
 .rstate{padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:650;background:var(--sunk);color:var(--muted)}
-.rstate.s-running{background:#E4EFF9;color:#2F6EA8}.rstate.s-paused{background:var(--amber-soft);color:var(--amber)}.rstate.s-done{background:var(--green-soft);color:var(--green)}
-.rp-data{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin:0 0 12px;padding:12px 14px;background:var(--sunk);border:1px solid var(--line);border-radius:8px}
-.rp-data .w2{grid-column:span 2}
-.rp-data dt{font-size:12px;color:var(--muted)}
-.rp-data dd{margin:1px 0 0;font-size:15px}
-.rp-data dd.big{font-size:22px;font-weight:700}
-.rp-data dd.epc{font-size:15.5px;letter-spacing:.02em;word-break:break-all}
-.rp-data dd.epc b{background:#FFF3C4;padding:0 2px;border-radius:2px}
+.rstate.s-running{background:#E4EFF9;color:var(--blue)}.rstate.s-paused{background:var(--amber-soft);color:var(--amber)}.rstate.s-done{background:var(--green-soft);color:var(--green)}
 .verify .vlist{margin-top:6px;display:flex;flex-direction:column;gap:3px}
 .verify .v{font-size:13px;padding:5px 8px;border-radius:5px;display:flex;flex-direction:column}
 .verify .v .data{font-size:11.5px;opacity:.8}
 .verify .v.ok{background:var(--green-soft);color:#1F5A37}.verify .v.bad{background:var(--red-soft);color:#7A2626}
-.rp-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .btn.big{padding:11px 20px;font-size:15.5px}
 .pausebox{display:none;gap:6px;margin-top:8px;align-items:center}
 .pausebox.on{display:flex}
-.rp-time{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.6}
-.rp-notes{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
-.rp-notes h3{font-size:14px;margin:0 0 6px}
-.w-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;padding:16px 20px 22px;border-top:1px solid var(--line)}
-.w-foot h3{font-size:14px;margin:0 0 10px;font-weight:650}
-@media (max-width:1100px){.w-body2,.w-foot{grid-template-columns:1fr}.rlist{max-height:260px}.w-roll{position:static}}
+/* roll tracking: compact header, roll tiles, three-column work area */
+.w-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start;padding:14px 20px 12px;border-top:3px solid var(--sc);border-radius:8px 8px 0 0}
+.wh-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wh-title h2{margin:0;font-size:20px}
+.wh-tk{font-weight:500;color:var(--muted);font-size:15px;margin-left:4px}
+.w-head .sub{margin-top:1px}
+.wh-prog{margin-top:10px;max-width:520px}
+.wh-prog .stack-bar{height:8px;margin-bottom:5px}
+.wh-prog .rsum{margin:0}
+.w-head .acts{margin-left:0;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.acts-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btcopy{display:flex;gap:2px;align-items:center;font-size:12px;color:var(--muted)}
+.btcopy span{margin-right:4px}
+.w-top{display:grid;gap:10px;padding:12px 20px 0}
+.w-top.two{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.w-top .imp,.w-top .ticketnote{margin:0}
+.rlist{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 330px);min-height:240px;overflow:auto;padding:3px}
+.rb-body{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+.rb .rb-body{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
+.rb-head{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:var(--sunk);padding:6px 10px;cursor:pointer;border-radius:7px 7px 0 0;text-align:left;font-size:13px}
+.rb.closed .rb-head{border-radius:7px}
+.rb-head:hover{background:#E8F2F1}
+.rb-head .caret{color:var(--muted);width:12px}
+.rb-head .rb-n{color:var(--muted);font-size:12.5px;margin-left:auto}
+.rb-head .rb-bar{width:54px;height:5px;border-radius:3px;background:#D9E0E6;overflow:hidden}
+.rb-head .rb-bar i{display:block;height:100%;background:var(--green)}
+.rb.full .rb-head .rb-n{color:var(--green);font-weight:600}
+.rb-body .ri{border:0;border-bottom:1px solid #EAEFF2;border-left:6px solid #C6D0D7;border-radius:0;background:#fff;padding:8px 10px}
+.rb-body .ri:last-child{border-bottom:0}
+.rb-body .ri.s-done{border-left-color:var(--green);background:#F6FBF8}
+.rb-body .ri.s-running{border-left-color:var(--blue-bright);background:#F3F8FD}
+.rb-body .ri:hover{background:#E9F3F2}
+.rb-body .ri.on{box-shadow:inset 0 0 0 2px var(--ink);position:relative;z-index:1}
+.rb-body .ri{display:grid;grid-template-columns:30px 16px minmax(0,1fr) minmax(0,86px);gap:0 8px;align-items:center;height:34px;padding:0 10px 0 8px}
+.rb-body .ri b{grid-row:auto;font-size:15px;text-align:right}
+.rb-body .ri .g{font-size:11px;color:var(--muted);text-align:center}
+.rb-body .ri.s-done .g{color:var(--green)}.rb-body .ri.s-running .g{color:var(--blue)}
+.rb-body .ri .ser{font-size:12.5px;color:var(--muted);grid-column:auto}
+.rb-body .ri .who{font-size:12px;color:var(--ink);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-body .ri .dot{right:auto;left:36px;top:5px;width:7px;height:7px;box-shadow:0 0 0 2px #fff}
+.ri .dot{background:var(--amber)}
+.w-roll{container-type:inline-size}
+@container app (max-width:1350px){.w-head{grid-template-columns:1fr}.w-head .acts{align-items:flex-start}.acts-row{justify-content:flex-start}}
+@container app (max-width:1500px){.w-body2{grid-template-columns:minmax(300px,340px) minmax(0,1fr)}}
+@media (max-width:1100px){.w-head{grid-template-columns:1fr}.w-head .acts{align-items:flex-start}.acts-row{justify-content:flex-start}.w-body2{grid-template-columns:1fr}.rlist{max-height:240px}}
+.w-body2{grid-template-columns:minmax(250px,290px) minmax(0,1fr)}
+.w-roll{position:static;border:0;padding:0;background:none;container-type:inline-size}
+.rc{border:1px solid var(--line);border-radius:9px;background:#fff}
+.rc-head{position:sticky;top:56px;z-index:3;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:10px 14px;background:#fff;border-bottom:1px solid var(--line);border-radius:9px 9px 0 0}
+.rc-nav{display:flex;align-items:center;gap:6px;flex:1 1 auto}
+.rc-nav h3{margin:0 4px;font-size:20px;font-weight:700;white-space:nowrap}
+.rc-nav h3 span{font-size:13px;font-weight:500;color:var(--muted)}
+.rc-nav .btn.sm{padding:2px 10px;font-size:18px;line-height:1.2}
+.rc-acts{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-left:auto}
+.rc-sub{flex:1 0 100%;font-size:12.5px;color:var(--muted);margin-top:-2px}
+.rc .pausebox{padding:8px 14px;background:var(--sunk);margin:0;border-bottom:1px solid var(--line)}
+.rc-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px 20px;padding:14px}
+.rc-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rc-strip{display:flex;flex-wrap:wrap;gap:6px 26px;margin:0;padding:10px 14px;background:var(--sunk);border:1px solid var(--line);border-radius:8px}
+.rc-strip dt{font-size:12px;color:var(--muted)}
+.rc-strip dd{margin:1px 0 0;font-size:15px}
+.rc-strip dd.big{font-size:22px;font-weight:700}
+.trange{width:100%;border-collapse:collapse}
+.trange th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 10px 6px 0;white-space:nowrap;width:1%}
+.trange td{padding:6px 0;border-top:1px solid #EAEFF2}
+.trange tr:first-child td,.trange tr:first-child th{border-top:0}
+.trange td:last-child{text-align:right;width:1%}
+.trange td.epc{font-size:15px;word-break:break-all}
+.trange td.epc b{background:#FFF3C4;padding:0 2px;border-radius:2px}
+.rc .verify{margin-top:0;padding-top:12px;border-top:1px solid var(--line)}
+.rc-notes{min-width:0}
+.rtabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:10px;flex-wrap:wrap}
+.rtabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px;margin-bottom:-1px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--muted)}
+.rtabs button b{margin-left:5px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:0 6px;font-size:11.5px;color:var(--ink)}
+.rtabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.rc-notes .feed-list{max-height:340px;border:1px solid var(--line);border-radius:7px;overflow:auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@container (min-width:860px){.rc-body{grid-template-columns:minmax(0,1.15fr) minmax(300px,1fr)}.rc-body.one{grid-template-columns:1fr}}
+/* printer strip + printer buttons */
+.rc-printer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:#F4FAF9}
+.rc-printer .pl{font-size:14px;font-weight:650;color:var(--muted)}
+.rc-printer select{width:auto;min-width:260px;font-size:15.5px;font-weight:600;padding:8px 10px}
+.pchip{background:var(--accent-soft);color:var(--accent-dark);border-radius:6px;padding:1px 8px;font-weight:650;font-size:13.5px;white-space:nowrap}
+.pchip.none{background:var(--amber-soft);color:var(--amber)}
+.rc-rec dd.big{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:750;color:var(--accent-dark)}
+.rc-rec dd small{font-size:13px;font-weight:600;color:var(--muted)}
+.rc-strip .rc-rec{flex:1 0 100%}
+.rc-strip dd{font-size:16.5px}
+/* roll list: larger text, record number leads */
+.rb-body .ri{grid-template-columns:34px 18px minmax(0,1fr) auto;height:44px;gap:0 9px;padding-left:8px}
+.rb-body .ri .rno{display:grid;place-items:center;height:26px;min-width:26px;padding:0 4px;border-radius:7px;background:#E8EDF2;border:1px solid #CDD6DE;font-size:14px;font-weight:700;color:var(--ink)}
+.rb-body .ri .g{font-size:13px}
+.rb-body .ri .rec{font-size:17.5px;font-weight:750;color:var(--ink);letter-spacing:-.01em;white-space:nowrap}
+.rb-body .ri .rec small{margin-left:8px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.rb-body .ri .who{font-size:14px;color:var(--ink);max-width:110px}
+.rb-head{font-size:14.5px;padding:8px 10px}
+.rb-head .rb-n{font-size:13.5px}
+.rfilter button{font-size:13.5px}
+.rtabs button{font-size:14.5px}
+.trange th{font-size:13px}.trange td{font-size:15.5px}.trange td.epc{font-size:16px}
+.rc-nav h3{font-size:22px}
+.rc-sub{font-size:13.5px}
+.fc .c{font-size:14px}.fc .p{font-size:13px}.runners,.pausers,.flag{font-size:13px}
+.w-body2{grid-template-columns:minmax(300px,340px) minmax(0,1fr)}
+.floor-list{background:#fff;border:1px solid var(--line);border-radius:10px;gap:0;overflow:hidden}
+.fl-head{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--line);background:var(--sunk);flex:none}
+.fl-head select{width:auto;flex:0 0 auto;font-weight:600}
+.fl-head .search{flex:1 1 auto;min-width:0}
+#floor-cards{padding:8px;flex:1 1 auto;min-height:0}
+.fc{border-left:4px solid var(--sc,var(--line-strong));padding:8px 10px}
+.fc .t b{font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc .c{font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .c .data{font-weight:700;color:var(--ink)}
+.fc .c .s{display:inline;color:var(--muted)}
+.jobs td.cust{font-size:16.5px;font-weight:650;color:var(--ink);white-space:nowrap}
+.jobs.d-compact td.cust{font-size:15.5px}
+.grp-btn .gname{font-size:15px}
+.seg.icons button{padding:4px 8px;display:flex;align-items:center}
+.seg.icons button.on{background:var(--ink);color:#fff}
+.icon-btn{padding:4px 8px;display:inline-flex;align-items:center}
+.fc .p{flex-wrap:wrap;row-gap:4px;margin-top:5px}.fc .bar{flex:1 0 100%}
+.verify{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rfilter{margin-bottom:8px;width:100%}.rfilter button{flex:1;padding:4px 6px;white-space:nowrap}
+.w-rolls{min-width:0}
+@media (max-width:1100px){.w-body2{grid-template-columns:1fr}.rlist{max-height:260px}.w-roll{position:static;order:-1}}
+
+/* ── Jobs table: grouping, density, status colour ── */
+.bar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.inline-sel{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:500}
+.inline-sel select{width:auto;padding:4px 8px}
+.jobs-wrap{max-height:calc(100vh - 150px)}
+.jobs thead th{z-index:2;box-shadow:0 1px 0 var(--line)}
+.jobs tbody tr:not(.grp) td:first-child{box-shadow:inset 3px 0 0 var(--sc,transparent)}
+.jobs tbody tr:not(.grp):not(.sel):hover{background:#E9F3F2}
+.jobs tr.grp td{padding:0;background:var(--sunk);border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.jobs tr.grp:hover{background:none}
+.grp-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:7px 9px;cursor:pointer;text-align:left;box-shadow:inset 3px 0 0 var(--sc)}
+.grp-btn:hover{background:#E8F2F1}
+.grp-btn .caret{width:14px;color:var(--muted);font-size:12px}
+.grp-btn .gname{font-weight:700;font-size:13.5px}
+.grp-btn .gcount{background:var(--sc);color:#fff;border-radius:999px;padding:0 8px;font-size:12px;font-weight:650}
+.grp-btn .gmeta{color:var(--muted);font-size:12.5px}
+.grp-btn .gbar{width:90px;height:5px;background:#D9E0E6;border-radius:3px;overflow:hidden}
+.grp-btn .gbar i{display:block;height:100%;background:var(--green)}
+.jobs.g-customer .c-cust,.jobs.g-status .c-stat{display:none}
+.jobs.g-customer .c-tk{padding-left:22px}
+.jobs.d-compact td{padding:4px 9px}
+.jobs.d-compact .tk{font-size:14px}
+.jobs.d-compact td.cust{font-size:13.5px}
+.jobs.d-compact .sub{font-size:11.5px}
+.jobs.d-compact td .sub.data{display:inline;margin-left:8px}
+.jobs.d-compact .strip-label{display:inline;margin-left:8px}
+.jobs.d-compact .strip{display:inline-flex}
+.jobs.d-compact .minibar{display:inline-block;vertical-align:middle;width:80px}
+.due small{display:block;font-size:11.5px;font-weight:600}
+.due-soon{color:var(--amber);font-weight:600}
+.pill{border:1px solid transparent}
+.st-in-progress{border-color:#C3D6E6}.st-on-hold{border-color:#D3CBE6}.st-pending{border-color:#EAD3A5}.st-complete{border-color:#B9DCC5}.st-cancelled{border-color:#E3BCBC}
 
 /* priority card */
 .side{display:flex;flex-direction:column;gap:12px;position:sticky;top:72px;max-height:calc(100vh - 92px)}
@@ -383,8 +550,8 @@ table.jobs{width:100%;border-collapse:collapse}
 .pc-list{list-style:none;margin:0;padding:4px 0;overflow:auto}
 .pc-list li{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-bottom:1px solid #EEF1F1;cursor:grab;font-size:13px}
 .pc-list li:last-child{border-bottom:0}
-.pc-list li.drag{opacity:.4}.pc-list li.over{box-shadow:inset 0 2px 0 var(--blue)}
-.pc-list .rk{font-weight:700;color:var(--blue);text-align:center}
+.pc-list li.drag{opacity:.4}.pc-list li.over{box-shadow:inset 0 2px 0 var(--accent)}
+.pc-list .rk{font-weight:700;color:var(--accent);text-align:center}
 .pc-list .t{min-width:0}
 .pc-list .t b{font-size:13.5px;color:#0A1417}
 .pc-list .t .l2{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -394,7 +561,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .pc-list .acts button{background:none;border:0;cursor:pointer;color:var(--muted);padding:2px 5px;border-radius:4px;font-size:13px}
 .pc-list .acts button:hover{background:var(--sunk);color:var(--ink)}
 .pc-empty{padding:12px;color:var(--muted);font-size:12.5px}
-.rank{display:inline-block;background:var(--blue);color:#fff;border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:2px}
+.rank{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:2px}
 .chip-special{display:inline-block;font-size:11.5px;padding:0 6px;border-radius:3px;background:var(--violet-soft);color:var(--violet);font-weight:600}
 /* job type + footer name */
 .seg.jt{width:100%}.seg.jt button{flex:1;padding:7px 8px}
@@ -414,17 +581,15 @@ table.jobs{width:100%;border-collapse:collapse}
 .seracts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 .seracts .box{border:1px solid var(--line);border-radius:7px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 .seracts h3{font-size:13.5px;margin:0}
-.conn.warn{color:#F6D58E}
-@media (max-width:1280px){.side{position:static;max-height:none}.pcard{max-height:320px}}
+.conn.warn{color:var(--amber);font-weight:600}
+@container app (max-width:1280px){.side{position:static;max-height:none}.pcard{max-height:320px}}
 @media (max-width:640px){.tools{grid-template-columns:1fr}.seracts{grid-template-columns:1fr}}
 
 
 /* header: keep one line on tablets */
-.brand,nav button,.conn,.hdr-right .btn{white-space:nowrap}
+.brand,.conn,.hdr-right .btn{white-space:nowrap}
 @media (max-width:1500px){
   header{gap:14px;padding:0 14px}
-  .brand .bt{display:none}
-  nav button{padding:0 10px}
   .conn{font-size:11.5px;margin-right:0}
   .hdr-right{gap:6px}
   .hdr-right .btn{padding:7px 11px}
@@ -450,19 +615,25 @@ table.jobs{width:100%;border-collapse:collapse}
 </style>
 </head>
 <body>
-<header>
+<aside class="sidenav" id="sidenav" aria-label="Main">
   <div class="brand">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3v5.8M21 12h-5.8"/></svg>
     <span class="bt">Job Manager</span>
   </div>
   <nav>
-    <button data-view="jobs" class="on">Jobs</button>
-    <button data-view="rolls">Roll tracking</button>
-    <button data-view="archive">Archive</button>
-    <button data-view="templates">Templates</button>
-    <button data-view="tools">Tools</button>
-    <button data-view="settings">Settings</button>
+    <button data-view="jobs" class="on" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg><span class="lbl">Jobs</span></button>
+    <button data-view="rolls" title="Roll tracking" aria-label="Roll tracking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="11" r="6.5"/><circle cx="10" cy="11" r="2"/><path d="M15 16l5 4.5h-9"/></svg><span class="lbl">Roll tracking</span></button>
+    <div class="nav-sep" role="separator"></div>
+    <button data-view="archive" title="Archive" aria-label="Archive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.2"/><path d="M5 9v10h14V9M10 13h4"/></svg><span class="lbl">Archive</span></button>
+    <button data-view="templates" title="Templates" aria-label="Templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg><span class="lbl">Templates</span></button>
+    <button data-view="tools" title="Tools" aria-label="Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.2a4.2 4.2 0 0 0 5.3 5.3l-9 9a2.1 2.1 0 0 1-3-3z"/><path d="m15 4 5 5"/></svg><span class="lbl">Tools</span></button>
+    <button data-view="settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span class="lbl">Settings</span></button>
   </nav>
+</aside>
+
+<div class="app">
+<header>
+  <span class="crumb" id="crumb">Jobs</span>
   <div class="hdr-right">
     <span class="conn" id="conn">Connecting…</span>
     <span class="conn" id="serial-status" role="button" tabindex="0" title="Serial records" onclick="openSerialTool()"></span>
@@ -481,11 +652,24 @@ table.jobs{width:100%;border-collapse:collapse}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input class="i" id="q-jobs" placeholder="Ticket, customer, UPC, PO, part…" autocomplete="off">
       </div>
-      <div class="seg" id="status-seg"></div>
+      <label class="inline-sel">Status <select class="i" id="status-sel" onchange="STATUS_FILTER=this.value;renderJobs()"></select></label>
+      <div class="bar-right">
+        <label class="inline-sel">Group by
+          <select class="i" id="group-by" onchange="setGroupBy(this.value)">
+            <option value="status">Status</option><option value="customer">Customer</option>
+            <option value="due">Due date</option><option value="none">No grouping</option></select></label>
+        <div class="seg sm icons" id="density-seg" role="group" aria-label="Row density">
+          <button data-d="compact" onclick="setDensity('compact')" title="Compact rows" aria-label="Compact rows">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4.5h14M3 8h14M3 11.5h14M3 15h14"/></svg></button>
+          <button data-d="comfy" onclick="setDensity('comfy')" title="Roomy rows" aria-label="Roomy rows">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h14M3 10h14M3 16h14"/></svg></button></div>
+        <button class="btn sm icon-btn" id="grp-toggle-all" onclick="toggleAllGroups()" title="Collapse all groups" aria-label="Collapse all groups">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 7 5 5 5-5"/></svg></button>
+      </div>
     </div>
     <div class="with-feed">
-      <div class="tablewrap"><table class="jobs">
-        <thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th class="hide-md">Label size</th><th class="num">Qty</th><th>Due</th><th>Rolls</th><th>Status</th><th class="hide-lg">Created</th></tr></thead>
+      <div class="tablewrap jobs-wrap"><table class="jobs" id="jobs-table">
+        <thead><tr><th class="c-tk">Ticket</th><th class="c-cust">Customer</th><th>Item</th><th class="hide-md">Label size</th><th class="num">Qty</th><th>Due</th><th>Rolls</th><th class="c-stat">Status</th><th class="hide-lg">Created</th></tr></thead>
         <tbody id="jobs-body"></tbody>
       </table></div>
       <div class="side">
@@ -510,9 +694,11 @@ table.jobs{width:100%;border-collapse:collapse}
   <section class="view" id="v-rolls">
     <div class="floor">
       <div class="floor-list">
-        <div class="seg sm" id="floor-seg"></div>
-        <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input class="i" id="q-floor" placeholder="Ticket, customer, UPC" autocomplete="off"></div>
+        <div class="fl-head">
+          <select class="i" id="floor-sel" aria-label="Show jobs" onchange="FLOOR_FILTER=this.value;renderFloor()"></select>
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="i" id="q-floor" placeholder="Ticket, customer, UPC" autocomplete="off" aria-label="Search jobs"></div>
+        </div>
         <div id="floor-cards"></div>
       </div>
       <div class="work" id="work"><div class="empty">Pick a job on the left to track its rolls.</div></div>
@@ -604,26 +790,43 @@ table.jobs{width:100%;border-collapse:collapse}
   <!-- Settings -->
   <section class="view" id="v-settings">
     <div class="bar"><h1>Settings</h1></div>
-    <div class="panel" id="data-panel" style="max-width:1100px">
+    <div class="set-layout">
+    <nav class="set-nav" id="set-nav" aria-label="Settings sections">
+      <button data-sec="data" onclick="setSettingsSection('data')">Data and backups</button>
+      <button data-sec="backup" onclick="setSettingsSection('backup')">Backup schedule</button>
+      <button data-sec="printers" onclick="setSettingsSection('printers')">Printers</button>
+      <button data-sec="shared" onclick="setSettingsSection('shared')">Shared settings</button>
+      <button data-sec="pc" onclick="setSettingsSection('pc')">This PC</button>
+      <button data-sec="tablets" onclick="setSettingsSection('tablets')">Tablets (rewind)</button>
+      <button data-sec="import" onclick="setSettingsSection('import')">Import old app</button>
+    </nav>
+    <div class="set-body">
+    <div class="panel show" data-sec="data" id="data-panel">
       <h2>Data and backups</h2>
-      <p class="d">There is no single database. Each kind of data has one place that is its source of truth, listed below with whether it can be reached and whether the backups cover it. The app database, serial registry, template previews and config.ini are backed up together; files on the share are not, so the share needs its own backup.</p>
+      <details class="more"><summary>About this</summary><p class="d">There is no single database. Each kind of data has one place that is its source of truth, listed below with whether it can be reached and whether the backups cover it. The app database, serial registry, template previews and config.ini are backed up together; files on the share are not, so the share needs its own backup.</p></details>
       <div id="dp-warn"></div>
       <div style="overflow:auto"><table class="dtab"><thead><tr><th>Data</th><th>Source of truth for</th><th>Location</th><th>Status</th><th>In backups?</th></tr></thead><tbody id="dp-rows"></tbody></table></div>
       <div id="dp-bk" class="dp-bk"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" onclick="backupNow(this)">Back up now</button><button class="btn" onclick="verifyBackup(this)">Check the latest backup</button></div>
       <div class="fieldmsg" id="dp-verify" style="margin-top:8px"></div>
     </div>
-    <div class="panel">
+    <div class="panel" data-sec="pc">
       <h2>This computer</h2>
-      <p class="d">Nobody signs in. When the app needs to know who did something (completing a roll, leaving one in progress,
+      <details class="more"><summary>About this</summary><p class="d">Nobody signs in. When the app needs to know who did something (completing a roll, leaving one in progress,
         adding a note, creating or completing a job) it asks, with this name filled in so you can just press Enter.
-        It's stored in this browser only.</p>
+        It's stored in this browser only.</p></details>
       <div class="grid2"><label class="f">Default name on this PC<input class="i" id="s-operator" maxlength="40" placeholder="e.g. Nima" list="dl-names"></label></div>
     </div>
-    <div class="panel" id="rewind-panel">
+    <div class="panel" data-sec="printers" id="printers-panel">
+      <h2>Printers</h2>
+      <p class="d">One printer name per line. Encoders pick one of these on a roll to say where it is running. Running rolls show their printer in the list.</p>
+      <label class="f">Printer names<textarea class="i" id="s-printers" rows="5" placeholder="Printer 1&#10;Printer 2"></textarea></label>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="savePrinters()">Save printers</button></div>
+    </div>
+    <div class="panel" data-sec="tablets" id="rewind-panel">
       <h2>Rewind page for tablets and phones</h2>
-      <p class="d">A page just for the rewind operators. They scan this QR code with the tablet camera, pick a job that is running in encoding, and skim its rolls.
-        It isn't in this menu, and it updates by itself as jobs are created or change.</p>
+      <details class="more"><summary>About this</summary><p class="d">A page just for the rewind operators. They scan this QR code with the tablet camera, pick a job that is running in encoding, and skim its rolls.
+        It isn't in this menu, and it updates by itself as jobs are created or change.</p></details>
       <div class="rw-box">
         <div class="rw-qr" id="rw-qr"></div>
         <div class="rw-info">
@@ -638,11 +841,11 @@ table.jobs{width:100%;border-collapse:collapse}
         </div>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-sec="pc">
       <h2>Open folder on this PC</h2>
-      <p class="d">The app runs on the host PC, so a browser on another PC can't open Explorer by itself.
+      <details class="more"><summary>About this</summary><p class="d">The app runs on the host PC, so a browser on another PC can't open Explorer by itself.
         A one-time setup on each PC lets the Open folder button work there. It needs no admin rights and nothing runs in the background.
-        Without it, Open folder copies the path for you to paste into File Explorer.</p>
+        Without it, Open folder copies the path for you to paste into File Explorer.</p></details>
       <div id="helper-state" class="helper-state"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <a class="btn primary" href="/helper/open-folder-setup.cmd" onclick="setTimeout(showHelperState,300)">Download setup for this PC</a>
@@ -652,7 +855,7 @@ table.jobs{width:100%;border-collapse:collapse}
       <p class="d" style="margin:10px 0 0">Run the downloaded file once. Windows may warn about a downloaded file; choose More info, then Run anyway.
         The first time you click Open folder, the browser asks to open Job Manager links. Tick Always allow.</p>
     </div>
-    <div class="panel">
+    <div class="panel" data-sec="shared">
       <h2>Shared settings</h2>
       <p class="d">Apply to everyone using the app.</p>
       <div class="stack">
@@ -661,9 +864,9 @@ table.jobs{width:100%;border-collapse:collapse}
         <div><button class="btn primary" onclick="saveShared(this)">Save shared settings</button></div>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-sec="backup">
       <h2>Backups</h2>
-      <p class="d">Each backup zips the database, serial registry, template previews and config.ini, then opens the copy of the database to check it. With no folder set, backups go to a <b>backups</b> folder next to the app: that is this PC only, so set a folder on the share. A folder here also switches on the serial journal. To restore, stop the app and copy files back by hand (see the documentation); that keeps a restore from ever rolling serial numbers back.</p>
+      <details class="more"><summary>About this</summary><p class="d">Each backup zips the database, serial registry, serial journal, template previews and config.ini, then checks that the serial history in the zip is complete. With no folder set, backups go to a <b>backups</b> folder next to the app: that is this PC only, so set a folder on the share. A folder here also switches on the serial journal. To restore in an emergency, close the app and drag a backup zip onto <b>restore_backup.bat</b> (see RESTORE.md). A restore never moves serial numbers backwards.</p></details>
       <div class="stack">
         <label class="f">Backup folder<input class="i" id="s-bdir" placeholder="Z:\3 Encoding and Printing Files\Operations\Backups"></label>
         <div class="grid3">
@@ -675,14 +878,16 @@ table.jobs{width:100%;border-collapse:collapse}
       </div>
       <div class="blist" id="blist"></div>
     </div>
-    <div class="panel">
+    <div class="panel" data-sec="import">
       <h2>Bring data over from the old app</h2>
-      <p class="d">On the host PC, stop Job Manager and drag the old app's folder onto <b>import_old.bat</b> in this app's folder.
+      <details class="more"><summary>About this</summary><p class="d">On the host PC, stop Job Manager and drag the old app's folder onto <b>import_old.bat</b> in this app's folder.
         It shows a preview first. Serial registries are merged so numbers never go backwards; templates, preview images and jobs come along.
-        Running it twice is safe.</p>
+        Running it twice is safe.</p></details>
     </div>
+    </div></div>
   </section>
 </main>
+</div>
 
 <!-- Drawer -->
 <aside class="drawer" id="drawer" aria-label="Job details">
@@ -859,7 +1064,7 @@ function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTi
 const operator = () => localStorage.getItem('jm_operator') || '';
 
 /* ───────────────────────── state ───────────────────────── */
-let META = null, JOBS = [], STATUS_FILTER = 'open', CURRENT = null, STAMP = null;
+let META = null, JOBS = [], STATUS_FILTER = 'all', CURRENT = null, STAMP = null;
 
 async function loadMeta() {
   META = await api('/api/meta');
@@ -876,9 +1081,11 @@ async function loadMeta() {
 }
 
 /* ───────────────────────── navigation ───────────────────────── */
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+document.querySelectorAll('.sidenav nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+const VIEW_TITLES = {jobs: 'Jobs', rolls: 'Roll tracking', archive: 'Archive', templates: 'Templates', tools: 'Tools', settings: 'Settings'};
 function showView(v) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $('#crumb').textContent = VIEW_TITLES[v] || '';
+  document.querySelectorAll('.sidenav nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   closeDrawer();
   if (v === 'jobs') loadJobs();
@@ -891,33 +1098,100 @@ function showView(v) {
 }
 
 /* ───────────────────────── jobs list ───────────────────────── */
-const FILTERS = [['open', 'Open', j => j.status !== 'Complete' && j.status !== 'Cancelled'], ['Pending', 'Pending'], ['In Progress', 'In progress'], ['On Hold', 'On hold'], ['Complete', 'Complete'], ['all', 'All']];
+const FILTERS = [['all', 'All'], ['open', 'Open', j => j.status !== 'Complete' && j.status !== 'Cancelled'], ['Pending', 'Pending'], ['In Progress', 'In progress'], ['On Hold', 'On hold'], ['Complete', 'Complete']];
 async function loadJobs() {
   const d = await api('/api/jobs?view=active&q=' + encodeURIComponent($('#q-jobs').value));
   JOBS = d.jobs; renderJobs(); if (typeof renderPriority === 'function' && PRIORITY) renderPriority();
 }
 function filterFn(key) { const f = FILTERS.find(x => x[0] === key); return f[2] || (key === 'all' ? () => true : j => j.status === key); }
 function renderJobs() {
-  $('#status-seg').innerHTML = FILTERS.map(([k, label]) => {
-    const n = JOBS.filter(filterFn(k)).length;
-    return `<button class="${k === STATUS_FILTER ? 'on' : ''}" onclick="STATUS_FILTER='${k}';renderJobs()">${label}<b>${n}</b></button>`;
-  }).join('');
+  $('#status-sel').innerHTML = FILTERS.map(([k, label]) =>
+    `<option value="${k}" ${k === STATUS_FILTER ? 'selected' : ''}>${label} (${JOBS.filter(filterFn(k)).length})</option>`).join('');
   const rows = JOBS.filter(filterFn(STATUS_FILTER));
   const today = new Date().toISOString().slice(0, 10);
-  $('#jobs-body').innerHTML = rows.length ? rows.map(j => `
-    <tr data-id="${j.id}" class="${CURRENT && CURRENT.job.id === j.id ? 'sel' : ''}" onclick="openJob(${j.id})">
-      <td><div class="tk">${esc(j.job_ticket || '—')}${j.priority_rank ? `<span class="rank" title="Priority">#${j.priority_rank}</span>` : ''}</div><div class="sub data">${esc(j.job_number)}</div></td>
-      <td class="cust">${esc(j.customer)}</td>
+  const tbl = $('#jobs-table');
+  tbl.className = `jobs g-${GROUP_BY} d-${DENSITY}`;
+  $('#group-by').value = GROUP_BY;
+  document.querySelectorAll('#density-seg button').forEach(b => { const on = b.dataset.d === DENSITY; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  $('#grp-toggle-all').hidden = GROUP_BY === 'none';
+  const rowHtml = j => `
+    <tr data-id="${j.id}" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}" class="${CURRENT && CURRENT.job.id === j.id ? 'sel' : ''}" onclick="openJob(${j.id})">
+      <td class="c-tk"><div class="tk">${esc(j.job_ticket || '—')}${j.priority_rank ? `<span class="rank" title="Priority">#${j.priority_rank}</span>` : ''}</div><div class="sub data">${esc(j.job_number)}</div></td>
+      <td class="cust c-cust">${esc(j.customer)}</td>
       <td><div class="item" title="${esc(j.title)}">${esc(j.title)}</div>${j.upc ? `<div class="sub data">${esc(j.upc)}</div>` : `<span class="chip-special">Special</span>`}</td>
       <td class="hide-md nw">${esc(j.label_size || '')}</td>
       <td class="num data">${fmt(j.quantity)}</td>
-      <td class="nw ${j.due_date && j.due_date < today && !['Complete','Cancelled'].includes(j.status) ? 'due-late' : ''}">${esc(j.due_date || '')}</td>
+      <td class="nw">${dueHtml(j, today)}</td>
       <td>${strip(j.roll_done, j.roll_total, (j.roll_running || 0) + (j.roll_paused || 0))}</td>
-      <td><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td>
+      <td class="c-stat"><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td>
       <td class="hide-lg sub nw">${day(j.created_at)}</td>
-    </tr>`).join('')
-    : `<tr><td colspan="9"><div class="empty">${$('#q-jobs').value ? 'No jobs match that search.' : 'No jobs here.'}<br>
+    </tr>`;
+  if (!rows.length) {
+    $('#jobs-body').innerHTML = `<tr><td colspan="9"><div class="empty">${$('#q-jobs').value ? 'No jobs match that search.' : 'No jobs here.'}<br>
        <button class="btn primary" onclick="openNewJob()">Create a job</button></div></td></tr>`;
+    return;
+  }
+  if (GROUP_BY === 'none') { $('#jobs-body').innerHTML = rows.map(rowHtml).join(''); return; }
+  const groups = groupJobs(rows, today);
+  const allShut = groups.every(g => COLLAPSED.has(GROUP_BY + ':' + g.key)), tg = $('#grp-toggle-all');
+  tg.title = tg.ariaLabel = allShut ? 'Expand all groups' : 'Collapse all groups';
+  tg.querySelector('path').setAttribute('d', allShut ? 'm5 13 5-5 5 5' : 'm5 7 5 5 5-5');
+  $('#jobs-body').innerHTML = groups.map(g => {
+    const closed = COLLAPSED.has(GROUP_BY + ':' + g.key);
+    const tot = g.rows.reduce((a, j) => (a.d += j.roll_done || 0, a.t += j.roll_total || 0, a.q += j.quantity || 0, a), {d: 0, t: 0, q: 0});
+    return `<tr class="grp" style="--sc:${g.color}"><td colspan="9"><button class="grp-btn" aria-expanded="${!closed}" data-key="${esc(g.key)}" onclick="toggleGroup(this.dataset.key)">
+        <span class="caret" aria-hidden="true">${closed ? '▸' : '▾'}</span><span class="gname">${esc(g.label)}</span>
+        <span class="gcount">${g.rows.length} job${g.rows.length > 1 ? 's' : ''}</span>
+        ${tot.q ? `<span class="gmeta">${fmt(tot.q)} labels</span>` : ''}${tot.t ? `<span class="gmeta">${tot.d} of ${tot.t} rolls done</span>
+        <span class="gbar"><i style="width:${tot.d / tot.t * 100}%"></i></span>` : ''}</button></td></tr>${closed ? '' : g.rows.map(rowHtml).join('')}`;
+  }).join('');
+}
+/* Grouping: rows cascade under a header that can be folded away, so long lists stay scannable. */
+const STATUS_COLOR = {'In Progress': 'var(--blue)', 'On Hold': 'var(--violet)', 'Pending': 'var(--amber)', 'Complete': 'var(--green)', 'Cancelled': 'var(--red)'};
+const STATUS_ORDER = ['In Progress', 'On Hold', 'Pending', 'Complete', 'Cancelled'];
+function pref(k, d) { try { return localStorage.getItem('jm_' + k) || d; } catch (_) { return d; } }
+function setPref(k, v) { try { localStorage.setItem('jm_' + k, v); } catch (_) {} }
+let GROUP_BY = pref('group', 'customer'), DENSITY = pref('density', 'compact');
+let COLLAPSED = new Set(JSON.parse(pref('collapsed', '[]')));
+function saveCollapsed() { setPref('collapsed', JSON.stringify([...COLLAPSED])); }
+function setGroupBy(v) { GROUP_BY = v; setPref('group', v); renderJobs(); }
+function setDensity(v) { DENSITY = v; setPref('density', v); renderJobs(); }
+function toggleGroup(key) { const k = GROUP_BY + ':' + key; COLLAPSED.has(k) ? COLLAPSED.delete(k) : COLLAPSED.add(k); saveCollapsed(); renderJobs(); }
+function toggleAllGroups() {
+  const rows = JOBS.filter(filterFn(STATUS_FILTER)), keys = groupJobs(rows, new Date().toISOString().slice(0, 10)).map(g => GROUP_BY + ':' + g.key);
+  const allClosed = keys.every(k => COLLAPSED.has(k));
+  keys.forEach(k => allClosed ? COLLAPSED.delete(k) : COLLAPSED.add(k)); saveCollapsed(); renderJobs();
+}
+function dueHtml(j, today) {
+  if (!j.due_date) return '<span class="sub">—</span>';
+  if (['Complete', 'Cancelled'].includes(j.status)) return esc(j.due_date);
+  const iso = dueIso(j.due_date); if (!iso) return esc(j.due_date);
+  const days = Math.round((new Date(iso) - new Date(today)) / 864e5);
+  if (days < 0) return `<span class="due due-late">${esc(j.due_date)}<small>${-days}d late</small></span>`;
+  if (days <= 3) return `<span class="due due-soon">${esc(j.due_date)}<small>${days === 0 ? 'today' : days + 'd'}</small></span>`;
+  return esc(j.due_date);
+}
+// Due dates are typed as MM/DD/YY or ISO; return ISO or null.
+function dueIso(s) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = /^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/.exec(s.trim()); if (!m) return null;
+  const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+}
+function groupJobs(rows, today) {
+  const rank = j => j.priority_rank || 9999;
+  const inner = (a, b) => rank(a) - rank(b) || (dueIso(a.due_date || '') || '9').localeCompare(dueIso(b.due_date || '') || '9') || String(a.job_ticket).localeCompare(String(b.job_ticket));
+  const by = {}; const keyOf = {
+    status: j => j.status, customer: j => j.customer || 'No customer',
+    due: j => { const i = dueIso(j.due_date || ''); if (!i || ['Complete', 'Cancelled'].includes(j.status)) return i ? 'Later' : 'No due date';
+      const d = Math.round((new Date(i) - new Date(today)) / 864e5); return d < 0 ? 'Overdue' : d <= 7 ? 'Due this week' : 'Later'; }}[GROUP_BY];
+  rows.forEach(j => (by[keyOf(j)] = by[keyOf(j)] || []).push(j));
+  let keys = Object.keys(by);
+  if (GROUP_BY === 'status') keys.sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b));
+  else if (GROUP_BY === 'due') keys.sort((a, b) => ['Overdue', 'Due this week', 'Later', 'No due date'].indexOf(a) - ['Overdue', 'Due this week', 'Later', 'No due date'].indexOf(b));
+  else keys.sort((a, b) => a.localeCompare(b));
+  const dueColor = {'Overdue': 'var(--red)', 'Due this week': 'var(--amber)', 'Later': 'var(--line-strong)', 'No due date': 'var(--line-strong)'};
+  return keys.map(k => ({key: k, label: k, rows: by[k].sort(inner),
+    color: GROUP_BY === 'status' ? STATUS_COLOR[k] : GROUP_BY === 'due' ? dueColor[k] : 'var(--accent)'}));
 }
 function strip(done, total, running = 0, paused = 0) {
   if (!total) return '<span class="sub">—</span>';
@@ -1320,11 +1594,11 @@ async function submitNewJob(allowDup = false, offline = null) {
     }
     toast(`${r.job_number} created` + (r.serial_alloc ? ` — serials ${fmt(r.serial_alloc.start)}–${fmt(r.serial_alloc.end)}` : ''));
     r.warnings.forEach(w => toast(w, true));
-    STATUS_FILTER = 'open'; if (!$('#v-rolls').classList.contains('on')) { showView('jobs'); await loadJobs(); openJob(r.job.id); } else loadFloor();
+    STATUS_FILTER = 'all'; if (!$('#v-rolls').classList.contains('on')) { showView('jobs'); await loadJobs(); openJob(r.job.id); } else loadFloor();
     loadMeta();
   } catch (e) {
     if (e.status === 409 && e.data.duplicate_of) {
-      msg.innerHTML = `${esc(e.message)} <a style="color:var(--blue);cursor:pointer;text-decoration:underline" onclick="closeOv('ov-new');openJob(${e.data.duplicate_ids[0]})">Open ${esc(e.data.duplicate_of[0])}</a>`;
+      msg.innerHTML = `${esc(e.message)} <a style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="closeOv('ov-new');openJob(${e.data.duplicate_ids[0]})">Open ${esc(e.data.duplicate_of[0])}</a>`;
       checkTicket();
     } else if (e.status === 423 && e.data.serial_offline) {
       N_OFFLINE = {next: e.data.next_known};
@@ -1452,7 +1726,19 @@ async function loadSettings() {
   await loadMeta(); const s = META.settings;
   $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct;
   $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
+  $('#s-printers').value = s.printers || '';
   loadDataPanel(); loadBackups(); showHelperState(); loadRewind();
+  setSettingsSection(pref('setsec', 'data'));
+}
+function setSettingsSection(k) {
+  if (!document.querySelector(`#set-nav [data-sec="${k}"]`)) k = 'data';
+  setPref('setsec', k);
+  document.querySelectorAll('#set-nav button').forEach(b => { const on = b.dataset.sec === k; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  document.querySelectorAll('#v-settings .panel[data-sec]').forEach(el => el.classList.toggle('show', el.dataset.sec === k));
+}
+async function savePrinters() {
+  try { await api('/api/settings', {method: 'POST', body: {printers: $('#s-printers').value}}); await loadMeta(); $('#s-printers').value = META.settings.printers; toast('Printers saved'); loadPrinters(); }
+  catch (e) { toast(e.message, true); }
 }
 function copyPlain(btn) { copyText(btn.dataset.path); toast('Path copied'); }
 async function loadDataPanel() {
@@ -1467,7 +1753,7 @@ async function loadDataPanel() {
   const b = d.backups, v = b.verify;
   $('#dp-bk').innerHTML = `<div><b>Backups</b> go to <span class="data">${esc(b.dir)}</span> ${b.explicit ? '(set in Settings)' : '<span style="color:var(--amber);font-weight:600">(on this PC only)</span>'}.
     Automatic: ${b.auto ? `every ${b.interval_hours} h, keeping the newest ${b.keep}` : '<b style="color:var(--amber)">off</b>'}. ${b.count} on hand${b.newest ? `, newest ${esc(b.newest.file)}, made ${esc(b.age_text)} (${esc(b.newest.size)})` : ''}.</div>
-    <div>${v ? (v.ok ? `<span style="color:var(--green);font-weight:650">✓ Last check passed</span>: ${esc(v.file)}, ${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files${v.has_config ? ', config.ini' : ''}.`
+    <div>${v ? (v.ok ? `<span style="color:var(--green);font-weight:650">✓ Last check passed</span>: ${esc(v.file)}, serial history complete for ${fmt(v.upcs_checked)} UPCs; ${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files${v.has_journal ? ', journal' : ''}${v.has_config ? ', config.ini' : ''}.`
         : `<span style="color:var(--red);font-weight:650">✗ Last check failed</span>: ${esc(v.error || v.integrity || 'the zip is damaged')}.`) : 'Not checked since the app started. Every backup is checked as it is made; use the button below to check the newest one again.'}</div>`;
 }
 async function verifyBackup(btn) {
@@ -1475,7 +1761,7 @@ async function verifyBackup(btn) {
   try {
     const v = await api('/api/backups/verify', {method: 'POST'});
     m.className = 'fieldmsg ' + (v.ok ? 'ok' : 'bad');
-    m.textContent = v.ok ? `✓ ${v.file}: the zip is sound, the database passes SQLite's integrity check, and it holds ${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges and ${fmt(v.registry_files)} registry files.`
+    m.textContent = v.ok ? `✓ ${v.file}: the zip is sound, the database passes SQLite's integrity check, and the serial history is complete for ${fmt(v.upcs_checked)} UPCs (${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files).`
       : `✗ ${v.file}: ${v.error || v.integrity || 'damaged'}. Make a new backup now.`;
     loadDataPanel();
   } catch (e) { m.className = 'fieldmsg bad'; m.textContent = e.message; } finally { btn.disabled = false; }
@@ -1487,7 +1773,7 @@ function showBackupStatus(b) {
 }
 async function saveBackup(btn) {
   btn.disabled = true;
-  try { await api('/api/settings', {method: 'POST', body: {backup_dir: $('#s-bdir').value, backup_interval_hours: $('#s-bint').value || 12, backup_keep: $('#s-bkeep').value || 60, backup_auto: $('#s-bauto').value}}); toast('Backup settings saved'); loadBackups(); loadDataPanel(); loadMeta(); }
+  try { await api('/api/settings', {method: 'POST', body: {backup_dir: $('#s-bdir').value, backup_interval_hours: $('#s-bint').value || 6, backup_keep: $('#s-bkeep').value || 60, backup_auto: $('#s-bauto').value}}); toast('Backup settings saved'); loadBackups(); loadDataPanel(); loadMeta(); }
   catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
 }
 async function backupNow(btn) {
@@ -1510,12 +1796,12 @@ function ago(ts) {
   if (s < 86400 && d.getDate() === new Date().getDate()) return d.toTimeString().slice(0, 5);
   return ts.slice(5, 10).replace('-', '/') + ' ' + ts.slice(11, 16);
 }
-function composerHtml(ctx, rolls) {
+function composerHtml(ctx, rolls, sel = '') {
   return `<div class="composer">
     <textarea id="${ctx}-note-body" placeholder="Add a note: lane issue, swapped inlay roll, customer request…" maxlength="2000"></textarea>
     <div class="row">
       <select class="i" id="${ctx}-note-roll" aria-label="Note is about">
-        <option value="">Whole job</option>${(rolls || []).map(r => `<option value="${r.roll_number}">Roll ${r.roll_number}</option>`).join('')}
+        <option value="">Whole job</option>${(rolls || []).map(r => `<option value="${r.roll_number}" ${String(sel) === String(r.roll_number) ? 'selected' : ''}>Roll ${r.roll_number}</option>`).join('')}
       </select>
       <label class="ck"><input type="checkbox" id="${ctx}-note-imp"> Important</label>
       <button class="btn sm primary" onclick="addNote('${ctx}')">Add note</button>
@@ -1538,7 +1824,7 @@ async function addNote(ctx) {
   try {
     await api(`/api/jobs/${noteJobId(ctx)}/notes`, {method: 'POST', body: {
       body, author: who, roll_number: +$(`#${ctx}-note-roll`).value || null, important: $(`#${ctx}-note-imp`).checked}});
-    $(`#${ctx}-note-body`).value = ''; $(`#${ctx}-note-imp`).checked = false; if (ctx !== 'r') $(`#${ctx}-note-roll`).value = '';
+    $(`#${ctx}-note-body`).value = ''; $(`#${ctx}-note-imp`).checked = false;
     toast('Note added'); afterNoteChange();
   } catch (e) { toast(e.message, true); }
 }
@@ -1587,37 +1873,69 @@ $('#nm-cancel').onclick = () => nmDone(false);
 $('#nm-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nmDone(true); } if (e.key === 'Escape') { e.stopPropagation(); nmDone(false); } });
 
 /* ───────────────────────── roll tracking page ───────────────────────── */
-let FLOOR = [], FLOOR_FILTER = 'running', WORK = null, WORK_ROLL = null; const VERIFY = {};
-const FFILTERS = [['running', 'Active', j => j.status === 'In Progress'], ['queued', 'Queued', j => j.status === 'Pending'],
-  ['hold', 'On hold', j => j.status === 'On Hold'], ['all', 'All', () => true]];
+let FLOOR = [], FLOOR_FILTER = 'running', WORK = null, WORK_ROLL = null, ROLL_FILTER = 'all', RECS = {}; const VERIFY = {};
+let PRINTERS = {printers: [], busy: []};
+function setRollFilter(k) { ROLL_FILTER = k; renderWork(); }
+const FFILTERS = [['all', 'All', () => true], ['running', 'Active', j => j.status === 'In Progress'], ['queued', 'Queued', j => j.status === 'Pending'],
+  ['hold', 'On hold', j => j.status === 'On Hold']];
 async function loadFloor(keepWork) {
   const d = await api('/api/floor'); FLOOR = d.jobs;
-  if (FLOOR_FILTER === 'running' && !FLOOR.some(j => j.status === 'In Progress') && !keepWork) FLOOR_FILTER = 'queued';
+  await loadPrinters();
   renderFloor();
   if (WORK && !keepWork) openWork(WORK.job.id, true);
 }
 function renderFloor() {
-  $('#floor-seg').innerHTML = FFILTERS.map(([k, l, f]) =>
-    `<button class="${k === FLOOR_FILTER ? 'on' : ''}" onclick="FLOOR_FILTER='${k}';renderFloor()">${l}<b>${FLOOR.filter(f).length}</b></button>`).join('');
+  $('#floor-sel').innerHTML = FFILTERS.map(([k, l, f]) =>
+    `<option value="${k}" ${k === FLOOR_FILTER ? 'selected' : ''}>${l} (${FLOOR.filter(f).length})</option>`).join('');
   const q = $('#q-floor').value.toLowerCase().trim();
   const f = FFILTERS.find(x => x[0] === FLOOR_FILTER)[2];
   const rows = FLOOR.filter(f).filter(j => !q || [j.job_ticket, j.customer, j.title, j.upc, j.job_number].join(' ').toLowerCase().includes(q));
   $('#floor-cards').innerHTML = rows.length ? rows.map(j => {
     const pct = j.roll_total ? j.roll_done / j.roll_total * 100 : 0;
-    return `<button class="fc ${WORK && WORK.job.id === j.id ? 'on' : ''}" onclick="openWork(${j.id})">
-      <div class="t"><b>${esc(j.job_ticket || j.job_number)}</b><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
-      <div class="c">${esc(j.customer)}</div><div class="s">${esc(j.title)}</div>
-      <div class="p"><span class="bar"><i style="width:${pct}%"></i><i class="r" style="width:${j.roll_total ? (j.running_rolls ? j.running_rolls.split(',').length : 0) / j.roll_total * 100 : 0}%"></i><i class="p" style="width:${j.roll_total ? (j.paused_count || 0) / j.roll_total * 100 : 0}%"></i></span>${j.roll_done} of ${j.roll_total} done</div>
-      ${j.running_rolls ? `<div class="runners">${esc(runnersText(j.running_rolls))}</div>` : ''}${j.paused_count ? `<div class="pausers">${j.paused_count} paused</div>` : ''}
+    return `<button class="fc ${WORK && WORK.job.id === j.id ? 'on' : ''}" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}" onclick="openWork(${j.id})">
+      <div class="t"><b>${esc(j.customer)}</b><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+      <div class="c"><span class="data">${esc(j.job_ticket || j.job_number)}</span><span class="s"> · ${esc(j.title)}</span></div>
+      <div class="p"><span class="bar"><i style="width:${pct}%"></i><i class="r" style="width:${j.roll_total ? ((j.running_rolls ? j.running_rolls.split(',').length : 0) + (j.paused_count || 0)) / j.roll_total * 100 : 0}%"></i></span>${j.roll_done} of ${j.roll_total} done${j.due_date ? ` · due ${esc(j.due_date)}` : ''}</div>
+      ${j.running_rolls ? `<div class="runners">${esc(runnersText(j.running_rolls))}</div>` : ''}${j.paused_count ? `<div class="runners">${j.paused_count} left in progress</div>` : ''}
       ${j.important_count ? `<span class="flag">${j.important_count} important note${j.important_count > 1 ? 's' : ''}</span>` : ''}
     </button>`;
   }).join('') : `<div class="empty" style="padding:24px 10px">${q ? 'No jobs match.' : FLOOR_FILTER === 'running' ? 'No jobs are running. Start one from Queued.' : 'Nothing here.'}</div>`;
 }
 $('#q-floor').addEventListener('input', debounce(renderFloor, 150));
 function runnersText(s) {
-  const by = {};
-  s.split(',').forEach(x => { const [n, w] = x.split(':'); (by[w || 'Someone'] = by[w || 'Someone'] || []).push(+n); });
-  return Object.entries(by).map(([w, ns]) => `${w} on ${ns.length > 1 ? 'rolls' : 'roll'} ${rangesText(ns)}`).join('; ');
+  return s.split(',').map(x => { const [n, w, p] = x.split(':'); return `Roll ${n} ${p ? 'on ' + p : '(no printer)'}${w ? ', ' + w : ''}`; }).join('; ');
+}
+async function loadPrinters() {
+  try { PRINTERS = await api('/api/printers'); } catch (_) { /* keep what we had */ }
+  updatePrinterBar();
+}
+const busyOn = (name, job, roll) => PRINTERS.busy.find(b => b.printer.toLowerCase() === name.toLowerCase() && !(b.job_id === job && b.roll_number === roll));
+function printerBarHtml(r) {
+  const j = WORK.job, st = RSTATE(r);
+  if (st === 'done') return r.printer ? `<div class="rc-printer"><span class="pl">Ran on</span><b>${esc(r.printer)}</b></div>` : '';
+  const names = [...PRINTERS.printers]; if (r.printer && !names.some(n => n.toLowerCase() === r.printer.toLowerCase())) names.push(r.printer);
+  const cur = names.find(n => n.toLowerCase() === (r.printer || '').toLowerCase()) || '';
+  return `<div class="rc-printer"><label class="pl" for="printer-sel">${st === 'pending' ? 'Start on printer' : 'Running on'}</label>
+    <select class="i" id="printer-sel" onchange="setPrinter(this.value)">
+      <option value="" ${cur ? '' : 'selected'}>${st === 'pending' ? 'Choose a printer to start…' : 'No printer'}</option>
+      ${names.map(n => { const o = busyOn(n, j.id, r.roll_number);
+        return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${o ? ` (busy: ${esc(o.customer)} roll ${o.roll_number})` : ''}</option>`; }).join('')}
+    </select></div>`;
+}
+function updatePrinterBar() {
+  const el = $('#rc-printer'); if (!el || !WORK || !currentRoll()) return;
+  el.innerHTML = printerBarHtml(currentRoll());
+}
+async function setPrinter(name) {
+  const r = currentRoll(), j = WORK.job; if (!r) return;
+  const o = name && busyOn(name, j.id, r.roll_number);
+  if (o && !confirm(`${name} is running ${o.customer} ${o.job_ticket || o.job_number}, roll ${o.roll_number}. Put roll ${r.roll_number} on it too?`)) return updatePrinterBar();
+  const who = await askName(name ? `Who is loading roll ${r.roll_number} on ${name}?` : `Who is taking roll ${r.roll_number} off its printer?`); if (!who) return updatePrinterBar();
+  try {
+    await api(`/api/jobs/${j.id}/rolls/${r.roll_number}/printer`, {method: 'POST', body: {printer: name, operator: who}});
+    toast(name ? `Roll ${r.roll_number} is on ${name}` : `Roll ${r.roll_number} taken off its printer`);
+    await openWork(j.id); loadFloor(true);
+  } catch (e) { toast(e.message, true); }
 }
 function trackJob(id) { closeDrawer(); showView('rolls'); openWork(id); }
 
@@ -1626,18 +1944,17 @@ async function openWork(id, quiet) {
   try { d = await api('/api/jobs/' + id); } catch (e) { if (!quiet) toast(e.message, true); return; }
   const draft = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-roll').value, $('#w-note-imp').checked] : null;
   const sameJob = WORK && WORK.job.id === id;
-  if (!sameJob) WORK_ROLL = null;
-  const rdraft = sameJob && $('#r-note-body') ? $('#r-note-body').value : '';
+  if (!sameJob) { WORK_ROLL = null; ROLL_FILTER = 'all'; }
   const vfocus = document.activeElement && document.activeElement.id === 'verify-in' ? $('#verify-in').value : null;
   WORK = d; renderWork();
-  if (rdraft && $('#r-note-body')) $('#r-note-body').value = rdraft;
   if (vfocus !== null && $('#verify-in')) { $('#verify-in').value = vfocus; $('#verify-in').focus(); }
-  if (draft && sameJob) { $('#w-note-body').value = draft[0]; $('#w-note-roll').value = draft[1]; $('#w-note-imp').checked = draft[2]; }
+  if (draft && sameJob && $('#w-note-body')) { $('#w-note-body').value = draft[0]; $('#w-note-roll').value = draft[1]; $('#w-note-imp').checked = draft[2]; }
   renderFloor();
 }
 // "In progress" = started or left unfinished (older "paused" rolls count as in progress).
 const RSTATE = r => isDone(r) ? 'done' : (r.status === 'running' || r.status === 'paused') ? 'running' : 'pending';
 const RLABEL = {pending: 'Not started', running: 'In progress', done: 'Done'};
+const RGLYPH = {pending: '○', running: '▶', done: '✓'};   // not shown with colour alone
 function pickDefaultRoll(rolls) {
   const me = operator();
   const f = pred => rolls.find(pred);
@@ -1645,8 +1962,63 @@ function pickDefaultRoll(rolls) {
          || f(x => !isDone(x)) || rolls[0];
   return r ? r.roll_number : null;
 }
+/* Rolls are listed as rectangles joined into one continuous rail (green done, blue in progress, grey waiting).
+   Past 10 rolls they cascade into blocks of 10 whose headers show that block's progress; numbering keeps
+   counting on from one block to the next, and finished blocks fold away. */
+const BATCH = 10, BATCH_OPEN = {};
+function toggleBatch(b) {
+  const k = WORK.job.id + ':' + b, el = document.querySelector(`.rb[data-b="${b}"]`);
+  BATCH_OPEN[k] = el.classList.contains('closed'); renderWork();
+}
+/* Record numbers: what an encoder types into BarTender ("print records 1 to 500"). A roll's records follow on from
+   the rolls before it. When the job's database is split into files of qty_db rows, numbering restarts in each file. */
+function recSegs(before, qty, qdb) {
+  const segs = []; let a = before + 1; const end = before + qty;
+  while (a <= end) {
+    const file = qdb ? Math.floor((a - 1) / qdb) + 1 : 1, fileEnd = qdb ? file * qdb : end, b = Math.min(end, fileEnd);
+    segs.push({file, from: qdb ? (a - 1) % qdb + 1 : a, to: qdb ? (b - 1) % qdb + 1 : b}); a = b + 1;
+  }
+  return segs;
+}
+function recMap(job, rolls) {
+  const m = {}; let cum = 0; const total = rolls.reduce((a, r) => a + r.quantity, 0), qdb = job.qty_db && job.qty_db < total ? job.qty_db : 0;
+  rolls.forEach(r => { m[r.roll_number] = {segs: recSegs(cum, r.quantity, qdb), multi: !!qdb}; cum += r.quantity; });
+  return m;
+}
+const recText = sg => `${fmt(sg.from)}–${fmt(sg.to)}`;
+const recCopy = sg => `${sg.from}-${sg.to}`;
+function rollRowHtml(r, noteRolls) {
+  const st = RSTATE(r), who = st === 'done' ? r.completed_by : st === 'pending' ? '' : (r.paused_by || r.started_by);
+  const on = r.roll_number === WORK_ROLL, rec = RECS[r.roll_number], sg = rec.segs[0];
+  const rng = recText(sg) + (rec.segs.length > 1 ? ' +' : '');
+  const right = st === 'running' ? (r.printer ? `<span class="pchip">${esc(r.printer)}</span>` : '<span class="pchip none">No printer</span>') : esc(who || '');
+  const lbl = `Roll ${r.roll_number}, records ${recText(sg)}${rec.multi ? ` in database file ${sg.file}` : ''}, ${RLABEL[st]}${r.printer ? ' on ' + r.printer : ''}${who ? ' by ' + who : ''}${noteRolls.has(r.roll_number) ? ', has notes' : ''}`;
+  return `<button class="ri s-${st} ${on ? 'on' : ''}" role="option" aria-selected="${on}" data-n="${r.roll_number}" title="${esc(lbl)}" aria-label="${esc(lbl)}" onclick="openRoll(${r.roll_number})">
+    <span class="rno">${r.roll_number}</span><span class="g" aria-hidden="true">${RGLYPH[st]}</span>
+    <span class="rec data">${esc(rng)}${rec.multi ? `<small>DB ${sg.file}</small>` : ''}</span><span class="who">${right}</span>
+    ${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</button>`;
+}
+function rollBatchesHtml(rolls, noteRolls) {
+  const shown = rolls.filter(r => ROLL_FILTER === 'all' || RSTATE(r) === ROLL_FILTER || r.roll_number === WORK_ROLL);
+  if (!shown.length) return '<div class="empty" style="padding:18px 8px">No rolls here.</div>';
+  if (rolls.length <= BATCH) return `<div class="rb-body">${shown.map(r => rollRowHtml(r, noteRolls)).join('')}</div>`;
+  const blocks = {};
+  shown.forEach(r => (blocks[Math.floor((r.roll_number - 1) / BATCH)] = blocks[Math.floor((r.roll_number - 1) / BATCH)] || []).push(r));
+  return Object.keys(blocks).map(b => {
+    const all = rolls.filter(r => Math.floor((r.roll_number - 1) / BATCH) === +b), n = all.filter(isDone).length;
+    const lo = all[0].roll_number, hi = all[all.length - 1].roll_number;
+    const dflt = all.some(r => !isDone(r)) || all.some(r => r.roll_number === WORK_ROLL);
+    const open = BATCH_OPEN[WORK.job.id + ':' + b] ?? dflt;
+    return `<div class="rb ${open ? '' : 'closed'} ${n === all.length ? 'full' : ''}" data-b="${b}">
+      <button class="rb-head" aria-expanded="${open}" onclick="toggleBatch(${b})"><span class="caret" aria-hidden="true">${open ? '▾' : '▸'}</span>
+        <b>Rolls ${lo}–${hi}</b><span class="rb-n">${n === all.length ? '✓ all done' : `${n} of ${all.length} done`}</span>
+        <span class="rb-bar" aria-hidden="true"><i style="width:${n / all.length * 100}%"></i></span></button>
+      ${open ? `<div class="rb-body">${blocks[b].map(r => rollRowHtml(r, noteRolls)).join('')}</div>` : ''}</div>`;
+  }).join('');
+}
 function renderWork() {
   const {job: j, rolls, notes, total_qty} = WORK;
+  RECS = recMap(j, rolls);
   if (!rolls.some(r => r.roll_number === WORK_ROLL)) WORK_ROLL = pickDefaultRoll(rolls);
   const cnt = s => rolls.filter(r => RSTATE(r) === s).length;
   const done = cnt('done');
@@ -1670,53 +2042,75 @@ function renderWork() {
   const listHtml = !rolls.length ? `<div class="ticketnote">This job has no rolls to track (no UPC or labels per roll).</div>` : `
     ${done === rolls.length ? `<div class="alldone"><b>All ${rolls.length} rolls done.</b>
       ${j.status !== 'Complete' ? `<button class="btn primary sm" onclick="workStatus('Complete')">Mark job complete</button>` : ''}</div>` : ''}
-    <div class="rsum"><span><b>${done}</b> done</span><span class="r-run"><b>${cnt('running')}</b> in progress</span>
-      <span><b>${cnt('pending')}</b> not started</span></div>
-    <div class="stack-bar"><i class="d" style="width:${pct(done)}%"></i><i class="r" style="width:${pct(cnt('running'))}%"></i></div>
-    <div class="rlist" role="listbox" aria-label="Rolls">${rolls.map(r => {
-      const st = RSTATE(r), who = st === 'done' ? r.completed_by : st === 'pending' ? '' : (r.paused_by || r.started_by);
-      return `<button class="ri s-${st} ${r.roll_number === WORK_ROLL ? 'on' : ''}" role="option" aria-selected="${r.roll_number === WORK_ROLL}"
-        onclick="openRoll(${r.roll_number})"><b>${r.roll_number}</b><span class="st">${RLABEL[st]}${who ? ` · ${esc(who)}` : ''}</span>
-        <span class="ser data">${r.serial_start ? `${esc(String(r.serial_start).slice(-5))}–${esc(String(r.serial_end).slice(-5))}` : `${fmt(r.quantity)} labels`}</span>
-        ${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</button>`;
-    }).join('')}</div>`;
+    <div class="seg sm rfilter" role="group" aria-label="Filter rolls">${[['all', 'All', rolls.length], ['pending', 'Not started', cnt('pending')], ['running', 'In progress', cnt('running')], ['done', 'Done', done]].map(([k, l, n]) =>
+      `<button class="${k === ROLL_FILTER ? 'on' : ''}" aria-pressed="${k === ROLL_FILTER}" onclick="setRollFilter('${k}')">${l}<b>${n}</b></button>`).join('')}</div>
+    <div class="rlist" role="listbox" aria-label="Rolls">${rollBatchesHtml(rolls, noteRolls)}</div>`;
 
+  const pctDone = rolls.length ? Math.round(done / rolls.length * 100) : 0;
+  const prog = rolls.length ? `<div class="wh-prog" role="group" aria-label="Job progress">
+      <div class="stack-bar" aria-hidden="true"><i class="d" style="width:${pct(done)}%"></i><i class="r" style="width:${pct(cnt('running'))}%"></i></div>
+      <div class="rsum"><span><b>${done}</b> of ${rolls.length} rolls done (${pctDone}%)</span><span class="r-run"><b>${cnt('running')}</b> in progress</span>
+        <span><b>${cnt('pending')}</b> not started</span></div></div>` : '';
+  const copyBtns = btLine ? `<div class="btcopy"><span>BarTender</span>` +
+    tpl.map(f => `<button class="btn sm quiet" title="${esc(f.name)}" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy template path</button>`).join('') +
+    dbf.map(f => `<button class="btn sm quiet" title="${esc(f.name)}" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy database path</button>`).join('') + `</div>` : '';
+  const impHtml = important.length ? `<div class="imp"><b>Important</b>${important.map(n => `<p>${n.roll_number ? `<b style="display:inline;color:inherit">Roll ${n.roll_number}:</b> ` : ''}${esc(n.body)} <span style="color:var(--muted);font-size:12px">— ${esc(n.author || '')}</span></p>`).join('')}</div>` : '';
+  const tkHtml = j.notes ? `<div class="ticketnote"><b>Notes from the ticket</b>${esc(j.notes)}</div>` : '';
   $('#work').innerHTML = `
-    <div class="w-head">
-      <div><h2>${esc(j.customer)}, ticket ${esc(j.job_ticket || '—')}</h2>
-        <div class="sub">${esc(j.title)} — ${esc(j.job_number)}</div><div class="chips">${chips}</div>${btLine}</div>
-      <div class="acts"><span class="pill ${stc(j.status)}" style="align-self:center">${esc(j.status)}</span>${statusBtns}
+    <div class="w-head" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}">
+      <div class="wh-main">
+        <div class="wh-title"><h2>${esc(j.customer)} <span class="wh-tk">ticket ${esc(j.job_ticket || '—')}</span></h2><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+        <div class="sub">${esc(j.title)} · ${esc(j.job_number)}</div><div class="chips">${chips}</div>${prog}</div>
+      <div class="acts"><div class="acts-row">${statusBtns}
         <button class="btn" onclick="openFolder(${j.id}, ${esc(JSON.stringify(j.folder_path || ''))})" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
         <button class="btn" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
-        <button class="btn quiet" onclick="openJob(${j.id})">Job details</button></div>
+        <button class="btn quiet" onclick="openJob(${j.id})">Job details</button></div>${copyBtns}</div>
     </div>
-    ${important.length || j.notes ? `<div class="w-top">
-      ${important.length ? `<div class="imp"><b>Important</b>${important.map(n => `<p>${n.roll_number ? `<b style="display:inline;color:inherit">Roll ${n.roll_number}:</b> ` : ''}${esc(n.body)} <span style="color:var(--muted);font-size:12px">— ${esc(n.author || '')}</span></p>`).join('')}</div>` : ''}
-      ${j.notes ? `<div class="ticketnote"><b>Notes from the ticket</b>${esc(j.notes)}</div>` : ''}</div>` : ''}
+    ${impHtml || tkHtml ? `<div class="w-top ${impHtml && tkHtml ? 'two' : ''}">${impHtml}${tkHtml}</div>` : ''}
     <div class="w-body2">
       <div class="w-rolls">${listHtml}</div>
-      <div class="w-roll" id="rollpanel">${rolls.length ? rollPanelHtml() : ''}</div>
-    </div>
-    <div class="w-foot">
-      <div><h3>All notes for this job</h3>${composerHtml('w', rolls)}<div>${notesHtml(notes)}</div></div>
-      <div><h3>History</h3><div id="w-hist" class="feed-list" style="max-height:320px;border:1px solid var(--line);border-radius:7px"></div></div>
+      <div class="w-roll" id="rollpanel">${rollPanelHtml()}</div>
     </div>`;
-  loadJobHistory(j.id);
+  if (NOTE_TAB === 'hist') loadJobHistory(j.id);
 }
 
+/* One card per roll: header with the actions, what the roll is (strip + tag range), the tag check, and
+   notes/history in tabs. On a wide card the notes sit beside the data; on a narrow one they stack under it. */
+let NOTE_TAB = 'roll';
+const currentRoll = () => (WORK.rolls || []).find(x => x.roll_number === WORK_ROLL) || null;
+function notesBlockHtml(r) {
+  const {rolls, notes} = WORK, tab = (!r && NOTE_TAB === 'roll') ? 'job' : NOTE_TAB;
+  const rn = r ? notes.filter(n => n.roll_number === r.roll_number) : [];
+  const tabs = [...(r ? [['roll', `Roll ${r.roll_number} notes`, rn.length]] : []), ['job', 'Job notes', notes.length], ['hist', 'History']];
+  const body = tab === 'hist' ? '<div id="w-hist" class="feed-list"></div>'
+    : `${composerHtml('w', rolls, tab === 'roll' && r ? r.roll_number : '')}<div>${tab === 'roll' && !rn.length ? `<div style="color:var(--muted);font-size:13px">No notes on roll ${r.roll_number} yet.</div>` : notesHtml(tab === 'roll' ? rn : notes)}</div>`;
+  return `<div class="rtabs" role="tablist" aria-label="Notes and history">${tabs.map(([k, l, n]) =>
+    `<button role="tab" aria-selected="${k === tab}" class="${k === tab ? 'on' : ''}" onclick="setNoteTab('${k}')">${l}${n !== undefined ? `<b>${n}</b>` : ''}</button>`).join('')}</div>${body}`;
+}
+function setNoteTab(t) {
+  const d = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-imp').checked] : null;
+  NOTE_TAB = t; $('#rollnotes').innerHTML = notesBlockHtml(currentRoll());
+  if (d && $('#w-note-body')) { $('#w-note-body').value = d[0]; $('#w-note-imp').checked = d[1]; }
+  if (t === 'hist') loadJobHistory(WORK.job.id);
+}
+function refreshCard() {
+  const d = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-imp').checked] : null;
+  $('#rollpanel').innerHTML = rollPanelHtml();
+  if (d && $('#w-note-body')) { $('#w-note-body').value = d[0]; $('#w-note-imp').checked = d[1]; }
+  if (NOTE_TAB === 'hist') loadJobHistory(WORK.job.id);
+}
+function copyRaw(btn) { copyText(btn.dataset.copy); toast('Copied'); }
 function rollPanelHtml() {
-  const {job: j, rolls, notes} = WORK;
-  const r = rolls.find(x => x.roll_number === WORK_ROLL); if (!r) return '';
+  const {job: j, rolls} = WORK;
+  const r = currentRoll();
+  if (!r) return `<div class="rc"><div class="rc-body one"><div class="rc-notes" id="rollnotes">${notesBlockHtml(null)}</div></div></div>`;
   const st = RSTATE(r), idx = rolls.indexOf(r);
   const prev = rolls[idx - 1], next = rolls[idx + 1];
-  const rn = notes.filter(n => n.roll_number === r.roll_number);
   const t = s => s ? esc(s.slice(5, 16).replace('-', '/')) : '';
   const epc = e => `${esc(e.slice(0, -5))}<b>${esc(e.slice(-5))}</b>`;
   const lastAt = r.paused_at || r.started_at, lastBy = r.paused_by || r.started_by;
-  const timeline = [
-    st === 'running' && lastAt && `In progress since ${t(lastAt)}${lastBy ? ' — ' + esc(lastBy) : ''}`,
-    st === 'done' && `Done ${t(r.completed_at)}${r.completed_by ? ' by ' + esc(r.completed_by) : ''}`,
-  ].filter(Boolean).join('<br>');
+  const timeline = st === 'running' && lastAt ? `In progress since ${t(lastAt)}${lastBy ? ' by ' + esc(lastBy) : ''}`
+    : st === 'done' ? `Done ${t(r.completed_at)}${r.completed_by ? ' by ' + esc(r.completed_by) : ''}` : 'Not started';
   const actions = {
     pending: `<button class="btn primary big" onclick="rollAction('complete')">Complete roll ${r.roll_number}</button>
               <button class="btn" onclick="showLeft()">Left in progress…</button>`,
@@ -1725,47 +2119,55 @@ function rollPanelHtml() {
     done:    `<button class="btn" onclick="rollAction('running', 'Reopen roll ${r.roll_number}? It goes back to in progress.')">Reopen</button>`,
   }[st];
   const checks = (VERIFY[`${j.id}:${r.roll_number}`] || []);
-  return `
-    <div class="rp-head">
-      <button class="btn sm quiet" onclick="openRoll(${prev ? prev.roll_number : r.roll_number})" ${prev ? '' : 'disabled'} aria-label="Previous roll">‹ Prev</button>
-      <div class="rp-title"><h3>Roll ${r.roll_number} <span>of ${rolls.length}</span></h3><span class="rstate s-${st}">${RLABEL[st]}</span></div>
-      <button class="btn sm quiet" onclick="openRoll(${next ? next.roll_number : r.roll_number})" ${next ? '' : 'disabled'} aria-label="Next roll">Next ›</button>
+  const cp = (v, what) => `<button class="btn sm quiet" data-copy="${esc(String(v))}" onclick="copyRaw(this)" aria-label="Copy ${what}">Copy</button>`;
+  return `<div class="rc">
+    <div class="rc-head">
+      <div class="rc-nav">
+        <button class="btn sm quiet" onclick="openRoll(${prev ? prev.roll_number : r.roll_number})" ${prev ? '' : 'disabled'} aria-label="Previous roll">‹</button>
+        <h3>Roll ${r.roll_number} <span>of ${rolls.length}</span></h3>
+        <button class="btn sm quiet" onclick="openRoll(${next ? next.roll_number : r.roll_number})" ${next ? '' : 'disabled'} aria-label="Next roll">›</button>
+        <span class="rstate s-${st}">${RLABEL[st]}</span>
+      </div>
+      <div class="rc-acts">${actions}${st !== 'pending' && st !== 'done' ? `<button class="btn quiet sm" onclick="rollAction('pending', 'Reset roll ${r.roll_number} to not started?')">Reset</button>` : ''}</div>
+      <div class="rc-sub">${timeline}${r.printer && st !== 'done' ? ' · on ' + esc(r.printer) : ''}</div>
     </div>
-    <dl class="rp-data">
-      <div><dt>Labels on this roll</dt><dd class="data big">${fmt(r.quantity)}</dd></div>
-      <div><dt>UPC</dt><dd class="data">${j.upc ? esc(j.upc) : '<span class="chip-special">Special job</span>'}</dd></div>
-      ${r.serial_start ? `<div class="w2"><dt>Serial range</dt><dd class="data">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</dd></div>
-      <div class="w2"><dt>First EPC</dt><dd class="data epc">${epc(r.epc_start)}</dd></div>
-      <div class="w2"><dt>Last EPC</dt><dd class="data epc">${epc(r.epc_end)}</dd></div>` : `<div class="w2"><dt>Serials</dt><dd>None. This is a special job without a UPC.</dd></div>`}
-      <div><dt>Label size</dt><dd>${esc(j.label_size || '—')}</dd></div>
-      <div><dt>Inlay</dt><dd>${esc(j.inlay_type || '—')}</dd></div>
-    </dl>
-    ${r.serial_start ? `<div class="verify">
-      <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll.</span>
-        <input class="i data" id="verify-in" placeholder="24-character EPC" autocomplete="off" spellcheck="false"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();verifyEpc()}"></label>
-      ${checks.length ? `<div class="vlist">${checks.slice(-6).reverse().map(c => `<div class="v ${c.ok ? 'ok' : 'bad'}"><span class="data">${esc(c.epc)}</span>${esc(c.msg)}</div>`).join('')}</div>` : ''}
-    </div>` : ''}
-    <div class="rp-acts">${actions}${st !== 'pending' && st !== 'done' ? `<button class="btn quiet sm" onclick="rollAction('pending', 'Reset roll ${r.roll_number} to not started?')">Reset</button>` : ''}</div>
-    <div class="pausebox" id="pausebox"><input class="i" id="pause-why" placeholder="Where did it stop? (optional, saved as a note)" maxlength="300"
+    <div id="rc-printer">${printerBarHtml(r)}</div>
+    <div class="pausebox" id="pausebox"><input class="i" id="pause-why" aria-label="Where did it stop" placeholder="Where did it stop? (optional, saved as a note)" maxlength="300"
         onkeydown="if(event.key==='Enter')rollAction('running')"><button class="btn" onclick="rollAction('running')">Save as in progress</button>
         <button class="btn quiet" onclick="$('#pausebox').classList.remove('on')">Cancel</button></div>
-    ${timeline ? `<div class="rp-time">${timeline}</div>` : ''}
-    <div class="rp-notes"><h3>Notes on roll ${r.roll_number}</h3>
-      ${rn.length ? rn.map(n => `<div class="note ${n.important ? 'important' : ''}"><div class="m"><b style="color:var(--ink)">${esc(n.author || 'Someone')}</b><span>${ago(n.created_at)}</span></div><p>${esc(n.body)}</p></div>`).join('') : ''}
-      <div class="composer"><textarea id="r-note-body" placeholder="Note on roll ${r.roll_number}…" maxlength="2000"></textarea>
-        <div class="row"><input type="hidden" id="r-note-roll" value="${r.roll_number}">
-          <label class="ck"><input type="checkbox" id="r-note-imp"> Important</label>
-          <button class="btn sm primary" onclick="addNote('r')">Add note</button></div></div>
-    </div>`;
+    <div class="rc-body">
+      <div class="rc-main">
+        <dl class="rc-strip">
+          <div class="rc-rec"><dt>BarTender records${RECS[r.roll_number].multi ? ' (numbering restarts in each database file)' : ''}</dt>
+            ${RECS[r.roll_number].segs.map(sg => `<dd class="data big">${RECS[r.roll_number].multi ? `<small>File ${sg.file}</small> ` : ''}${recText(sg)}
+              <button class="btn sm quiet" data-copy="${recCopy(sg)}" onclick="copyRaw(this)" aria-label="Copy records ${recCopy(sg)}">Copy</button></dd>`).join('')}</div>
+          <div><dt>Labels</dt><dd class="data">${fmt(r.quantity)}</dd></div>
+          <div><dt>Size</dt><dd>${esc(j.label_size || '—')}</dd></div>
+          <div><dt>Inlay</dt><dd>${esc(j.inlay_type || '—')}</dd></div>
+          ${j.upc ? `<div><dt>UPC</dt><dd class="data">${esc(j.upc)}</dd></div>` : ''}
+        </dl>
+        ${r.serial_start ? `<table class="trange"><caption class="sr">Tag range for roll ${r.roll_number}</caption><tbody>
+          <tr><th scope="row">Serials</th><td class="data">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</td><td>${cp(r.serial_start + '-' + r.serial_end, 'serial range')}</td></tr>
+          <tr><th scope="row">First EPC</th><td class="data epc">${epc(r.epc_start)}</td><td>${cp(r.epc_start, 'first EPC')}</td></tr>
+          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr></tbody></table>
+        <div class="verify">
+          <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll.</span>
+            <input class="i data" id="verify-in" placeholder="24-character EPC" autocomplete="off" spellcheck="false"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();verifyEpc()}"></label>
+          <div class="vlist" role="status" aria-live="polite">${checks.slice(-3).reverse().map(c => `<div class="v ${c.ok ? 'ok' : 'bad'}"><span class="data">${esc(c.epc)}</span>${c.ok ? '✓ ' : '✗ '}${esc(c.msg)}${c.go ? ` <button class="btn sm" onclick="openRoll(${c.go})">Go to roll ${c.go}</button>` : ''}</div>`).join('')}</div>
+        </div>` : `<div class="ticketnote" style="margin:0"><span class="chip-special">Special job</span> No UPC, so no serials are given out and there is no tag to check.</div>`}
+      </div>
+      <div class="rc-notes" id="rollnotes">${notesBlockHtml(r)}</div>
+    </div>
+  </div>`;
 }
 function openRoll(n) {
-  const keep = $('#r-note-body') && WORK_ROLL === n ? $('#r-note-body').value : '';
   WORK_ROLL = n;
-  $('#rollpanel').innerHTML = rollPanelHtml();
-  if (keep) $('#r-note-body').value = keep;
-  document.querySelectorAll('.rlist .ri').forEach(b => { const on = b.getAttribute('onclick') === `openRoll(${n})`; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  const b = document.querySelector('.rlist .ri.on'); if (b) b.scrollIntoView({block: 'nearest'});
+  refreshCard();
+  document.querySelectorAll('.rlist .ri').forEach(b => { const on = +b.dataset.n === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  let b = document.querySelector('.rlist .ri.on');
+  if (!b) { delete BATCH_OPEN[WORK.job.id + ':' + Math.floor((n - 1) / BATCH)]; renderWork(); b = document.querySelector('.rlist .ri.on'); }
+  if (b) b.scrollIntoView({block: 'nearest'});
 }
 function showLeft() { $('#pausebox').classList.add('on'); $('#pause-why').focus(); }
 async function rollAction(status, confirmText) {
@@ -1775,10 +2177,14 @@ async function rollAction(status, confirmText) {
   const q = {complete: `Who completed roll ${n}?`, running: `Who is leaving roll ${n} in progress?`, pending: `Who is resetting roll ${n}?`}[status];
   const who = await askName(q, status === 'complete' ? `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}` : '');
   if (!who) return;
-  if (status !== 'pending' && WORK.job.status === 'Pending') FLOOR_FILTER = 'running';   // job is now active; follow it
   try {
     await api(`/api/jobs/${WORK.job.id}/rolls/${n}`, {method: 'POST', body: {status, note, operator: who}});
     toast({running: `Roll ${n} saved as in progress`, complete: `Roll ${n} done`, pending: `Roll ${n} reset`}[status]);
+    // After completing, move on to the next roll that still needs work.
+    if (status === 'complete') {
+      const after = WORK.rolls.find(x => x.roll_number > n && !isDone(x) && x.roll_number !== n) || WORK.rolls.find(x => !isDone(x) && x.roll_number !== n);
+      if (after) WORK_ROLL = after.roll_number;
+    }
     await openWork(WORK.job.id); loadFloor(true);
   } catch (e) { toast(e.message, true); }
 }
@@ -1791,7 +2197,7 @@ function epcParts(hex) {
 function verifyEpc() {
   const inp = $('#verify-in'); const raw = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw) return;
   const {job: j, rolls} = WORK, r = rolls.find(x => x.roll_number === WORK_ROLL);
-  let ok = false, msg;
+  let ok = false, msg, go = null;
   if (!/^[0-9A-F]{24}$/.test(raw)) msg = 'Not an EPC: needs 24 characters, 0–9 and A–F.';
   else {
     const got = epcParts(raw), exp = epcParts(r.epc_start), s = got.serial;
@@ -1801,12 +2207,13 @@ function verifyEpc() {
       ok = true; msg = `Belongs to roll ${r.roll_number}: serial ${fmtS(s)}, label ${fmtS(s - BigInt(r.serial_start) + 1n)} of ${fmt(r.quantity)}.`;
     } else {
       const other = rolls.find(x => s >= BigInt(x.serial_start) && s <= BigInt(x.serial_end));
+      go = other ? other.roll_number : null;
       msg = other ? `Serial ${fmtS(s)} belongs to roll ${other.roll_number}, not roll ${r.roll_number}.`
                   : `Serial ${fmtS(s)} is not part of this job.`;
     }
   }
-  const key = `${j.id}:${r.roll_number}`; (VERIFY[key] = VERIFY[key] || []).push({epc: raw, ok, msg});
-  $('#rollpanel').innerHTML = rollPanelHtml(); $('#verify-in').focus();
+  const key = `${j.id}:${r.roll_number}`; (VERIFY[key] = VERIFY[key] || []).push({epc: raw, ok, msg, go});
+  refreshCard(); $('#verify-in').focus();
 }
 
 function rangesText(nums) {
@@ -1818,7 +2225,6 @@ async function workStatus(s) {
   let who = '';
   if (s === 'Complete') { who = await askName('Who is completing this job?', `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}`); if (!who) return; }
   try { await api('/api/jobs/' + WORK.job.id, {method: 'PATCH', body: {status: s, operator: who}}); toast(`Status set to ${s}`);
-    if (s === 'In Progress') FLOOR_FILTER = 'running';
     await openWork(WORK.job.id); loadFloor(true); }
   catch (e) { toast(e.message, true); }
 }

@@ -1,11 +1,17 @@
-﻿__pycache__/
+__pycache__/
 *.py[cod]
+.pytest_cache/
 config.ini
-local.db
+local.db*
 *.db
 *.sqlite3
 backups/
 serial_registry/
+template_thumbnails/
 .env
 .venv/
 venv/
+
+# demo sandbox (generated) and local tool settings
+mock_demo/site/
+.claude/settings.local.json
