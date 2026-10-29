@@ -22,12 +22,11 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   reorder, and a recent activity feed.
 - **New job**: Standard (UPC + serials) or **Special** (no UPC, nothing outside the
   normal process gets serials). Folder: `Customer\Label size\MM.DD.YY - <ticket>`.
-- **GO2 data sheets** (Special jobs): pick **Customer data sheet** to write GO2's sheet into the
-  job's Data folder: **sequential** (serials count up by one from a start serial, EPC = serial as
-  8 hex digits; ranges can't overlap an earlier GO2 job) or **random EPC** (`E2004` + 19 random hex
-  digits, all unique). Written as fixed values, never formulas, and every file is re-read and
-  checked before the job is created, so the prefix can't drift (the old sheet counted up to
-  `E2005`, `E2006`... after row 100,000).
+- **GO2 data sheet** (customer GO2 only): typing the customer as GO2 (any capitalization) switches
+  New job to Special and selects the **random EPC** data sheet: `E2004` + 19 random hex digits, all
+  unique, written into the job's Data folder (split by Qty per DB file if set). Values only, never
+  formulas, and every file is re-read and checked before the job is created, so the prefix can't
+  drift (the old sheet counted up to `E2005`, `E2006`... after row 100,000). Choose **None** to skip it.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel
   the old job first to redo it). The form warns as soon as the ticket is typed, and
   the server refuses even if two people enter it at the same instant.

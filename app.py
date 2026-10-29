@@ -33,7 +33,7 @@ from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, TH
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
-                        generate_db_files, generate_go2_files, GO2_SHEETS, GO2_MAX_SERIAL, generate_qc_sheet, qc_html, _safe_name)
+                        generate_db_files, generate_go2_files, is_go2_customer, GO2_SHEET, generate_qc_sheet, qc_html, _safe_name)
 import serial_store as SS
 import backup
 from generators import decode_epc
@@ -313,8 +313,8 @@ def create_job(data: dict) -> tuple[dict, int]:
       standard  UPC + serials: encoding database, serial-tracked rolls, QC sheet.
       special   no UPC / not our normal process: folder, checklist, template, notes and
                 (if quantity and labels per roll are given) rolls tracked by quantity.
-                No serials are given out. Optional data_sheet (GO2): go2_seq or go2_rand
-                writes the customer's data sheet(s) into Data (see generators.py)."""
+                No serials are given out. Optional data_sheet "go2_rand" (customer GO2 only)
+                writes GO2's random EPC data sheet into Data (see generators.py)."""
     g = lambda k: (str(data.get(k) or "")).strip() or None
     customer, title, ticket = g("customer"), g("title"), g("job_ticket")
     upc, label_size, inlay  = g("upc"), g("label_size"), g("inlay_type")
@@ -325,20 +325,20 @@ def create_job(data: dict) -> tuple[dict, int]:
         return {"error": "Job type must be standard or special"}, 400
 
     if not customer: return {"error": "Customer is required"}, 400
+    if is_go2_customer(customer):
+        customer = "GO2"                    # go2 / Go2 / gO2 are one customer (folders, grouping)
     if not title:    return {"error": "Item / title is required"}, 400
     if job_type == "standard" and not upc:
         return {"error": "A standard job needs a UPC. Choose Special for jobs without one."}, 400
     data_sheet = g("data_sheet")
-    if data_sheet and (job_type != "special" or data_sheet not in GO2_SHEETS):
-        return {"error": "A data sheet can only be chosen on a special job (GO2 sequential or GO2 random EPC)."}, 400
+    if data_sheet and (data_sheet != GO2_SHEET or job_type != "special" or not is_go2_customer(customer)):
+        return {"error": "The random EPC data sheet is only for special (no UPC) jobs for customer GO2."}, 400
     if job_type == "special":
         upc = None                          # special jobs never take serials
     try:
         quantity = _int(data.get("quantity"), "Quantity", required=(job_type == "standard" or bool(data_sheet)))
         lpr      = _int(data.get("lpr"), "Labels per roll")
         qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
-        go2_start = (_int(data.get("go2_start"), "Start serial", required=True)
-                     if data_sheet == "go2_seq" else None)
         start_override = _int(data.get("start_serial"), "Start serial") if upc else None
         offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
         overage  = float(data.get("overage_pct") or 0)
@@ -359,8 +359,6 @@ def create_job(data: dict) -> tuple[dict, int]:
     if not os.path.isdir(Z_DRIVE_BASE):
         return {"error": f"The job folders aren't reachable from the host PC ({Z_DRIVE_BASE}). "
                          "Nothing was created. Check that the drive or share is connected."}, 503
-    if data_sheet == "go2_seq" and go2_start + total_qty - 1 > GO2_MAX_SERIAL:
-        return {"error": "That range runs past the largest serial 8 hex digits can hold."}, 400
     if upc:
         nxt = SS.next_start(upc)
         if start_override and start_override < nxt:
@@ -379,21 +377,14 @@ def create_job(data: dict) -> tuple[dict, int]:
         if dup:
             conn.rollback(); conn.close()
             return dup, 409
-        if go2_start:
-            clash = _go2_overlap(conn, go2_start, total_qty)
-            if clash:
-                conn.rollback(); conn.close()
-                return {"error": f"Serials {go2_start:,}–{go2_start + total_qty - 1:,} overlap {clash['job_number']} "
-                                 f"({clash['start']:,}–{clash['end']:,}). The next free serial is {clash['next']:,}.",
-                        "next_start": clash["next"]}, 400
         job_number = next_job_number(conn)
         ts = now_str()
         # The ticket, UPC and quantity go in with the reservation so a second request that
         # arrives while this one is still being built can see it and be refused.
         cur = conn.execute(
             "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
-            " data_sheet, start_serial) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?)",
-            (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet, go2_start))
+            " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
+            (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
         job_id = cur.lastrowid
         conn.commit()
     except Exception as e:
@@ -440,7 +431,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         if not alloc["journaled"] and SS.journal_path():
             warnings.append("The serial journal (backup folder) couldn't be written. The range is still "
                             "saved in the registry and the app database.")
-    start_serial = alloc["start"] if alloc else go2_start
+    start_serial = alloc["start"] if alloc else None
 
     job = {"job_number": job_number, "customer": customer, "title": title,
            "job_ticket": ticket, "po_number": po, "po_clean": clean_po(po),
@@ -459,13 +450,12 @@ def create_job(data: dict) -> tuple[dict, int]:
                 warnings.append(f"Encoding database not written: {e}")
         if data_sheet:
             try:
-                generated["go2"] = generate_go2_files(job_dir, data_sheet, ticket or job_number,
-                                                      total_qty, qty_db, go2_start)
+                generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
             except Exception as e:
                 # Nothing is half-written (the generator removes its own files) and no serial
                 # was taken from the registry, so the job is simply not created.
                 _discard_job(job_id, job_dir if created_new else None)
-                return {"error": f"The {GO2_SHEETS[data_sheet]} data sheet could not be written, "
+                return {"error": f"The GO2 data sheet could not be written, "
                                  f"so nothing was created: {e}"}, 500
         r = generate_checklist_html(job_dir, job)
         if not r.get("success"): warnings.append(f"Checklist not written: {r.get('error')}")
@@ -494,7 +484,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         log_activity(conn, "created", job_id,
                      f"Created {job_number} for {customer}"
                      + (f", ticket {ticket}" if ticket else "")
-                     + (f" (special, {GO2_SHEETS[data_sheet]} data sheet)" if data_sheet
+                     + (" (special, GO2 random EPC data sheet)" if data_sheet
                         else " (special, no serials)" if job_type == "special" else "")
                      + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else ""), created_by)
         conn.commit()
@@ -509,34 +499,6 @@ def create_job(data: dict) -> tuple[dict, int]:
             "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc,
             "db_split": db_file_split(total_qty, qty_db) if upc else [],
             "rolls": len(rolls), "warnings": warnings}, 201
-
-
-def _go2_overlap(conn, start, qty):
-    """The existing GO2 sequential job whose serials overlap [start, start+qty), if any,
-    plus the next free serial after every GO2 sequential range."""
-    end = start + qty - 1
-    hit, top = None, 0
-    for r in conn.execute("SELECT job_number, start_serial, quantity, overage_pct FROM jobs"
-                          " WHERE data_sheet='go2_seq' AND start_serial IS NOT NULL"):
-        a = r["start_serial"]; b = a + production_qty(r["quantity"] or 0, r["overage_pct"] or 0) - 1
-        top = max(top, b)
-        if a <= end and start <= b and not hit:
-            hit = {"job_number": r["job_number"], "start": a, "end": b}
-    if hit:
-        hit["next"] = top + 1
-    return hit
-
-
-@app.route("/api/go2/next-start")
-def api_go2_next_start():
-    """Suggested start for a new GO2 sequential sheet: one past the highest range used so far."""
-    conn = get_db()
-    top = 0
-    for r in conn.execute("SELECT start_serial, quantity, overage_pct FROM jobs"
-                          " WHERE data_sheet='go2_seq' AND start_serial IS NOT NULL"):
-        top = max(top, r["start_serial"] + production_qty(r["quantity"] or 0, r["overage_pct"] or 0) - 1)
-    conn.close()
-    return jsonify({"next_start": top + 1 if top else None})
 
 
 def _discard_job(job_id, folder=None):

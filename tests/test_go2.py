@@ -1,4 +1,4 @@
-"""GO2 data sheets on special (no UPC) jobs: sequential serials and random E2004 EPCs."""
+"""GO2 data sheet on special (no UPC) jobs: random E2004 EPCs, customer GO2 only."""
 import os
 import re
 
@@ -61,32 +61,18 @@ def test_random_sheet_splits_with_overage(jm):
     assert len(set(allepc)) == 1020 and all(e.startswith("E2004") for e in allepc)
 
 
-def test_sequential_sheet(jm):
-    res, code = _go2(jm, 5, "go2_seq", 15_000, go2_start=3768662565)
-    assert code == 201, res
-    rows = _rows(_data_files(res)[0])
-    assert rows[0] == (3768662565, "E0A13A25") and rows[-1] == (3768677564, "E0A174BC")
-    assert all(b[0] - a[0] == 1 for a, b in zip(rows, rows[1:]))
-    assert all(r[1] == format(r[0], "08X") for r in rows)
-    assert res["job"]["data_sheet"] == "go2_seq" and res["job"]["start_serial"] == 3768662565
-    assert res["job"]["upc"] is None and res["serial_alloc"] is None
+@pytest.mark.parametrize("name", ["GO2", "go2", "Go2", "gO2", "  go2 "])
+def test_any_capitalization_of_go2_is_accepted(jm, name):
+    res, code = _go2(jm, 20, "go2_rand", 10, customer=name)
+    assert code == 201 and res["job"]["data_sheet"] == "go2_rand", res
+    assert res["job"]["customer"] == "GO2"                  # one customer, one folder
+    assert os.path.basename(os.path.dirname(res["folder_path"])) == "GO2"
 
 
-def test_sequential_sheets_cannot_overlap_and_suggest_next(jm):
-    _go2(jm, 6, "go2_seq", 1000, go2_start=5000)
-    res, code = _go2(jm, 7, "go2_seq", 100, go2_start=5500)
-    assert code == 400 and res["next_start"] == 6000 and "overlap" in res["error"]
-    ok, code = _go2(jm, 8, "go2_seq", 100, go2_start=6000)
-    assert code == 201, ok
-    nxt = jm.app.app.test_client().get("/api/go2/next-start").get_json()
-    assert nxt["next_start"] == 6100
-
-
-def test_sequential_needs_start_and_stays_in_8_hex(jm):
-    res, code = _go2(jm, 9, "go2_seq", 10)
-    assert code == 400 and "Start serial" in res["error"]
-    res, code = _go2(jm, 10, "go2_seq", 10, go2_start=0xFFFFFFFF)
-    assert code == 400 and "8 hex" in res["error"]
+@pytest.mark.parametrize("name", ["Acme", "GO23", "GO 2", ""])
+def test_other_customers_cannot_take_the_go2_sheet(jm, name):
+    res, code = _go2(jm, 21, "go2_rand", 10, customer=name)
+    assert code == 400
 
 
 def test_data_sheet_rules(jm):
@@ -95,7 +81,7 @@ def test_data_sheet_rules(jm):
     assert code == 400                                   # standard jobs cannot take one
     res, code = _go2(jm, 11, "go2_rand", None)
     assert code == 400 and "Quantity" in res["error"]
-    res, code = _go2(jm, 12, "bogus", 10)
+    res, code = _go2(jm, 12, "go2_seq", 10)              # the sequential sheet is gone
     assert code == 400
 
 
@@ -114,4 +100,4 @@ def test_verifier_rejects_a_drifting_prefix(tmp_path):
     ws.append(["E2005", "1" * 19, "E2005" + "1" * 19])        # the old fill-down bug
     p = str(tmp_path / "bad.xlsx"); wb.save(p)
     with pytest.raises(ValueError, match="bad prefix"):
-        g.verify_go2_file(p, "go2_rand", 2)
+        g.verify_go2_file(p, 2)
