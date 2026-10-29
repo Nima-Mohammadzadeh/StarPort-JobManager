@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Proofing · Job Manager</title>
+  <link rel="stylesheet" href="/proofing/static/styles.css?v=jm2">
+</head>
+<body>
+<!-- Same side navigation as Job Manager (templates/index.html); the other views are links back into it. -->
+<aside class="sidenav" aria-label="Main">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3v5.8M21 12h-5.8"/></svg>
+    <span class="bt">Job Manager</span>
+  </div>
+  <nav>
+    <a href="/" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg><span class="lbl">Jobs</span></a>
+    <a href="/?view=rolls" title="Roll tracking" aria-label="Roll tracking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="11" r="6.5"/><circle cx="10" cy="11" r="2"/><path d="M15 16l5 4.5h-9"/></svg><span class="lbl">Roll tracking</span></a>
+    <div class="nav-sep" role="separator"></div>
+    <a href="/?view=archive" title="Archive" aria-label="Archive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.2"/><path d="M5 9v10h14V9M10 13h4"/></svg><span class="lbl">Archive</span></a>
+    <a href="/proofing/" class="on" aria-current="page" title="Proofing" aria-label="Proofing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></svg><span class="lbl">Proofing</span></a>
+    <a href="/?view=templates" title="Templates" aria-label="Templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg><span class="lbl">Templates</span></a>
+    <a href="/?view=tools" title="Tools" aria-label="Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.2a4.2 4.2 0 0 0 5.3 5.3l-9 9a2.1 2.1 0 0 1-3-3z"/><path d="m15 4 5 5"/></svg><span class="lbl">Tools</span></a>
+    <a href="/?view=settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+</aside>
+
+<div class="app">
+<header>
+  <span class="crumb">Proofing</span>
+  <nav class="ptabs" aria-label="Proofing sections">
+    <button class="nav-item active" data-page="home">Jobs &amp; proofs</button>
+    <button class="nav-item" data-page="proof">Proof</button>
+    <button class="nav-item" data-page="queue">Queue</button>
+    <button class="nav-item" data-page="settings">Settings</button>
+  </nav>
+  <h1 class="sr" id="pageTitle">Home</h1><p class="sr" id="pageSubtitle"></p>
+  <div class="hdr-right">
+    <span class="conn" title="Connection to Job Manager"><span id="connectionDot" class="dot ok"></span><span id="connectionText">Connected</span></span>
+    <span class="status" id="saveStatus">Draft ready</span>
+    <span class="status" id="proofStatus">Needs data</span>
+    <button class="btn primary" id="headerNewBtn" type="button">New proof</button>
+  </div>
+</header>
+
+<main>
+  <!-- Jobs & proofs: Job Manager jobs with their proof state, plus proof counts and recent proofs -->
+  <section class="page active" id="page-home">
+    <div class="with-feed">
+      <div class="home-main">
+        <div class="bar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="i" id="jmJobSearch" placeholder="Ticket, customer, item, UPC…" autocomplete="off" aria-label="Search jobs">
+          </div>
+          <div class="seg" id="jmJobSeg" role="group" aria-label="Which jobs">
+            <button class="on" data-show="needs" aria-pressed="true">Needs a proof</button><button data-show="all" aria-pressed="false">All open jobs</button>
+          </div>
+          <div class="bar-right"><button class="btn" id="homeRefreshBtn" type="button">Refresh</button></div>
+        </div>
+        <div class="tablewrap jobs-wrap"><table class="jobs">
+          <thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th class="hide-md">Label size</th><th class="num">Qty</th><th>Proof</th><th></th></tr></thead>
+          <tbody id="jmJobsBody"><tr><td colspan="7"><div class="empty">Loading jobs…</div></td></tr></tbody>
+        </table></div>
+        <p class="footnote" id="jmJobsNote"></p>
+      </div>
+      <div class="side">
+        <section class="pcard">
+          <div class="pc-head"><h2>Saved proofs</h2></div>
+          <div class="stat-grid">
+            <button class="stat-card" id="homeQueueCard" type="button"><span>Active</span><strong id="homeQueueTotal">0</strong></button>
+            <button class="stat-card" id="homeReadyCard" type="button"><span>Ready</span><strong id="homeReady">0</strong></button>
+            <button class="stat-card" id="homeAttentionCard" type="button"><span>Needs attention</span><strong id="homeAttention">0</strong></button>
+            <div class="stat-card"><span>BarTender</span><strong id="homeBarTender">Checking</strong><small id="homeBarTenderDetail">On the host PC</small></div>
+          </div>
+          <div class="pc-actions"><button class="btn sm" id="homeNewBtn" type="button">Blank proof</button><button class="btn sm" id="homeOpenBtn" type="button">Open saved proof</button><button class="btn sm quiet" id="homeQueueBtn" type="button">Queue</button></div>
+        </section>
+        <section class="feed">
+          <div class="feed-head"><h2>Recent proofs</h2></div>
+          <div id="homeRecent" class="list feed-list"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proof editor -->
+  <section class="page" id="page-proof">
+    <div class="proof-toolbar">
+      <div class="pt-title">
+        <h2 id="contextTitle">New RFID Proof</h2>
+        <div class="sub" id="contextDetail">Unsaved draft</div>
+        <div class="jm-link" id="jmLinkBar"></div>
+      </div>
+      <div class="toolbar-actions"><button class="btn" id="newBtn" type="button">New</button><button class="btn" id="openBtn" type="button">Open</button><button class="btn" id="saveBtn" type="button">Save</button><button class="btn" id="previewBtn" type="button">BarTender Preview</button><button class="btn primary" id="generateBtn" type="button">Generate Proof</button><details class="menu"><summary class="btn">More</summary><div><button id="manualPreviewBtn" type="button">Use image preview</button><button id="packageBtn" type="button">Customer package</button><button id="nextRevisionBtn" type="button">Next proof revision</button><button id="openOutputBtn" type="button">Output folder</button></div></details></div>
+    </div>
+    <div class="sync-bar" id="syncBar" hidden></div>
+
+    <div class="proof-layout">
+      <div class="proof-form">
+        <section class="panel section" id="jobSection"><div class="panel-head"><div><span class="step">1</span><h2>Job</h2></div></div><div class="form-grid">
+          <label>Customer<input data-job="customer" autocomplete="off"></label>
+          <label>Job Number<input data-job="job_number" autocomplete="off"></label>
+          <label>Part Number<input data-job="part_number" autocomplete="off"></label>
+          <label>Quantity<input data-job="quantity" autocomplete="off"></label>
+          <label>Label Revision<input data-job="revision" autocomplete="off"></label>
+          <label>Proof Revision<input data-job="proof_revision" autocomplete="off"></label>
+          <label>Operator Initials<input data-job="operator_initials" maxlength="8" autocomplete="off"></label>
+          <label>Preparing Company<select id="masterCompany"><option>MCC Label</option><option>Starport Technologies</option></select></label>
+        </div></section>
+
+        <section class="panel section" id="artworkSection"><div class="panel-head"><div><span class="step">2</span><h2>Artwork</h2></div><span class="mini-status" id="previewIntegrity">Preview missing</span></div><div class="form-grid">
+          <label class="span-2">BarTender Template<div class="input-action"><input id="templatePath" data-job="template_path" readonly placeholder="Choose from Master Templates"><button class="btn sm" id="browseTemplateBtn" type="button">Choose</button></div></label>
+          <label>Label Width (in)<input data-job="label_width" type="number" step="0.001" min="0"></label>
+          <label>Label Height (in)<input data-job="label_height" type="number" step="0.001" min="0"></label>
+          <label class="span-2">RFID Inlay<select id="inlaySelect" data-job="inlay"><option value="">Select RFID inlay</option></select></label>
+          <label>X Offset (mm)<input data-job="inlay_x_mm" type="number" step="0.1"></label>
+          <label>Y Offset (mm)<input data-job="inlay_y_mm" type="number" step="0.1"></label>
+          <label>Rotation<select data-job="inlay_rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+          <label>Overlay Opacity<input data-job="inlay_preview_opacity" type="range" min="5" max="100" step="5"></label>
+        </div></section>
+
+        <section class="panel section" id="barcodeSection"><div class="panel-head"><div><span class="step">3</span><h2>Barcode + RFID</h2></div></div><div class="form-grid">
+          <label class="span-2">GTIN / UPC<input data-job="gtin" id="gtinInput" autocomplete="off"></label>
+          <label>Barcode 1 Type<select data-job="barcode_type_1"><option>UPC-A</option><option>UPC-E</option><option>EAN-13</option><option>EAN-8</option><option>Code 128</option><option>GS1-128</option><option>Code 39</option><option>ITF-14</option><option>Data Matrix</option><option>QR Code</option></select></label>
+          <label>Barcode 1 Data<div class="input-action"><input data-job="barcode_data_1" id="barcodeData1" autocomplete="off"><button class="btn sm quiet" id="useGtinBtn" type="button">Use GTIN</button></div></label>
+          <label>Barcode 2 Type<select data-job="barcode_type_2"><option value="">None</option><option>UPC-A</option><option>EAN-13</option><option>Code 128</option><option>GS1-128</option><option>Code 39</option><option>ITF-14</option><option>Data Matrix</option><option>QR Code</option></select></label>
+          <label>Barcode 2 Data<input data-job="barcode_data_2" autocomplete="off"></label>
+          <label>Font Size Callout<input data-job="font_size_callout" autocomplete="off"></label>
+          <label>Encoding Type<select id="encodingType" data-job="encoding_type"><option value="SGTIN-96">SGTIN-96</option><option value="SGTIN-198">SGTIN-198</option><option value="SSCC-96">SSCC-96</option><option value="SGLN-96">SGLN-96</option><option value="GRAI-96">GRAI-96</option><option value="GIAI-96">GIAI-96</option><option value="CPI-96">CPI-96</option><option value="GDTI-96">GDTI-96</option><option value="Custom EPC / Hex">Custom EPC / Hex</option><option value="Other / Customer Specific">Other / Customer Specific</option></select><small id="encodingHelp">SGTIN-96 can be calculated automatically. Other encoding types use manual approved EPC/data entry.</small></label>
+          <label>Serial / Reference<input id="serialInput" data-job="serial" autocomplete="off"></label>
+          <label class="sgtin-only">Company Prefix Digits<select id="prefixDigits" data-job="company_prefix_digits"></select></label>
+          <label class="sgtin-only">Filter<select id="filterValue" data-job="filter_value"></select></label>
+          <label class="sgtin-only">Company Prefix<input data-job="company_prefix" readonly></label>
+          <label class="sgtin-only">Item Reference<input data-job="item_reference" readonly></label>
+          <label class="span-2">EPC / Data<div class="input-action"><input id="epcHex" data-job="epc_hex" autocomplete="off" class="data"><button class="btn sm sgtin-only" id="computeEpcBtn" type="button">Calculate SGTIN-96</button></div></label>
+        </div></section>
+
+        <section class="panel section" id="notesSection"><div class="panel-head"><div><span class="step">4</span><h2>Proof Notes</h2></div></div><div class="form-grid"><label class="span-2">Customer-facing Notes<textarea data-job="notes" rows="4"></textarea></label><label class="span-2">Internal Comments<textarea data-job="internal_comments" rows="3"></textarea></label></div></section>
+
+        <section class="panel section" id="approvalSection"><div class="panel-head"><div><span class="step">5</span><h2>Approval</h2></div><span class="mini-status" id="approvalLockText">Editable</span></div><div class="form-grid"><label>Approval Status<select id="approvalStatus"><option>Draft</option><option>Internal Review</option><option>Customer Review</option><option>Approved</option><option>Changes Requested</option></select></label><label>Approval Note<input id="approvalNote" maxlength="500"></label><div class="span-2 action-row"><button class="btn primary" id="recordApprovalBtn" type="button">Record status</button><button class="btn" id="reopenBtn" type="button" hidden>Reopen for edit</button></div></div></section>
+      </div>
+
+      <aside class="proof-side">
+        <section class="panel sticky-card"><div class="panel-head"><div><h2>Artwork preview</h2><p>BarTender Record 1 / Page 1</p></div></div><div class="preview-stage" id="previewStage"><img id="previewImage" alt="Label artwork preview" hidden><div id="previewEmpty" class="empty">Generate a BarTender preview or choose a preview image.</div></div><div class="preview-meta"><span id="previewSource">No preview</span><span id="previewTime"></span></div></section>
+        <section class="panel"><div class="panel-head"><div><h2>Proof readiness</h2><p>Only blockers that affect the proof are shown.</p></div><span class="score" id="readinessScore">0</span></div><div id="validationMessage" class="validation-message">Enter proof data to begin.</div><div id="issueList" class="issue-list"></div></section>
+        <section class="panel"><div class="panel-head"><div><h2>Output</h2><p>Customer PDF fields stay editable after generation.</p></div></div><div class="output-actions"><button class="btn primary" id="sideGenerateBtn" type="button">Generate editable PDF</button><button class="btn" id="sidePackageBtn" type="button">Create package</button><button class="btn quiet" id="openLatestBtn" type="button" disabled>Open latest output</button></div><small id="latestOutputText" class="muted">No output generated in this session.</small></section>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Queue of saved proofs -->
+  <section class="page" id="page-queue">
+    <div class="bar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="i" id="queueSearch" placeholder="Customer, job, part, Proof ID, company…" aria-label="Search proofs">
+      </div>
+      <label class="inline-sel">Status <select class="i" id="queueFilter"><option value="">All</option><option value="ready">Ready</option><option value="needs_attention">Needs attention</option><option value="warning">Warning</option><option value="generated">Generated</option><option value="approved">Approved</option></select></label>
+      <div class="bar-right"><button class="btn" id="queueRefreshBtn" type="button">Refresh</button><button class="btn primary" id="queueNewBtn" type="button">New proof</button></div>
+    </div>
+    <div class="company-queue-stack">
+      <section class="panel company-queue mcc-queue"><div class="panel-head"><div><span class="company-mark">MCC</span><div><h2>MCC Label</h2><p>Active proofs prepared under MCC Label.</p></div></div><strong class="queue-count" id="queueMccCount">0</strong></div><div class="table-wrap"><table><thead><tr><th>Customer / Job</th><th>Part</th><th>Proof</th><th>Approval</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="queueMccBody"></tbody></table></div></section>
+      <section class="panel company-queue starport-queue"><div class="panel-head"><div><span class="company-mark">ST</span><div><h2>Starport Technologies</h2><p>Active proofs prepared under Starport Technologies.</p></div></div><strong class="queue-count" id="queueStarportCount">0</strong></div><div class="table-wrap"><table><thead><tr><th>Customer / Job</th><th>Part</th><th>Proof</th><th>Approval</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="queueStarportBody"></tbody></table></div></section>
+      <section class="panel company-queue approved-queue"><div class="panel-head"><div><span class="company-mark approved-mark">OK</span><div><h2>Approved proofs</h2><p>Grouped by customer.</p></div></div><strong class="queue-count" id="queueApprovedCount">0</strong></div><div class="approved-customer-groups" id="queueApprovedGroups"></div></section>
+    </div>
+    <details class="panel archived-queue"><summary><span><strong>Archived proofs</strong><small>Hidden from the working queue but recoverable.</small></span><span class="queue-count" id="queueArchivedCount">0</span></summary><div class="table-wrap"><table><thead><tr><th>Company</th><th>Customer / Job</th><th>Part</th><th>Proof</th><th>Approval</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="queueArchivedBody"></tbody></table></div></details>
+    <p class="footnote">Approved proofs move to the Approved folder by themselves; reopening one returns it to the active queue. Archive can be undone. Delete removes only the saved proof record; generated PDFs and packages stay.</p>
+  </section>
+
+  <!-- Proofing settings (shared by everyone) -->
+  <section class="page" id="page-settings">
+    <div class="bar"><p class="lead">Proofing settings are shared by everyone who uses Job Manager.</p><div class="bar-right"><button class="btn primary" id="saveSettingsBtn" type="button">Save settings</button></div></div>
+    <div class="settings-grid">
+      <section class="panel section"><div class="panel-head"><div><h2>Proof defaults</h2></div></div><div class="form-grid"><label>Preparing Company<select id="settingMasterCompany"><option>MCC Label</option><option>Starport Technologies</option></select></label><label>Default Operator Initials<input id="settingOperator" maxlength="8"><small>Blank: the initials of the name set in Job Manager on each PC.</small></label><label class="span-2">Output Folder (proofs not linked to a job)<input id="settingOutputFolder"><small>Proofs linked to a Job Manager job are written to that job's Proof folder.</small></label><label>Preview DPI<input id="settingPreviewDpi" type="number" min="150" max="600" step="50"></label><label>Default Inlay<select id="settingDefaultInlay"><option value="">None</option></select></label></div></section>
+      <section class="panel section"><div class="panel-head"><div><h2>BarTender</h2><p>Previews render on the PC that runs Job Manager.</p></div></div><div class="form-grid"><label class="span-2">BarTender Executable (on the host PC)<input id="settingBartenderExe" placeholder="C:\Program Files\Seagull\BarTender 2022\bartend.exe"><small>Leave blank to detect it.</small></label><div class="span-2 action-row"><button class="btn" id="diagnoseBartenderBtn" type="button">Check BarTender</button><span id="bartenderDiagnostic" class="muted"></span></div></div></section>
+      <section class="panel section"><div class="panel-head"><div><h2>Inlays</h2><p>Keep inlays in step with one source folder.</p></div></div><div class="form-grid"><label class="span-2">Inlay Source Folder (as the host PC sees it)<input id="settingInlayFolder" placeholder="Z:\...\Inlays"></label><div class="span-2 action-row"><button class="btn" id="syncInlaysBtn" type="button">Sync inlays</button><span id="inlaySyncStatus" class="muted"></span></div></div></section>
+      <section class="panel section"><div class="panel-head"><div><h2>Support</h2></div></div><div class="action-row"><button class="btn" id="healthBtn" type="button">Check installation</button><button class="btn" id="backupBtn" type="button">Create backup</button><button class="btn" id="openDataBtn" type="button">Copy data folder path</button><button class="btn" id="relinkBtn" type="button">Link proofs to jobs</button><span id="supportStatus" class="muted"></span></div><div id="healthList" class="health-list"></div><p class="muted small-note">Job Manager's own backups include proof records. <b>Link proofs to jobs</b> links saved proofs whose Job # is a Job Manager ticket.</p><p class="muted small-note">RFID Proofing Utility <span id="versionText">V 1.0.0</span> · <span id="releaseText">BETA</span></p></section>
+    </div>
+  </section>
+</main>
+</div>
+
+<input type="file" id="previewFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+<div class="modal" id="templateModal" hidden role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
+  <div class="modal-card">
+    <div class="m-head"><h2 id="templateModalTitle">Choose a BarTender template</h2><span class="m-sub" id="templateModalSub">From Job Manager's Master Templates index</span><button class="btn quiet x" data-close-modal type="button" aria-label="Close">✕</button></div>
+    <div class="m-body">
+      <input id="templateSearch" class="i modal-search" placeholder="Search by customer, UPC, size or file name" autocomplete="off">
+      <div id="templateSuggestions" class="pick-list"></div>
+      <div id="templateResults" class="pick-list"></div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="linkModal" hidden role="dialog" aria-modal="true" aria-labelledby="linkModalTitle">
+  <div class="modal-card">
+    <div class="m-head"><h2 id="linkModalTitle">Link to a Job Manager job</h2><button class="btn quiet x" data-close-modal type="button" aria-label="Close">✕</button></div>
+    <div class="m-body">
+      <p class="m-note">The proof then takes the job's details, and its PDF and package go to that job's Proof folder.</p>
+      <input id="linkSearch" class="i modal-search" placeholder="Ticket, job number, customer or UPC" autocomplete="off">
+      <div id="linkResults" class="pick-list"></div>
+      <div class="action-row" id="unlinkRow" hidden><button class="btn danger" id="unlinkBtn" type="button">Unlink from the current job</button></div>
+    </div>
+  </div>
+</div>
+<div id="toastHost" class="toast-host"></div>
+<script src="/proofing/static/app.js?v=jm2"></script>
+</body>
+</html>

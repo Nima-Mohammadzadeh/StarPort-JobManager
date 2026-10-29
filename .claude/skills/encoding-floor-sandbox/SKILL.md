@@ -94,6 +94,22 @@ insert a few hundred archived rows straight into `mock_demo/site/demo.db` (jobs 
 check: sort each column (aria-sort changes), page numbers with ellipsis, rows per page, Go to page, customer /
 status / archived-date filters, search, Clear filters, and the empty state.
 
+## Proofing (`/proofing`)
+
+The sandbox keeps proof records in `mock_demo/site/proofing_data`. BarTender isn't on the sandbox
+PC, so previews fail with "BarTender executable was not found": use **More > Use Image Preview** (any
+PNG). To exercise template matching and inlays, give the sandbox some files first:
+
+- Templates: put a few empty `.btw` files in a folder (name one `<Customer> - <a demo UPC>.btw`), set it
+  as the Master Templates folder in Job Manager Settings, then sync templates.
+- Inlays: a folder with `Dogbone.png`, `Monza R6.png` and an `inlays.csv`
+  (`name,chip,width_mm,height_mm,preview_opacity,image,notes`), synced from Proofing > Settings.
+
+Check: a job drawer shows **Start proof**; the proof opens filled in (ticket, UPC, first serial and EPC
+with filter 1, label size, inlay, template); Generate writes the PDF into the job's `Proof` folder;
+approval moves the proof to Approved and the Jobs list chip says "Proof approved"; two tabs saving the
+same proof get the "Someone else saved this proof" question.
+
 ## Gotchas found while testing
 
 - `templates/index.html` is rendered by Jinja, so JavaScript template literals must never contain
