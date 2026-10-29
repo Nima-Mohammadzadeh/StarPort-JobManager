@@ -1,0 +1,11 @@
+﻿__pycache__/
+*.py[cod]
+config.ini
+local.db
+*.db
+*.sqlite3
+backups/
+serial_registry/
+.env
+.venv/
+venv/

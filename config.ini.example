@@ -1,0 +1,17 @@
+# Job Manager configuration
+# Leave a path blank to keep it next to app.py (home / testing).
+# If a path is set and can't be reached at startup, the app refuses to start
+# instead of quietly using a different database or serial registry.
+
+[paths]
+# Shop floor examples:
+#   database        = Z:\3 Encoding and Printing Files\Operations\local.db
+#   serial_registry = Z:\3 Encoding and Printing Files\Operations\serial_registry
+#   z_drive_base    = Z:\3 Encoding and Printing Files\Customers Encoding Files
+database        =
+serial_registry =
+z_drive_base    =
+
+[server]
+host = 0.0.0.0
+port = 5050

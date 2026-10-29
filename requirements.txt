@@ -1,0 +1,4 @@
+flask>=2.3
+openpyxl>=3.1
+waitress>=2.1
+segno>=1.5
