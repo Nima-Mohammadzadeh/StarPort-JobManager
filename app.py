@@ -41,6 +41,7 @@ import backup
 from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
+import proofing                      # RFID proofing at /proofing (proofing/__init__.py)
 
 APP_VERSION = "3.3"
 DEFAULT_TEMPLATE_DIR = r"Z:\3 Encoding and Printing Files\Master Templates"
@@ -148,6 +149,7 @@ def init_db():
     cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
     SS.init_schema(cur)
     SHEETS_SEQ.init_schema(cur)
+    proofing.init_schema(cur)                              # job_proofs: which proof belongs to which job
     add_col("job_rolls", "completed_by", "completed_by TEXT")
     add_col("job_rolls", "started_at", "started_at TEXT")
     add_col("job_rolls", "started_by", "started_by TEXT")
@@ -668,7 +670,7 @@ ROLL_SUMMARY = """(SELECT COUNT(*) FROM job_rolls r WHERE r.job_id=j.id) AS roll
 def api_jobs():
     view = request.args.get("view", "active")
     q    = request.args.get("q", "").strip()
-    sql  = f"SELECT j.*, {ROLL_SUMMARY} FROM jobs j WHERE "
+    sql  = f"SELECT j.*, {ROLL_SUMMARY}, {proofing.PROOF_SUMMARY_SQL} FROM jobs j WHERE "
     sql += "j.archived_at IS NULL" if view == "active" else "j.archived_at IS NOT NULL"
     params = []
     for word in q.split():
@@ -2135,7 +2137,8 @@ def make_backup(label=""):
             backup.write_snapshot(part, db_path=DB_PATH, registry_dir=SERIAL_REGISTRY_DIR,
                                   thumbnail_dir=THUMBNAIL_DIR, config_ini=CONFIG_INI,
                                   journal_path=SS.journal_path(), job_folder_base=Z_DRIVE_BASE,
-                                  app_version=APP_VERSION, serial_lock=SS._lock)
+                                  app_version=APP_VERSION, serial_lock=SS._lock,
+                                  extra_sources=proofing.backup_sources())
             check = backup.verify_backup(part)
             check["file"] = name
             if check["ok"]:
@@ -2315,6 +2318,7 @@ def api_data_status():
          "holds": "Preview images added on the Templates page", "status": f"{previews:,} images", "detail": "", "backup": "Yes, in every backup"},
         {"key": "config", "name": "config.ini", "path": CONFIG_INI, "level": ok_lv(os.path.isfile(CONFIG_INI)),
          "holds": "Paths and the port", "status": "Found" if os.path.isfile(CONFIG_INI) else "Not found", "detail": "", "backup": "Yes, in every backup"},
+        proofing.data_store(),
     ]
     zips = _list_backups(bdir)
     newest = None
@@ -2683,6 +2687,11 @@ def _lan_ips():
     return sorted(ip for ip in ips if not ip.startswith("127."))
 
 
+# RFID proofing at /proofing. Registered here, after everything it borrows is defined.
+proofing.init_app(app, get_db=get_db, log_activity=log_activity, job_label=job_label, now_str=now_str,
+                  match_templates=match_templates_fresh, jm_settings=get_settings, z_drive_base=Z_DRIVE_BASE)
+
+
 if __name__ == "__main__":
     validate_and_prepare()
     init_db()
@@ -2692,6 +2701,7 @@ if __name__ == "__main__":
     start_template_sync()
     start_serial_keeper()
     start_auto_archive()
+    proofing.start()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")
     for ip in _lan_ips():

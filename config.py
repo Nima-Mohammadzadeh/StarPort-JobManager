@@ -44,6 +44,13 @@ Z_DRIVE_BASE        = _zdr or os.path.join(str(Path.home()), "Documents", "JobMa
 THUMBNAIL_DIR       = os.path.join(HERE, "template_thumbnails")
 Z_IS_DEFAULT        = not _zdr          # no job-folder location set: folders stay on this PC
 
+# RFID proofing (proofing/ package): saved proofs, proofing settings, inlay library, proof
+# history. Blank = a proofing_data folder next to app.py. Generated proof PDFs for jobs go
+# into each job's Proof folder; this folder holds the proof records themselves.
+_prf = _norm(_get("proofing", "data_dir"))
+PROOFING_DATA_DIR   = _prf or os.path.join(HERE, "proofing_data")
+PROOFING_IS_DEFAULT = not _prf
+
 HOST = _get("server", "host", "0.0.0.0")
 PORT = int(_get("server", "port", "5050") or 5050)
 
@@ -57,6 +64,7 @@ def validate_and_prepare():
     print(f"  Database    : {DB_PATH}")
     print(f"  Serials     : {SERIAL_REGISTRY_DIR}")
     print(f"  Job folders : {Z_DRIVE_BASE}")
+    print(f"  Proofing    : {PROOFING_DATA_DIR}")
     print(f"  Port        : {PORT}  (open http://localhost:{PORT} on this PC)")
 
     problems = []
@@ -80,6 +88,10 @@ def validate_and_prepare():
         print("         on THIS PC only. Other users will not see them. For a shared")
         print("         location, set z_drive_base to the shared folder and restart.")
         print("-" * 64)
+    if _prf and not os.path.isdir(_prf) and not os.path.isdir(os.path.dirname(_prf.rstrip("\\/"))):
+        # Not a stop: encoding work must not wait on the proofing share. The Proofing
+        # page says the folder can't be reached until it can.
+        print(f"  [WARN] Proofing data folder not reachable right now: {_prf}")
     if not os.path.isdir(Z_DRIVE_BASE):
         if _zdr:
             print(f"  [WARN] Job folder root not reachable right now: {Z_DRIVE_BASE}")

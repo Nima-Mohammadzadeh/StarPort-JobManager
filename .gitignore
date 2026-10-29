@@ -8,6 +8,7 @@ local.db*
 backups/
 serial_registry/
 template_thumbnails/
+proofing_data/
 .env
 .venv/
 venv/
