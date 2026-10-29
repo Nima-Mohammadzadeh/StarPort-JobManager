@@ -12,13 +12,6 @@ database        =
 serial_registry =
 z_drive_base    =
 
-[proofing]
-# RFID proofing records (saved proofs, proofing settings, inlay library, history).
-# Blank = a proofing_data folder next to app.py. A folder on the share is better:
-#   data_dir = Z:\3 Encoding and Printing Files\Operations\proofing_data
-# Generated proof PDFs for a job are written into that job's Proof folder.
-data_dir =
-
 [server]
 host = 0.0.0.0
 port = 5050

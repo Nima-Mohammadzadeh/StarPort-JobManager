@@ -11,9 +11,7 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
    - `z_drive_base` = the shared customer folder. Use the network path
      (`\\10.44.4.15\Starport Tech Shared Drive\3 Encoding and Printing Files\Customers Encoding Files`).
    - `database` and `serial_registry` blank = next to `app.py` on the host.
-   - `[proofing] data_dir` = where saved RFID proofs live (blank = `proofing_data` next to `app.py`;
-     a folder on the share is better). See `PROOFING.md`.
-3. Double-click `run.bat`. It installs Flask, openpyxl, waitress, Pillow and reportlab the first time.
+3. Double-click `run.bat`. It installs Flask, openpyxl and waitress the first time.
 4. In Settings, set the **Backup folder** on the share. It also turns on the serial journal.
    Backups run every 6 hours by default (adjustable). Each zip is a full snapshot and is only
    kept as a good backup if its serial history checks out. To restore, see `RESTORE.md`.
@@ -62,11 +60,6 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
 - **BarTender**: the template is copied into `Print\`. Each job shows **Copy path** buttons
   for the template and the encoding database so they can be pasted into BarTender's file box.
 - **Templates**: Master Templates index, picked automatically by UPC.
-- **Proofing** (`/proofing`, sidebar **Proofing**, or **Start proof** in a job's drawer): the RFID Proofing
-  Utility (Lean Core) inside Job Manager. A proof started from a job is filled in from it, including the first
-  serial and EPC exactly as Job Manager encodes them; its PDF and customer package go into the job's `Proof`
-  folder; the Jobs list shows each job's proof state. BarTender previews render on the host PC. Saved proofs
-  from the standalone app come over with `import_proofing.bat`. Details: `PROOFING.md`.
 
 ## Serial numbers, in short
 
@@ -93,8 +86,6 @@ is flagged as a conflict.
 | `run.bat`, `run.sh` | Start the app |
 | `import_old.py`, `.bat` | Bring data over from the old app |
 | `seed_serials.py`, `.bat` | Find serials used before the app and reserve them |
-| `backup.py` | Snapshot zips and their serial check (proof records included) |
+| `backup.py` | Snapshot zips and their serial check |
 | `restore_backup.py`, `.bat` | Emergency restore (see RESTORE.md) |
-| `proofing/` | RFID proofing at `/proofing`: the proofing app's core, its server as a blueprint, its page |
-| `import_proofing.py`, `.bat` | Bring saved proofs over from the standalone RFID Proofing Utility |
 | `tests/` | Automated tests (`pip install pytest`, then `python -m pytest -q`) |
