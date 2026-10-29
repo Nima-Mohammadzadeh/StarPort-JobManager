@@ -383,6 +383,19 @@ def apply_restore(zip_path, keep=None, allow_unverified=False, ask=None):
                     with open(dest, "wb") as fh:
                         fh.write(z.read(n))
                     thumbs += 1
+        # Proofing records: a proof file that is missing comes back; one that exists is never
+        # overwritten (it may be newer than the backup).
+        proof_files = 0
+        proof_root = os.path.realpath(config.PROOFING_DATA_DIR)
+        for n in z.namelist():
+            if n.startswith("proofing/") and not n.endswith("/"):
+                dest = os.path.realpath(os.path.join(proof_root, *n.split("/")[1:]))
+                if os.path.commonpath([proof_root, dest]) != proof_root or os.path.exists(dest):
+                    continue
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as fh:
+                    fh.write(z.read(n))
+                proof_files += 1
         config_note = "unchanged"
         if "config.ini" in z.namelist():
             data = z.read("config.ini")
@@ -409,7 +422,8 @@ def apply_restore(zip_path, keep=None, allow_unverified=False, ask=None):
     conn.commit(); conn.close()
 
     result = {"safety_copy": safety, "registry": reg, "kept_jobs": kept, "dropped_jobs": dropped,
-              "thumbnails_added": thumbs, "config": config_note, "serials_went_back": went_back,
+              "thumbnails_added": thumbs, "proofing_files_added": proof_files,
+              "config": config_note, "serials_went_back": went_back,
               "next_after": after, "plan": plan}
     with open(os.path.join(safety, "restore_log.txt"), "w", encoding="utf-8") as fh:
         fh.write(f"Restored {plan['zip']} at {datetime.now():%Y-%m-%d %H:%M:%S}\n{choice}\n")
@@ -466,6 +480,8 @@ def main(argv=None):
     if r["dropped_jobs"]:
         print(f"  Dropped {len(r['dropped_jobs'])} job(s); listed in restore_log.txt in the safety copy")
     print(f"  config.ini: {r['config']}")
+    if r.get("proofing_files_added"):
+        print(f"  Proofing: {r['proofing_files_added']} missing proof file(s) brought back (existing ones untouched)")
     print("  Serial check: no UPC's next serial went backwards.")
     print("  Start Job Manager with run.bat.")
     return 0
