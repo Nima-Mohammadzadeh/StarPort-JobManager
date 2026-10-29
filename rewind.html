@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1B2A2E">
+<title>Rewind</title>
+<style>
+:root{
+  --canvas:#EEF1F0; --surface:#FFFFFF; --sunk:#F6F8F7; --ink:#1B2A2E; --muted:#5E6E72;
+  --line:#D3DADB; --blue:#1F4E79; --blue-soft:#E3ECF4; --green:#2F7D4F; --green-soft:#E2F1E7;
+  --amber:#A8670F; --amber-soft:#FBEFD9; --red:#A23B3B; --run:#2F6EA8; --run-soft:#E4EFF9;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --data:Consolas,"Cascadia Mono",Menlo,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{font:16px/1.4 var(--sans);color:var(--ink);background:var(--canvas)}
+button,input{font:inherit;color:inherit}
+.data{font-family:var(--data);font-variant-numeric:tabular-nums}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:8px 10px;min-height:58px}
+.ib{background:none;border:0;color:#fff;font-size:26px;width:48px;height:48px;border-radius:12px;cursor:pointer;flex:0 0 auto}
+.ib:active{background:#2c4046}
+.ttl{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.ttl b{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl span{font-size:13px;color:#B9C6C9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{font-size:12px;color:#B9C6C9;text-align:right;line-height:1.25;flex:0 0 auto}
+.sync i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#58C27D;margin-right:5px}
+.sync.off i{background:#E8A33C}
+#banner{background:var(--amber-soft);color:#6B4207;padding:10px 14px;font-size:14.5px;border-bottom:1px solid #EBC983}
+main{max-width:900px;margin:0 auto;padding:12px 12px 90px}
+section[hidden]{display:none}
+.sb{margin-bottom:10px}
+.sb input{width:100%;font-size:18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.sb input:focus{outline:2px solid var(--blue);border-color:var(--blue)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch}
+.chip{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:11px 18px;font-size:16px;font-weight:600;cursor:pointer;min-height:46px}
+.chip b{margin-left:6px}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.card:active{background:#F3F7FA}
+.jt{display:flex;align-items:center;gap:8px}
+.jt .tk{font-size:22px;font-weight:800;color:#0A1417}
+.pill{margin-left:auto;padding:3px 11px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.st-pending{background:var(--amber-soft);color:var(--amber)}
+.st-in-progress{background:var(--run-soft);color:var(--run)}
+.st-on-hold{background:#ECE8F5;color:#5B4B8A}
+.st-complete{background:var(--green-soft);color:var(--green)}
+.badge{font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;background:var(--blue);color:#fff}
+.badge.new{background:#C2410C}
+.cu{font-size:18px;font-weight:700;margin-top:2px}
+.it{font-size:15px;color:var(--muted);margin-top:1px}
+.pr{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:14.5px;color:var(--muted)}
+.bar{flex:1;height:9px;background:#E1E7E8;border-radius:5px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.bar .d{background:var(--green)}.bar .r{background:#4F8FCB}
+.flag{margin-top:8px;font-size:14px;font-weight:700;color:var(--amber)}
+.empty{padding:40px 14px;text-align:center;color:var(--muted)}
+.jh{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.jh .cu{font-size:22px}
+.cl{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cl span{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:14px}
+.note{border-radius:12px;padding:11px 14px;margin-bottom:10px;font-size:15.5px;white-space:pre-wrap;word-break:break-word}
+.note.imp{background:var(--amber-soft);border:1px solid #EBC983}
+.note.tk{background:var(--sunk);border:1px solid var(--line)}
+.note small{display:block;color:var(--muted);font-size:12.5px;margin-top:3px}
+.note b.l{display:block;font-size:12.5px;color:#6B4207;margin-bottom:2px}
+.roll{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:7px solid #CBD3D5;border-radius:16px;padding:12px 14px;margin-bottom:10px;cursor:pointer}
+.roll:active{background:#F3F7FA}
+.roll .n{flex:0 0 50px;font-size:36px;font-weight:800;text-align:center;line-height:1}
+.roll .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.roll .r1,.roll .r3{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.roll .r2{display:flex;gap:18px;font-size:16px;white-space:nowrap}
+.roll .q{font-size:17px;font-weight:700}
+.roll .r2 b{font-family:var(--data);font-size:19px;letter-spacing:.02em}
+.roll .sr{font-size:12.5px;color:var(--muted);font-family:var(--data);white-space:nowrap}
+.roll .who{font-size:12.5px;color:var(--muted);text-align:right}
+.roll.s-done{border-left-color:var(--green)}
+.roll.s-running{border-left-color:#4F8FCB}
+.rs{padding:3px 11px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.rs.done{background:var(--green-soft);color:var(--green)}
+.rs.running{background:var(--run-soft);color:var(--run)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--amber);margin-left:6px}
+.rbig{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:12px}
+.rbig .lab{font-size:34px;font-weight:800;line-height:1.1}
+.rbig .lab small{font-size:16px;font-weight:600;color:var(--muted)}
+.kv{margin-top:16px}
+.kv .k{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kv .v{font-family:var(--data);font-size:20px;margin-top:2px;word-break:break-all;letter-spacing:.02em}
+.kv .v b{background:#FFF3C4;padding:0 4px;border-radius:5px}
+.kv .v.ser{font-size:17.5px;white-space:nowrap;letter-spacing:0}
+.kv .tail{font-family:var(--data);font-size:44px;font-weight:800;letter-spacing:.05em;line-height:1.1}
+.nav2{display:flex;gap:10px;margin:14px 0}
+.nav2 button{flex:1;font-size:18px;font-weight:700;padding:16px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:58px}
+.nav2 button:active{background:#F3F7FA}
+.nav2 button:disabled{opacity:.4}
+h3.sec{font-size:15px;margin:18px 2px 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.spin{padding:50px;text-align:center;color:var(--muted)}
+.scanbar{position:sticky;top:58px;z-index:9;background:var(--canvas);padding:8px 0 6px;margin:-4px 0 6px}
+.scanbar form{display:flex;gap:8px}
+.scanbar input{flex:1;min-width:0;font-family:var(--data);font-size:19px;padding:14px 14px;border:2px solid var(--blue);border-radius:14px;background:#fff;letter-spacing:.02em}
+.scanbar input:focus{outline:3px solid var(--blue-soft)}
+.scanbar button{font-size:17px;font-weight:700;padding:0 18px;border-radius:14px;border:0;background:var(--blue);color:#fff;min-height:54px}
+.smsg{border-radius:14px;padding:12px 14px;margin-top:8px;font-size:16px;font-weight:600}
+.smsg.bad{background:#B33A3A;color:#fff}.smsg.warn{background:#E0A526;color:#2B1D00}
+.smsg button{margin-top:8px;font-size:16px;font-weight:700;padding:11px 16px;border-radius:12px;border:0;background:#fff;color:#111}
+.smsg small{display:block;font-weight:400;margin-top:4px}
+.hit{border-radius:18px;padding:16px 18px;margin-bottom:12px;background:var(--green);color:#fff}
+.hit .hb{font-size:40px;font-weight:800;line-height:1.05}
+.hit .hb small{font-size:18px;font-weight:600;opacity:.9}
+.hit .pos{display:inline-block;margin-top:8px;background:#fff;color:var(--green);font-weight:800;font-size:15px;padding:4px 10px;border-radius:8px}
+.hit .e{font-family:var(--data);font-size:21px;letter-spacing:.03em;word-break:break-all;margin-top:8px}
+.hit .e b{background:rgba(255,255,255,.85);color:#111;padding:0 5px;border-radius:5px}
+.hit .sm{font-size:14.5px;opacity:.92;margin-top:4px}
+.hit.dupe{background:#5B7B8E}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
+@media (min-width:760px){.roll .n{font-size:42px}}
+</style>
+</head>
+<body>
+<header>
+  <button class="ib" id="back" aria-label="Back" hidden>&#8592;</button>
+  <div class="ttl"><b id="title">Rewind</b><span id="sub"></span></div>
+  <div class="sync" id="sync" aria-live="polite"></div>
+  <button class="ib" id="snd" aria-label="Sound on or off"></button>
+  <button class="ib" id="rf" aria-label="Refresh">&#8635;</button>
+</header>
+<div id="banner" hidden></div>
+<main>
+  <div class="scanbar" id="scanbar" hidden>
+    <form id="scanf" autocomplete="off"><input id="scan" type="text" enterkeyhint="go" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Scan a tag with the fob"><button type="submit">Look up</button></form>
+    <div id="smsg"></div>
+  </div>
+  <section id="v-list">
+    <div class="sb"><input id="q" type="search" placeholder="Search ticket or customer, or scan a tag" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>
+    <div id="lmsg"></div>
+    <div class="chips" id="tabs"></div>
+    <div id="cards"></div>
+  </section>
+  <section id="v-job" hidden>
+    <div id="jhead"></div>
+    <div class="chips" id="rtabs"></div>
+    <div id="rolls"></div>
+  </section>
+  <section id="v-roll" hidden><div id="rview"></div></section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmt = n => (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString();
+const when = ts => ts ? ts.slice(5, 10).replace('-', '/') + ' ' + ts.slice(11, 16) : '';
+const stc = s => 'st-' + String(s || '').toLowerCase().replace(/\s+/g, '-');
+const rstate = r => (r.status === 'complete' || r.status === 'verified') ? 'done' : (r.status === 'running' || r.status === 'paused') ? 'running' : 'pending';
+const RLAB = {done: 'Done', running: 'In progress', pending: 'Not started'};
+const parse = ts => new Date(String(ts).replace(' ', 'T'));
+const epcHtml = e => e ? esc(e.slice(0, -5)) + '<b>' + esc(e.slice(-5)) + '</b>' : '';
+
+const S = {scan: null, sound: localStorage.getItem('rw_sound') !== '0', tab: 'open', counts: {}, jobs: [], openCount: 0, q: '', now: null, d: null, rf: 'all', stamp: null, updated: null, offline: false, loaded: false};
+
+async function api(url) {
+  const r = await fetch(url, {cache: 'no-store'});
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
+
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), cache: 'no-store'});
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+/* ── scanning: the fob reads the tag, Serial Magic Keys types it here and presses Enter ── */
+const HEX24 = v => /^(0x)?[0-9a-fA-F]{24}$/.test(String(v).replace(/[\s:\-]/g, ''));
+let scanTimer = null, audio = null;
+function feedback(good) {
+  try { if (navigator.vibrate) navigator.vibrate(good ? 40 : [120, 70, 120]); } catch (e) {}
+  if (!S.sound) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = good ? 880 : 220;
+    g.gain.setValueAtTime(.2, audio.currentTime); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + (good ? .14 : .4));
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + (good ? .14 : .4));
+  } catch (e) {}
+}
+async function lookup(raw, fromList) {
+  const rt = route(), box = fromList ? $('#lmsg') : $('#smsg');
+  box.innerHTML = '';
+  let r;
+  try { r = await post('/api/rewind/lookup', {raw, job_id: fromList ? '' : rt.job}); S.offline = false; }
+  catch (e) { S.offline = true; setBar(); box.innerHTML = '<div class="smsg bad">No connection to the server, so that scan wasn\'t looked up. Scan again when it reconnects.</div>'; feedback(false); return; }
+  if (r.result === 'found') {
+    const x = r.roll; S.scan = {r, at: Date.now()}; feedback(true);
+    const h = '#/job/' + x.job_id + '/roll/' + x.roll_number;
+    if (location.hash === h) render(); else go(h);
+    return;
+  }
+  feedback(false);
+  const warn = r.result === 'other_job' || r.result === 'ambiguous';
+  box.innerHTML = `<div class="smsg ${warn ? 'warn' : 'bad'}">${esc(r.message)}${r.note ? `<small>${esc(r.note)}</small>` : ''}
+    ${r.result === 'other_job' ? `<div><button onclick="openOther()">Open that job, roll ${r.roll.roll_number}</button></div>` : ''}
+    ${r.epc && r.epc.length === 24 ? `<small class="data">${esc(r.epc)}</small>` : r.raw ? `<small>Received: <span class="data">${esc(r.raw)}</span></small>` : ''}</div>`;
+  S.other = r.result === 'other_job' ? r : null;
+}
+function openOther() { const r = S.other; if (!r) return; S.scan = {r, at: Date.now()}; $('#smsg').innerHTML = ''; go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); }
+function fromScanBox() { clearTimeout(scanTimer); const v = $('#scan').value.trim(); $('#scan').value = ''; if (v) lookup(v, false); }
+$('#scanf').addEventListener('submit', e => { e.preventDefault(); fromScanBox(); });
+$('#scan').addEventListener('input', () => { clearTimeout(scanTimer); if (HEX24($('#scan').value)) scanTimer = setTimeout(fromScanBox, 200); });
+/* on the job list, the search box also takes a scan */
+function fromSearch() { clearTimeout(scanTimer); const v = $('#q').value.trim(); if (!HEX24(v) && !/^[0-9a-fA-F]{20,}$/.test(v.replace(/[\s:\-]/g, ''))) return false;
+  $('#q').value = ''; S.q = ''; drawList(); lookup(v, true); return true; }
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fromSearch(); } });
+$('#q').addEventListener('input', () => { clearTimeout(scanTimer); if (HEX24($('#q').value)) scanTimer = setTimeout(fromSearch, 200); });
+function focusScan() { if (route().job !== null) setTimeout(() => $('#scan').focus({preventScroll: true}), 60); }
+
+/* ── routing: #/  ·  #/job/12  ·  #/job/12/roll/3 (so the Android back button works) ── */
+function route() {
+  const m = (location.hash || '#/').match(/^#\/job\/(\d+)(?:\/roll\/(\d+))?$/);
+  return m ? {job: +m[1], roll: m[2] ? +m[2] : null} : {job: null, roll: null};
+}
+window.addEventListener('hashchange', () => render());
+function go(h) { location.hash = h; }
+
+function setBar() {
+  const rt = route(), el = $('#sync');
+  el.className = 'sync' + (S.offline ? ' off' : '');
+  el.innerHTML = '<i></i>' + (S.offline ? 'Offline' : 'Live') + (S.updated ? '<br>' + S.updated.toTimeString().slice(0, 8) : '');
+  const b = $('#banner');
+  b.hidden = !S.offline;
+  if (S.offline) b.textContent = 'No connection to the server. Showing what was loaded at ' + (S.updated ? S.updated.toTimeString().slice(0, 8) : 'start') + '. It will reconnect by itself.';
+  $('#back').hidden = rt.job === null;
+}
+
+/* ── data ── */
+async function loadList() {
+  const d = await api('/api/rewind/jobs?view=' + S.tab);
+  S.jobs = d.jobs; S.counts = d.counts || {}; S.openCount = d.open_count; S.now = d.now; S.loaded = true;
+}
+async function loadJob(id) {
+  S.d = await api('/api/rewind/jobs/' + id);
+}
+async function refresh() {
+  const rt = route();
+  try {
+    if (rt.job === null) await loadList(); else await loadJob(rt.job);
+    S.offline = false; S.updated = new Date();
+  } catch (e) { S.offline = true; }
+  render(true);
+}
+async function poll() {
+  try {
+    const r = await api('/api/stamp');
+    const changed = S.stamp !== null && r.stamp !== S.stamp;
+    S.stamp = r.stamp; S.offline = false; S.updated = new Date();
+    if (changed) { await refresh(); return; }
+  } catch (e) { S.offline = true; }
+  setBar();
+}
+setInterval(poll, 8000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+$('#rf').onclick = async () => { await refresh(); toast(S.offline ? 'Still offline' : 'Up to date'); };
+$('#back').onclick = () => { const rt = route(); go(rt.roll !== null ? '#/job/' + rt.job : '#/'); window.scrollTo(0, 0); };
+
+/* ── rendering ── */
+async function render(dataOnly) {
+  const rt = route();
+  $('#v-list').hidden = rt.job !== null;
+  $('#v-job').hidden = rt.job === null || rt.roll !== null;
+  $('#v-roll').hidden = rt.roll === null;
+  $('#scanbar').hidden = rt.job === null;
+  if (!dataOnly) { $('#smsg').innerHTML = ''; if (rt.job === null) $('#lmsg').innerHTML = ''; focusScan(); }
+  if (rt.job === null) {
+    $('#title').textContent = 'Rewind'; $('#sub').textContent = 'Jobs running in encoding';
+    if (!S.loaded) { $('#cards').innerHTML = '<div class="spin">Loading jobs…</div>'; try { await loadList(); S.updated = new Date(); } catch (e) { S.offline = true; } }
+    drawList();
+  } else {
+    if (!S.d || S.d.job.id !== rt.job) {
+      S.rf = 'all'; $('#jhead').innerHTML = '<div class="spin">Loading job…</div>'; $('#rolls').innerHTML = ''; $('#rtabs').innerHTML = ''; $('#rview').innerHTML = '';
+      try { await loadJob(rt.job); S.offline = false; S.updated = new Date(); } catch (e) { S.offline = true; $('#jhead').innerHTML = '<div class="empty">Could not load this job. Check the connection, then tap refresh.</div>'; setBar(); return; }
+    }
+    if (rt.roll === null) drawJob(); else drawRoll(rt.roll);
+  }
+  setBar();
+}
+
+function drawList() {
+  const tab = S.tab, open = tab !== 'done';
+  $('#tabs').innerHTML = [['open', 'Open jobs', S.counts.open], ['running', 'In progress', S.counts.running], ['done', 'Completed', null]]
+    .map(([k, l, n]) => `<button class="chip ${tab === k ? 'on' : ''}" onclick="setTab('${k}')">${l}${n != null ? `<b>${n}</b>` : ''}</button>`).join('');
+  const q = S.q.toLowerCase().trim();
+  const rows = S.jobs.filter(j => !q || [j.job_ticket, j.customer, j.title, j.job_number, j.upc, j.part_number, j.po_number].join(' ').toLowerCase().includes(q));
+  const nowT = S.now ? parse(S.now).getTime() : Date.now();
+  $('#cards').innerHTML = rows.length ? rows.map(j => {
+    const isNew = j.created_at && (nowT - parse(j.created_at).getTime()) < 3600e3;
+    const pct = j.roll_total ? j.roll_done / j.roll_total * 100 : 0, run = j.roll_total ? j.roll_running / j.roll_total * 100 : 0;
+    const meta = [j.label_size, j.inlay_type, j.quantity ? fmt(j.quantity) + ' labels' : ''].filter(Boolean).join(' · ');
+    return `<button class="card" onclick="go('#/job/${j.id}')">
+      <div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span>${j.priority_rank ? `<span class="badge">#${j.priority_rank}</span>` : ''}${isNew ? '<span class="badge new">NEW</span>' : ''}<span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+      <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}${meta ? ' · ' + esc(meta) : ''}</div>
+      ${j.roll_total ? `<div class="pr"><span class="bar"><i class="d" style="width:${pct}%"></i><i class="r" style="width:${run}%"></i></span><span>${j.roll_done} of ${j.roll_total} rolls done${j.roll_running ? ', ' + j.roll_running + ' in progress' : ''}</span></div>` : '<div class="pr">No rolls set up yet</div>'}
+      ${j.important_count ? `<div class="flag">⚑ ${j.important_count} important note${j.important_count > 1 ? 's' : ''}</div>` : ''}
+    </button>`; }).join('')
+    : `<div class="empty">${q ? 'No jobs match that search.' : tab === 'running' ? 'No job is marked In Progress right now.<br><br><button class="chip" onclick="setTab(\'open\')">Show all open jobs</button>' : tab === 'open' ? 'No open jobs in encoding right now.' : 'No completed jobs.'}</div>`;
+}
+function setTab(t) { S.tab = t; S.loaded = false; S.q = ''; $('#q').value = ''; render(); }
+$('#q').addEventListener('input', e => { if (/^[0-9a-fA-F\s:\-]{16,}$/.test(e.target.value)) return; S.q = e.target.value; drawList(); });
+
+function drawJob() {
+  const {job: j, rolls, notes, total_qty} = S.d;
+  $('#title').textContent = j.job_ticket || j.job_number; $('#sub').textContent = j.customer;
+  const cnt = k => rolls.filter(r => rstate(r) === k).length;
+  const chips = [j.upc && `<span class="data">${esc(j.upc)}</span>`, j.label_size && `<span>${esc(j.label_size)}</span>`, j.inlay_type && `<span>${esc(j.inlay_type)}</span>`,
+    total_qty && `<span>${fmt(total_qty)} labels</span>`, j.lpr && `<span>${fmt(j.lpr)} per roll</span>`, rolls.length && `<span>${rolls.length} rolls</span>`,
+    j.part_number && `<span>Part ${esc(j.part_number)}</span>`, j.po_number && `<span>PO ${esc(j.po_number)}</span>`, j.due_date && `<span>Due ${esc(j.due_date)}</span>`,
+    j.job_type === 'special' && '<span>Special job: no serials</span>'].filter(Boolean).join('');
+  const imp = notes.filter(n => n.important);
+  $('#jhead').innerHTML = `<div class="jh"><div class="jt"><span class="tk" style="font-size:24px;font-weight:800">${esc(j.job_ticket || j.job_number)}</span>${j.priority_rank ? `<span class="badge">#${j.priority_rank}</span>` : ''}<span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+      <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div><div class="cl">${chips}</div></div>
+    ${imp.map(n => `<div class="note imp"><b class="l">Important${n.roll_number ? ' · roll ' + n.roll_number : ''}</b>${esc(n.body)}<small>${esc(n.author || '')} · ${when(n.created_at)}</small></div>`).join('')}
+    ${j.ticket_notes ? `<div class="note tk"><b class="l" style="color:var(--muted)">Notes from the ticket</b>${esc(j.ticket_notes)}</div>` : ''}`;
+  const f = S.rf;
+  $('#rtabs').innerHTML = rolls.length ? [['all', 'All', rolls.length], ['done', 'Done', cnt('done')], ['running', 'In progress', cnt('running')], ['pending', 'Not started', cnt('pending')]]
+    .map(([k, l, n]) => `<button class="chip ${f === k ? 'on' : ''}" onclick="setRf('${k}')">${l}<b>${n}</b></button>`).join('') : '';
+  const shown = rolls.filter(r => f === 'all' || rstate(r) === f);
+  const noteRolls = new Set(notes.filter(n => n.roll_number).map(n => n.roll_number));
+  $('#rolls').innerHTML = !rolls.length ? '<div class="empty">No roll data for this job yet. It needs a quantity and labels per roll.</div>'
+    : shown.length ? shown.map(r => { const st = rstate(r), who = st === 'done' ? [r.completed_by, when(r.completed_at)] : st === 'running' ? [r.paused_by || r.started_by, when(r.paused_at || r.started_at)] : ['', ''];
+      return `<button class="roll s-${st}" onclick="go('#/job/${j.id}/roll/${r.roll_number}')">
+        <span class="n">${r.roll_number}</span>
+        <span class="body">
+          <span class="r1"><span class="q">${fmt(r.quantity)} labels${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</span><span class="rs ${st}">${RLAB[st]}</span></span>
+          ${r.serial_start ? `<span class="r2"><span>Start <b>${esc(r.epc_start.slice(-5))}</b></span><span>End <b>${esc(r.epc_end.slice(-5))}</b></span></span>` : '<span class="r2" style="color:var(--muted)">No serials</span>'}
+          <span class="r3"><span class="sr">${r.serial_start ? fmt(r.serial_start) + ' – ' + fmt(r.serial_end) : ''}</span><span class="who">${esc([who[0], who[1]].filter(Boolean).join(' · '))}</span></span>
+        </span>
+      </button>`; }).join('') : '<div class="empty">No rolls in this group.</div>';
+}
+function setRf(k) { S.rf = k; drawJob(); }
+
+function drawRoll(n) {
+  const {job: j, rolls, notes} = S.d, i = rolls.findIndex(r => r.roll_number === n), r = rolls[i];
+  if (!r) { go('#/job/' + j.id); return; }
+  $('#title').textContent = `Roll ${r.roll_number} of ${rolls.length}`; $('#sub').textContent = `${j.customer} · ${j.job_ticket || j.job_number}`;
+  const st = rstate(r), before = rolls.slice(0, i).reduce((a, x) => a + x.quantity, 0), total = rolls.reduce((a, x) => a + x.quantity, 0);
+  const who = st === 'done' ? `Done ${when(r.completed_at)}${r.completed_by ? ' by ' + esc(r.completed_by) : ''}` : st === 'running' ? `In progress since ${when(r.paused_at || r.started_at)}${(r.paused_by || r.started_by) ? ' — ' + esc(r.paused_by || r.started_by) : ''}` : 'Not started';
+  const rn = notes.filter(x => x.roll_number === r.roll_number), jn = notes.filter(x => !x.roll_number && x.important);
+  const nav = `<div class="nav2"><button onclick="go('#/job/${j.id}/roll/${rolls[i - 1] ? rolls[i - 1].roll_number : n}')" ${i ? '' : 'disabled'}>‹ Roll ${rolls[i - 1] ? rolls[i - 1].roll_number : ''}</button><button onclick="go('#/job/${j.id}/roll/${rolls[i + 1] ? rolls[i + 1].roll_number : n}')" ${rolls[i + 1] ? '' : 'disabled'}>Roll ${rolls[i + 1] ? rolls[i + 1].roll_number : ''} ›</button></div>`;
+  const sc = S.scan && S.scan.r.roll && S.scan.r.roll.job_id === j.id && S.scan.r.roll.roll_number === r.roll_number ? S.scan.r : null;
+  const hit = sc ? `<div class="hit">
+      <div class="hb">Label ${fmt(sc.roll.label_no)} <small>of ${fmt(r.quantity)} on roll ${r.roll_number}</small></div>
+      ${sc.roll.position !== 'middle' ? `<div class="pos">${sc.roll.position === 'first' ? 'FIRST TAG of this roll: matches the sheet' : 'LAST TAG of this roll: matches the sheet'}</div>` : ''}
+      <div class="e">${epcHtml(sc.epc)}</div>
+      <div class="sm">Serial ${fmt(sc.roll.serial)} · scanned ${new Date(S.scan.at).toTimeString().slice(0, 8)}${sc.result === 'other_job' ? ' · opened from a different job' : ''}</div>
+      ${sc.note ? `<div class="sm">${esc(sc.note)}</div>` : ''}</div>` : '';
+  $('#rview').innerHTML = `${hit}${nav}
+    <div class="rbig"><div style="display:flex;align-items:center;gap:10px"><div class="lab">${fmt(r.quantity)} <small>labels</small></div><span class="rs ${st}" style="margin-left:auto;font-size:15px">${RLAB[st]}</span></div>
+      <div style="color:var(--muted);font-size:14.5px;margin-top:4px">${who}</div>
+      ${r.serial_start ? `<div class="kv"><div class="k">First tag (matches the sheet)</div><div class="tail">${esc(r.epc_start.slice(-5))}</div><div class="v">${epcHtml(r.epc_start)}</div></div>
+      <div class="kv"><div class="k">Last tag (matches the sheet)</div><div class="tail">${esc(r.epc_end.slice(-5))}</div><div class="v">${epcHtml(r.epc_end)}</div></div>
+      <div class="kv"><div class="k">Serial range</div><div class="v ser">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</div></div>`
+      : '<div class="kv"><div class="v" style="font-family:var(--sans);font-size:16px">Special job: no serials or tag data for this roll.</div></div>'}
+      <div class="kv"><div class="k">Position in the job</div><div class="v" style="font-family:var(--sans);font-size:17px">Labels ${fmt(before + 1)} – ${fmt(before + r.quantity)} of ${fmt(total)}</div></div></div>
+    ${jn.map(x => `<div class="note imp"><b class="l">Important</b>${esc(x.body)}<small>${esc(x.author || '')} · ${when(x.created_at)}</small></div>`).join('')}
+    <h3 class="sec">Notes on roll ${r.roll_number}</h3>
+    ${rn.length ? rn.map(x => `<div class="note ${x.important ? 'imp' : 'tk'}">${esc(x.body)}<small>${esc(x.author || '')} · ${when(x.created_at)}</small></div>`).join('') : '<div class="empty" style="padding:14px">No notes on this roll.</div>'}
+    ${nav}`;
+}
+
+/* swipe between rolls */
+let tx = null, ty = null;
+$('#v-roll').addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive: true});
+$('#v-roll').addEventListener('touchend', e => {
+  if (tx === null) return; const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty; tx = null;
+  if (Math.abs(dx) < 80 || Math.abs(dy) > 50 || !S.d) return;
+  const rt = route(), rolls = S.d.rolls, i = rolls.findIndex(r => r.roll_number === rt.roll), k = rolls[i + (dx < 0 ? 1 : -1)];
+  if (k) go('#/job/' + rt.job + '/roll/' + k.roll_number);
+}, {passive: true});
+
+function sndBtn() { $('#snd').textContent = S.sound ? '🔊' : '🔇'; }
+$('#snd').onclick = () => { S.sound = !S.sound; localStorage.setItem('rw_sound', S.sound ? '1' : '0'); sndBtn(); focusScan(); };
+sndBtn();
+render();
+poll();
+</script>
+</body>
+</html>

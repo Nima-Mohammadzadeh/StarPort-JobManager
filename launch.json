@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mock-demo",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["mock_demo/run_mock.py"],
+      "port": 5051
+    }
+  ]
+}

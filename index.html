@@ -1,0 +1,2706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Manager</title>
+<style>
+:root{
+  /* Palette: cool teal-grey neutrals carry ~90% of the screen; teal means "click me / selected";
+     semantic hues are kept at similar lightness so no status shouts louder than another:
+     blue = in progress, amber = waiting (blue's complement, so active vs waiting is obvious),
+     violet = held, green = done, red = problem. Every text/background pair is at least 4.5:1. */
+  --canvas:#E9F0F0; --surface:#FFFFFF; --sunk:#F2F7F7; --ink:#10252A; --muted:#4F6569;
+  --line:#D1DDDF; --line-strong:#AEC0C3;
+  --accent:#0F766E; --accent-dark:#0B5A54; --accent-soft:#DDF1EE;   /* teal: buttons, links, focus, selection */
+  --blue:#2563A8; --blue-bright:#4A8FD8; --blue-soft:#E3EEF9;       /* blue: work in progress */
+  --green:#2A7430; --green-soft:#E3F2E4; --amber:#9A5B00; --amber-soft:#FCEFD2;
+  --red:#B3322B; --red-soft:#F9E2E0; --violet:#5E48A8; --violet-soft:#ECE8F7;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --data:Consolas,"Cascadia Mono","SFMono-Regular",Menlo,monospace;
+  --r:6px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%}
+body{font:14px/1.45 var(--sans);color:var(--ink);background:var(--canvas)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ── Side navigation (always open; icons only on narrow screens) + slim top bar ── */
+:root{--sw:284px}
+@media (max-width:900px){:root{--sw:76px}.sidenav .lbl,.brand .bt{display:none}}
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--ink);color:#fff;z-index:30;display:flex;flex-direction:column;padding:12px 12px 14px;transition:width .18s ease;overflow:hidden}
+.brand{font-weight:650;font-size:21px;letter-spacing:.01em;display:flex;align-items:center;gap:14px;height:56px;padding:0 12px;margin-bottom:12px;white-space:nowrap}
+.brand svg{width:30px;height:30px;flex:none;color:#5ED0C2}
+.sidenav nav{display:flex;flex-direction:column;gap:2px}
+.sidenav nav button{display:flex;align-items:center;gap:16px;width:100%;height:57px;padding:0 15px;background:none;border:0;border-radius:11px;color:#B4C9C8;cursor:pointer;font-weight:550;font-size:18px;white-space:nowrap;text-align:left;position:relative}
+.sidenav nav button svg{width:28px;height:28px;flex:none}
+.sidenav nav button:hover{background:#1D3C3E;color:#fff}
+.sidenav nav button.on{background:#17423F;color:#fff}
+.sidenav nav button.on::before{content:"";position:absolute;left:-12px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#5ED0C2}
+.nav-sep{height:1px;background:#2B4648;margin:10px 6px}
+.app{margin-left:var(--sw);transition:margin-left .18s ease;min-width:0;container:app/inline-size}
+header{display:flex;align-items:center;gap:16px;padding:0 18px;height:56px;background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);position:sticky;top:0;z-index:20}
+.crumb{font-weight:650;font-size:16px}
+.bar h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.conn{font-size:12px;color:var(--muted);margin-right:8px}
+.conn.bad{color:var(--red);font-weight:600}
+
+/* ── Buttons & fields ── */
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r);padding:7px 14px;cursor:pointer;font-weight:550;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-dark)}
+.btn.danger{color:var(--red);border-color:#DDB4B4}
+.btn.quiet{border-color:transparent;background:transparent}
+.btn.quiet:hover{background:var(--sunk)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
+label.f span.hint{font-weight:400;font-size:12px;order:3}
+input.i,select.i,textarea.i{border:1px solid var(--line-strong);border-radius:var(--r);padding:7px 10px;background:#fff;color:var(--ink);width:100%}
+input.i:focus,select.i:focus,textarea.i:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+input.i.bad{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+textarea.i{resize:vertical;min-height:56px}
+.data{font-family:var(--data);font-variant-numeric:tabular-nums}
+
+/* ── Layout ── */
+main{padding:20px 18px 60px;max-width:2200px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.bar h1{font-size:20px;margin:0 12px 0 0;font-weight:650}
+.search{position:relative;flex:0 1 380px}
+.search input{padding-left:32px}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted)}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden;background:#fff}
+.seg button{border:0;background:none;padding:6px 12px;cursor:pointer;border-right:1px solid var(--line);font-size:13px;color:var(--muted)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.seg b{font-weight:600;margin-left:4px}
+
+/* ── Table ── */
+.tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:auto}
+table.jobs{width:100%;border-collapse:collapse}
+.jobs th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:9px 9px;border-bottom:1px solid var(--line);background:var(--sunk);position:sticky;top:0;white-space:nowrap}
+.jobs td{padding:9px 9px;border-bottom:1px solid #E7ECEC;vertical-align:middle}
+.jobs tbody tr{cursor:pointer}
+.jobs tbody tr:hover{background:#E9F3F2}
+.jobs tbody tr.sel{background:var(--accent-soft)}
+.jobs td.num{text-align:right}
+.jobs .tk{font-size:16px;font-weight:700;color:#0A1417;line-height:1.2}
+.jobs td.cust{font-size:15px;font-weight:600;color:#0A1417;line-height:1.25}
+.jobs .sub{color:var(--muted);font-size:12.5px}
+.jobs .item{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.due-late{color:var(--red);font-weight:600}
+.empty{padding:48px 20px;text-align:center;color:var(--muted)}
+.empty .btn{margin-top:12px}
+
+/* Roll strip — the thing that mirrors the paper roll tracker */
+.strip{display:flex;gap:2px;align-items:center}
+.minibar{width:110px;height:8px;border-radius:2px;background:#D9E0E6;overflow:hidden}
+.minibar i{display:block;height:100%;background:var(--green)}
+.jobs td.nw{white-space:nowrap}
+.strip i{width:9px;height:12px;border-radius:2px;background:#D9E0E6;display:block}
+.strip i.d{background:var(--green)}
+.strip .more{font-size:11.5px;color:var(--muted);margin-left:4px}
+.strip-label{font-size:12px;color:var(--muted);margin-top:2px}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.st-pending{background:var(--amber-soft);color:var(--amber)}
+.st-in-progress{background:var(--blue-soft);color:var(--blue)}
+.st-on-hold{background:var(--violet-soft);color:var(--violet)}
+.st-complete{background:var(--green-soft);color:var(--green)}
+.st-cancelled{background:var(--red-soft);color:var(--red)}
+
+/* ── Drawer ── */
+.drawer{position:fixed;top:56px;right:0;bottom:0;width:min(640px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(27,42,46,.12);transform:translateX(100%);transition:transform .18s ease;z-index:15;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.d-head{padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+.d-title{display:flex;align-items:flex-start;gap:10px}
+.d-title h2{margin:0;font-size:19px;font-weight:650;line-height:1.25}
+.d-title .sub{color:var(--muted);font-size:13px}
+.d-title .x{margin-left:auto}
+.d-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.d-body{overflow:auto;padding:4px 20px 30px;flex:1}
+.d-sec{padding:16px 0;border-bottom:1px solid #E7ECEC}
+.d-sec:last-child{border-bottom:0}
+.d-sec h3{font-size:14px;margin:0 0 10px;font-weight:650;display:flex;align-items:center;gap:8px}
+.d-sec h3 .r{margin-left:auto;display:flex;gap:6px}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px}
+.kv div{min-width:0}
+.kv dt{font-size:12px;color:var(--muted)}
+.kv dd{margin:1px 0 0;word-break:break-word}
+.path{font-family:var(--data);font-size:12.5px;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;word-break:break-all;color:var(--muted)}
+.warnbox{background:var(--amber-soft);color:#6B4207;border-radius:var(--r);padding:8px 12px;font-size:13px;margin:8px 0}
+
+/* Roll grid in drawer */
+.rolls{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.roll{border:1px solid var(--line-strong);border-radius:5px;background:#fff;padding:6px 4px 5px;text-align:center;cursor:pointer;line-height:1.2}
+.roll:hover{border-color:var(--accent)}
+.roll b{display:block;font-size:15px}
+.roll small{font-size:11px;color:var(--muted);font-family:var(--data)}
+.roll.d{background:var(--green);border-color:var(--green);color:#fff}
+.roll.d small{color:#D6EEDD}
+.roll-meta{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+.progress{height:6px;background:#D9E0E6;border-radius:3px;overflow:hidden;margin-bottom:12px}
+.progress i{display:block;height:100%;background:var(--green)}
+.rolldetail{margin-top:10px;font-size:13px;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:none}
+.rolldetail.on{display:block}
+.files a{display:flex;justify-content:space-between;gap:10px;padding:6px 8px;border-radius:5px;color:var(--ink);text-decoration:none;font-size:13.5px}
+.files a:hover{background:var(--sunk)}
+.files .frow{display:flex;align-items:center;gap:4px}.files .frow a{flex:1;min-width:0}
+.files .fgrp{font-size:12px;color:var(--muted);margin:8px 0 2px 8px}
+.files small{color:var(--muted)}
+
+/* ── Modal ── */
+.ov{position:fixed;inset:0;background:rgba(27,42,46,.45);display:none;align-items:flex-start;justify-content:center;z-index:40;padding:40px 16px;overflow:auto}
+.ov.on{display:flex}
+.modal{background:var(--surface);border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(980px,100%)}
+.modal.wide{width:min(1400px,100%)}
+.modal.narrow{width:min(460px,100%)}
+.m-head{display:flex;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line)}
+.m-head h2{margin:0;font-size:18px;font-weight:650}
+.m-head .x{margin-left:auto}
+.m-body{padding:18px 22px}
+.m-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--line);background:var(--sunk);border-radius:0 0 10px 10px}
+.m-foot .msg{margin-right:auto;font-size:13px;color:var(--red)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.col-title{font-size:14px;font-weight:650;margin:0 0 2px}
+.fieldmsg{font-size:12.5px;min-height:18px}
+.fieldmsg.ok{color:var(--green)} .fieldmsg.bad{color:var(--red)}
+.fieldmsg a{color:var(--accent);cursor:pointer;text-decoration:underline}
+.summary{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13.5px}
+.summary .row{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.summary .row span:first-child{color:var(--muted)}
+.summary .row span:last-child{text-align:right}
+.summary .spill{color:var(--amber);font-size:12.5px;margin-top:4px}
+.tlist{border:1px solid var(--line);border-radius:var(--r);max-height:190px;overflow:auto;background:#fff}
+.tlist label{display:flex;gap:8px;align-items:flex-start;padding:6px 10px;border-bottom:1px solid #EEF1F1;cursor:pointer;font-size:13px}
+.tlist label:last-child{border-bottom:0}
+.tlist label:hover{background:var(--sunk)}
+.tlist small{display:block;color:var(--muted);font-family:var(--data);font-size:11.5px;word-break:break-all}
+.tlist .none{padding:10px;color:var(--muted);font-size:13px}
+.tpl-box{border-top:1px solid var(--line);padding-top:12px}
+.tpl-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;font-size:13.5px}
+.tstat{font-size:12.5px;margin-left:auto;text-align:right}
+.tstat.ok{color:var(--green);font-weight:600}.tstat.warn{color:var(--amber);font-weight:600}.tstat.muted{color:var(--muted)}
+.tlist label.sel{background:var(--accent-soft)}
+.why{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:6px}
+.why i{font-style:normal;font-size:11px;padding:0 6px;border-radius:3px;background:var(--sunk);border:1px solid var(--line);color:var(--muted)}
+.why i.k{background:var(--green-soft);border-color:#B9DCC5;color:var(--green)}
+
+/* Batch grid */
+.bgrid{width:100%;border-collapse:collapse;font-size:13px}
+.bgrid th{font-weight:600;color:var(--muted);text-align:left;padding:4px 3px;font-size:12px;white-space:nowrap}
+.bgrid td{padding:2px 3px}
+.bgrid input{width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 6px;background:#fff}
+.bgrid input:focus{border-color:var(--accent);outline:none}
+.bgrid input.bad{border-color:var(--red);background:#FFF7F7}
+.bgrid td.res{font-size:12px;min-width:150px}
+.bgrid td.res.ok{color:var(--green)} .bgrid td.res.bad{color:var(--red)}
+.bgrid tr.done input{background:var(--green-soft);border-color:transparent}
+
+/* Templates page */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.tcard{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.tcard .img{height:120px;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
+.tcard .img img{max-width:100%;max-height:100%;object-fit:contain}
+.tcard .b{padding:10px 12px;font-size:13px}
+.tcard .b small{display:block;color:var(--muted);font-family:var(--data);font-size:11px;word-break:break-all;margin-top:3px}
+.tcard .f{padding:0 12px 10px;margin-top:auto}
+
+/* Settings */
+.panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;max-width:860px}
+/* settings: section list on the left, one compact section at a time */
+.set-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}
+.set-nav{position:sticky;top:76px;display:flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
+.set-nav button{text-align:left;border:0;background:none;padding:10px 12px;border-radius:7px;font-size:15px;font-weight:600;color:var(--muted);cursor:pointer}
+.set-nav button:hover{background:var(--sunk);color:var(--ink)}
+.set-nav button.on{background:var(--accent-soft);color:var(--accent-dark)}
+.set-body{min-width:0}
+#v-settings .panel{display:none;max-width:none;padding:14px 18px;margin-bottom:12px}
+#v-settings .panel.show{display:block}
+#v-settings .panel h2{font-size:17px;margin-bottom:8px}
+#v-settings .stack{gap:10px}
+details.more{margin:0 0 10px}
+details.more summary{cursor:pointer;color:var(--accent);font-size:13px;font-weight:600;width:max-content}
+details.more p.d{margin:6px 0 0}
+@container app (max-width:900px){.set-layout{grid-template-columns:1fr}.set-nav{position:static;flex-direction:row;flex-wrap:wrap}}
+.panel h2{font-size:16px;margin:0 0 4px;font-weight:650}
+.panel p.d{margin:0 0 14px;color:var(--muted);font-size:13px}
+.blist{font-size:13px;margin-top:12px;max-height:200px;overflow:auto}
+.blist div{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #EEF1F1}
+
+/* Toast */
+#toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:60;align-items:center}
+.toast{background:var(--ink);color:#fff;padding:9px 16px;border-radius:var(--r);font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:560px}
+.toast.bad{background:var(--red)}
+
+@media (max-width:900px){
+  .cols,.grid3{grid-template-columns:1fr}
+  .kv{grid-template-columns:1fr 1fr}
+  header{gap:12px;padding:0 12px}
+  .conn{display:none}
+  .hide-sm{display:none}
+}
+
+/* ── Activity feed (Jobs page) ── */
+.with-feed{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+.feed{background:var(--surface);border:1px solid var(--line);border-radius:8px;position:sticky;top:72px;max-height:calc(100vh - 92px);display:flex;flex-direction:column}
+.feed-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.feed-head h2{font-size:14px;margin:0;font-weight:650;margin-right:auto}
+.seg.sm button{padding:3px 9px;font-size:12px}
+.feed-list{overflow:auto;padding:4px 0}
+.fi{display:block;width:100%;text-align:left;background:none;border:0;border-left:3px solid var(--line);padding:7px 12px 7px 11px;cursor:pointer;font-size:13px;line-height:1.35}
+.fi:hover{background:var(--sunk)}
+.fi .meta{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.fi.k-created,.fi.k-upload,.fi.k-template{border-left-color:var(--accent)}
+.fi.k-roll{border-left-color:var(--green)}
+.fi.k-roll_start{border-left-color:var(--blue-bright)}
+.fi.k-roll_pause{border-left-color:#C98A1B}
+.fi.k-roll_undo,.fi.k-edited,.fi.k-archived,.fi.k-import{border-left-color:var(--line-strong)}
+.fi.k-note{border-left-color:#8BA3A8}
+.fi.k-note_important{border-left-color:var(--amber);background:#FFFBF2}
+.fi.k-status{border-left-color:var(--violet)}
+.fi.k-deleted{border-left-color:var(--red)}
+.fi.day{border:0;padding:8px 12px 2px;font-size:11.5px;color:var(--muted);font-weight:600;cursor:default;background:none}
+
+/* ── Roll tracking page ── */
+.who{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13.5px;color:var(--muted);min-height:34px}
+.who b{color:var(--ink)}
+.who.need{background:var(--amber-soft);color:#6B4207;padding:8px 12px;border-radius:var(--r)}
+.who input{max-width:220px}
+.floor{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start}
+.floor-list{display:flex;flex-direction:column;gap:8px;position:sticky;top:72px;max-height:calc(100vh - 140px)}
+.floor-list .search{flex:none}
+#floor-cards{overflow:auto;display:flex;flex-direction:column;gap:6px;padding:2px}
+.fc{background:#fff;border:1px solid var(--line);border-radius:7px;padding:9px 11px;cursor:pointer;text-align:left;width:100%}
+.fc:hover{border-color:var(--line-strong)}
+.fc.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.fc .t{display:flex;align-items:center;gap:8px}
+.fc .t b{font-size:14.5px}
+.fc .t .pill{margin-left:auto;font-size:11.5px}
+.fc .c{font-size:13px;margin-top:1px}
+.fc .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .p{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12px;color:var(--muted)}
+.fc .bar{flex:1;height:5px;background:#D9E0E6;border-radius:3px;overflow:hidden}
+.fc .bar i{display:block;height:100%;background:var(--green)}
+.flag{display:inline-block;color:var(--amber);font-weight:600;font-size:12px;margin-top:5px}
+.work{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:420px}
+.w-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.w-head h2{margin:0;font-size:20px;font-weight:650}
+.w-head .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.w-head .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.btline{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.btline b{color:var(--ink)}
+.chip{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 7px;font-size:12.5px}
+.w-body{padding:16px 20px 24px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:22px}
+.w-body h3{font-size:14px;margin:0 0 10px;font-weight:650}
+.imp{background:var(--amber-soft);border:1px solid #EBC983;border-radius:7px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}
+.imp b{display:block;font-size:12.5px;color:#6B4207;margin-bottom:3px}
+.imp p{margin:4px 0 0;white-space:pre-wrap}
+.ticketnote{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:9px 12px;margin-bottom:14px;font-size:13.5px;white-space:pre-wrap}
+.ticketnote b{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
+.next{border:2px solid var(--accent);border-radius:9px;padding:14px 16px;margin-bottom:14px}
+.next .lbl{font-size:13px;color:var(--muted)}
+.next .big{font-size:26px;font-weight:700;line-height:1.15;margin:2px 0 8px}
+.next .big small{font-size:15px;font-weight:500;color:var(--muted)}
+.next .rng{font-size:13px;line-height:1.6}
+.next .go{margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn.big{padding:11px 20px;font-size:15.5px}
+.catch{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.catch input{width:70px;padding:5px 8px}
+.next.done{border-color:var(--green);background:var(--green-soft)}
+.roll .dot{display:block;width:6px;height:6px;border-radius:50%;background:var(--amber);margin:2px auto 0}
+.roll.d .dot{background:#FFE29A}
+.roll.nx{border:2px solid var(--accent)}
+.composer{border:1px solid var(--line-strong);border-radius:7px;padding:8px;margin-bottom:12px;background:#fff}
+.composer textarea{border:0;width:100%;resize:vertical;min-height:54px;outline:none;font:inherit}
+.composer .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #EEF1F1;padding-top:8px}
+.composer select{width:auto;padding:4px 8px}
+.composer label.ck{display:flex;gap:5px;align-items:center;font-size:13px}
+.composer .btn{margin-left:auto}
+.note{border-bottom:1px solid #EEF1F1;padding:8px 0;font-size:13.5px}
+.note:last-child{border-bottom:0}
+.note .m{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.note .m .tag{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:0 6px}
+.note .m .acts{margin-left:auto;display:flex;gap:2px}
+.note .m .acts button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:4px}
+.note .m .acts button:hover{background:var(--sunk);color:var(--ink)}
+.note p{margin:3px 0 0;white-space:pre-wrap;word-break:break-word}
+.note.important{background:#FFFBF2;margin:0 -8px;padding:8px;border-left:3px solid var(--amber);border-bottom-color:#F3E3C0}
+.helper-state{font-size:13.5px}
+.uprow{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.uprow select{width:auto;padding:4px 8px}
+
+@container app (max-width:1650px){.hide-lg{display:none}}
+@container app (max-width:1280px){.with-feed{grid-template-columns:1fr}.feed{position:static;max-height:420px}.hide-md{display:none}}
+@media (max-width:1100px){.w-body{grid-template-columns:1fr}}
+@container app (max-width:900px){.floor{grid-template-columns:1fr}.floor-list{position:static;max-height:none}#floor-cards{max-height:300px}}
+
+/* roll tracking: one roll at a time */
+.strip i.r,.minibar i.r,.fc .bar i.r,.stack-bar i.r{background:var(--blue-bright)}
+.strip i.p,.minibar i.p,.stack-bar i.p,.fc .bar i.p{background:#E0A93B}
+.minibar,.fc .bar,.stack-bar{display:flex}
+.rsum{display:flex;gap:14px;font-size:13px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+.rsum b{color:var(--ink)} .rsum .r-run b{color:var(--blue)} .rsum .r-pause b{color:var(--amber)}
+.stack-bar{height:7px;background:#D9E0E6;border-radius:4px;overflow:hidden;margin-bottom:10px}
+.stack-bar i.d{background:var(--green)}
+.alldone{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--green-soft);border:1px solid #B9DCC5;border-radius:7px;padding:9px 12px;margin-bottom:10px;font-size:13.5px}
+.runners{font-size:12px;color:var(--blue);margin-top:4px}
+.pausers{font-size:12px;color:var(--amber);margin-top:2px}
+.w-top{padding:14px 20px 0}
+.w-body2{display:grid;grid-template-columns:minmax(230px,320px) minmax(0,1fr);gap:20px;padding:14px 20px 18px;align-items:start}
+.rlist{display:flex;flex-direction:column;gap:4px;max-height:560px;overflow:auto;padding:2px}
+.ri{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:2px 8px;text-align:left;background:#fff;border:1px solid var(--line);border-left:5px solid #CBD3D5;border-radius:6px;padding:7px 10px;cursor:pointer;position:relative}
+.ri:hover{border-color:var(--line-strong)}
+.ri b{font-size:17px;grid-row:span 2}
+.ri .st{font-size:12.5px;font-weight:600}
+.ri .ser{font-size:11.5px;color:var(--muted);grid-column:2}
+.ri .dot{position:absolute;right:8px;top:8px;width:7px;height:7px;border-radius:50%;background:var(--amber)}
+.ri.s-running{border-left-color:var(--blue-bright)}.ri.s-running .st{color:var(--blue)}
+.ri.s-paused{border-left-color:#E0A93B;background:#FFFBF2}.ri.s-paused .st{color:var(--amber)}
+.ri.s-done{border-left-color:var(--green)}.ri.s-done .st{color:var(--green)}
+.ri.s-pending .st{color:var(--muted)}
+.ri.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink)}
+.w-roll{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fff;position:sticky;top:66px}
+.rstate{padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:650;background:var(--sunk);color:var(--muted)}
+.rstate.s-running{background:#E4EFF9;color:var(--blue)}.rstate.s-paused{background:var(--amber-soft);color:var(--amber)}.rstate.s-done{background:var(--green-soft);color:var(--green)}
+.verify .vlist{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.verify .v{font-size:13px;padding:5px 8px;border-radius:5px;display:flex;flex-direction:column}
+.verify .v .data{font-size:11.5px;opacity:.8}
+.verify .v.ok{background:var(--green-soft);color:#1F5A37}.verify .v.bad{background:var(--red-soft);color:#7A2626}
+.btn.big{padding:11px 20px;font-size:15.5px}
+.pausebox{display:none;gap:6px;margin-top:8px;align-items:center}
+.pausebox.on{display:flex}
+/* roll tracking: compact header, roll tiles, three-column work area */
+.w-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start;padding:14px 20px 12px;border-top:3px solid var(--sc);border-radius:8px 8px 0 0}
+.wh-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wh-title h2{margin:0;font-size:20px}
+.wh-tk{font-weight:500;color:var(--muted);font-size:15px;margin-left:4px}
+.w-head .sub{margin-top:1px}
+.wh-prog{margin-top:10px;max-width:520px}
+.wh-prog .stack-bar{height:8px;margin-bottom:5px}
+.wh-prog .rsum{margin:0}
+.w-head .acts{margin-left:0;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.acts-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btcopy{display:flex;gap:2px;align-items:center;font-size:12px;color:var(--muted)}
+.btcopy span{margin-right:4px}
+.w-top{display:grid;gap:10px;padding:12px 20px 0}
+.w-top.two{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.w-top .imp,.w-top .ticketnote{margin:0}
+.rlist{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 330px);min-height:240px;overflow:auto;padding:3px}
+.rb-body{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+.rb .rb-body{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
+.rb-head{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:var(--sunk);padding:6px 10px;cursor:pointer;border-radius:7px 7px 0 0;text-align:left;font-size:13px}
+.rb.closed .rb-head{border-radius:7px}
+.rb-head:hover{background:#E8F2F1}
+.rb-head .caret{color:var(--muted);width:12px}
+.rb-head .rb-n{color:var(--muted);font-size:12.5px;margin-left:auto}
+.rb-head .rb-bar{width:54px;height:5px;border-radius:3px;background:#D9E0E6;overflow:hidden}
+.rb-head .rb-bar i{display:block;height:100%;background:var(--green)}
+.rb.full .rb-head .rb-n{color:var(--green);font-weight:600}
+.rb-body .ri{border:0;border-bottom:1px solid #EAEFF2;border-left:6px solid #C6D0D7;border-radius:0;background:#fff;padding:8px 10px}
+.rb-body .ri:last-child{border-bottom:0}
+.rb-body .ri.s-done{border-left-color:var(--green);background:#F6FBF8}
+.rb-body .ri.s-running{border-left-color:var(--blue-bright);background:#F3F8FD}
+.rb-body .ri:hover{background:#E9F3F2}
+.rb-body .ri.on{box-shadow:inset 0 0 0 2px var(--ink);position:relative;z-index:1}
+.rb-body .ri{display:grid;grid-template-columns:30px 16px minmax(0,1fr) minmax(0,86px);gap:0 8px;align-items:center;height:34px;padding:0 10px 0 8px}
+.rb-body .ri b{grid-row:auto;font-size:15px;text-align:right}
+.rb-body .ri .g{font-size:11px;color:var(--muted);text-align:center}
+.rb-body .ri.s-done .g{color:var(--green)}.rb-body .ri.s-running .g{color:var(--blue)}
+.rb-body .ri .ser{font-size:12.5px;color:var(--muted);grid-column:auto}
+.rb-body .ri .who{font-size:12px;color:var(--ink);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-body .ri .dot{right:auto;left:36px;top:5px;width:7px;height:7px;box-shadow:0 0 0 2px #fff}
+.ri .dot{background:var(--amber)}
+.w-roll{container-type:inline-size}
+@container app (max-width:1350px){.w-head{grid-template-columns:1fr}.w-head .acts{align-items:flex-start}.acts-row{justify-content:flex-start}}
+@container app (max-width:1500px){.w-body2{grid-template-columns:minmax(300px,340px) minmax(0,1fr)}}
+@media (max-width:1100px){.w-head{grid-template-columns:1fr}.w-head .acts{align-items:flex-start}.acts-row{justify-content:flex-start}.w-body2{grid-template-columns:1fr}.rlist{max-height:240px}}
+.w-body2{grid-template-columns:minmax(250px,290px) minmax(0,1fr)}
+.w-roll{position:static;border:0;padding:0;background:none;container-type:inline-size}
+.rc{border:1px solid var(--line);border-radius:9px;background:#fff}
+.rc-head{position:sticky;top:56px;z-index:3;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:10px 14px;background:#fff;border-bottom:1px solid var(--line);border-radius:9px 9px 0 0}
+.rc-nav{display:flex;align-items:center;gap:6px;flex:1 1 auto}
+.rc-nav h3{margin:0 4px;font-size:20px;font-weight:700;white-space:nowrap}
+.rc-nav h3 span{font-size:13px;font-weight:500;color:var(--muted)}
+.rc-nav .btn.sm{padding:2px 10px;font-size:18px;line-height:1.2}
+.rc-acts{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-left:auto}
+.rc-sub{flex:1 0 100%;font-size:12.5px;color:var(--muted);margin-top:-2px}
+.rc .pausebox{padding:8px 14px;background:var(--sunk);margin:0;border-bottom:1px solid var(--line)}
+.rc-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px 20px;padding:14px}
+.rc-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rc-strip{display:flex;flex-wrap:wrap;gap:6px 26px;margin:0;padding:10px 14px;background:var(--sunk);border:1px solid var(--line);border-radius:8px}
+.rc-strip dt{font-size:12px;color:var(--muted)}
+.rc-strip dd{margin:1px 0 0;font-size:15px}
+.rc-strip dd.big{font-size:22px;font-weight:700}
+.trange{width:100%;border-collapse:collapse}
+.trange th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 10px 6px 0;white-space:nowrap;width:1%}
+.trange td{padding:6px 0;border-top:1px solid #EAEFF2}
+.trange tr:first-child td,.trange tr:first-child th{border-top:0}
+.trange td:last-child{text-align:right;width:1%}
+.trange td.epc{font-size:15px;word-break:break-all}
+.trange td.epc b{background:#FFF3C4;padding:0 2px;border-radius:2px}
+.rc .verify{margin-top:0;padding-top:12px;border-top:1px solid var(--line)}
+.rc-notes{min-width:0}
+.rtabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:10px;flex-wrap:wrap}
+.rtabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px;margin-bottom:-1px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--muted)}
+.rtabs button b{margin-left:5px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:0 6px;font-size:11.5px;color:var(--ink)}
+.rtabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.rc-notes .feed-list{max-height:340px;border:1px solid var(--line);border-radius:7px;overflow:auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@container (min-width:860px){.rc-body{grid-template-columns:minmax(0,1.15fr) minmax(300px,1fr)}.rc-body.one{grid-template-columns:1fr}}
+/* printer strip + printer buttons */
+.rc-printer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:#F4FAF9}
+.rc-printer .pl{font-size:14px;font-weight:650;color:var(--muted)}
+.rc-printer select{width:auto;min-width:260px;font-size:15.5px;font-weight:600;padding:8px 10px}
+.pchip{background:var(--accent-soft);color:var(--accent-dark);border-radius:6px;padding:1px 8px;font-weight:650;font-size:13.5px;white-space:nowrap}
+.pchip.none{background:var(--amber-soft);color:var(--amber)}
+.rc-rec dd.big{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:750;color:var(--accent-dark)}
+.rc-rec dd small{font-size:13px;font-weight:600;color:var(--muted)}
+.rc-strip .rc-rec{flex:1 0 100%}
+.rc-strip dd{font-size:16.5px}
+/* roll list: larger text, record number leads */
+.rb-body .ri{grid-template-columns:34px 18px minmax(0,1fr) auto;height:44px;gap:0 9px;padding-left:8px}
+.rb-body .ri .rno{display:grid;place-items:center;height:26px;min-width:26px;padding:0 4px;border-radius:7px;background:#E8EDF2;border:1px solid #CDD6DE;font-size:14px;font-weight:700;color:var(--ink)}
+.rb-body .ri .g{font-size:13px}
+.rb-body .ri .rec{font-size:17.5px;font-weight:750;color:var(--ink);letter-spacing:-.01em;white-space:nowrap}
+.rb-body .ri .rec small{margin-left:8px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.rb-body .ri .who{font-size:14px;color:var(--ink);max-width:110px}
+.rb-head{font-size:14.5px;padding:8px 10px}
+.rb-head .rb-n{font-size:13.5px}
+.rfilter button{font-size:13.5px}
+.rtabs button{font-size:14.5px}
+.trange th{font-size:13px}.trange td{font-size:15.5px}.trange td.epc{font-size:16px}
+.rc-nav h3{font-size:22px}
+.rc-sub{font-size:13.5px}
+.fc .c{font-size:14px}.fc .p{font-size:13px}.runners,.pausers,.flag{font-size:13px}
+.w-body2{grid-template-columns:minmax(300px,340px) minmax(0,1fr)}
+.floor-list{background:#fff;border:1px solid var(--line);border-radius:10px;gap:0;overflow:hidden}
+/* archive: sortable headers, scrolling table, pager */
+.archive-wrap{max-height:calc(100vh - 210px)}
+.archive-wrap.loading tbody{opacity:.55;transition:opacity .12s}
+.ar-custom{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.ar-custom input{width:auto;padding:5px 8px}
+.jobs th .th-sort{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap}
+.jobs th .th-sort:hover{color:var(--ink)}
+.jobs th .th-sort.on{color:var(--ink)}
+.jobs th .arrow{font-size:10px;opacity:.45}.jobs th .th-sort.on .arrow{opacity:1;color:var(--accent)}
+.jobs th.num .th-sort{justify-content:flex-end}
+#archive-body tr[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#archive-body tr:not(.grp) td:first-child{box-shadow:inset 3px 0 0 var(--sc,transparent)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 4px;font-size:13.5px;color:var(--muted)}
+.pager b{color:var(--ink)}
+.pg-ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pg{min-width:34px;height:34px;padding:0 8px;border:1px solid var(--line-strong);background:#fff;border-radius:7px;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
+.pg:hover:not(:disabled):not(.on){background:var(--sunk)}
+.pg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pg:disabled{opacity:.4;cursor:default}
+.pager .gap{padding:0 2px}
+.pg-go{width:84px;padding:6px 8px}
+.pager select.i{width:auto;padding:5px 8px}
+.fl-head{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--line);background:var(--sunk);flex:none}
+.fl-head select{width:auto;flex:0 0 auto;font-weight:600}
+.fl-head .search{flex:1 1 auto;min-width:0}
+#floor-cards{padding:8px;flex:1 1 auto;min-height:0}
+.fc{border-left:4px solid var(--sc,var(--line-strong));padding:8px 10px}
+.fc .t b{font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc .c{font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .c .data{font-weight:700;color:var(--ink)}
+.fc .c .s{display:inline;color:var(--muted)}
+.jobs td.cust{font-size:16.5px;font-weight:650;color:var(--ink);white-space:nowrap}
+.jobs.d-compact td.cust{font-size:15.5px}
+.grp-btn .gname{font-size:15px}
+.seg.icons button{padding:4px 8px;display:flex;align-items:center}
+.seg.icons button.on{background:var(--ink);color:#fff}
+.icon-btn{padding:4px 8px;display:inline-flex;align-items:center}
+.fc .p{flex-wrap:wrap;row-gap:4px;margin-top:5px}.fc .bar{flex:1 0 100%}
+.verify{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rfilter{margin-bottom:8px;width:100%}.rfilter button{flex:1;padding:4px 6px;white-space:nowrap}
+.w-rolls{min-width:0}
+@media (max-width:1100px){.w-body2{grid-template-columns:1fr}.rlist{max-height:260px}.w-roll{position:static;order:-1}}
+
+/* ── Jobs table: grouping, density, status colour ── */
+.bar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.inline-sel{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:500}
+.inline-sel select{width:auto;padding:4px 8px}
+.jobs-wrap{max-height:calc(100vh - 150px)}
+.jobs thead th{z-index:2;box-shadow:0 1px 0 var(--line)}
+.jobs tbody tr:not(.grp) td:first-child{box-shadow:inset 3px 0 0 var(--sc,transparent)}
+.jobs tbody tr:not(.grp):not(.sel):hover{background:#E9F3F2}
+.jobs tr.grp td{padding:0;background:var(--sunk);border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.jobs tr.grp:hover{background:none}
+.grp-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:7px 9px;cursor:pointer;text-align:left;box-shadow:inset 3px 0 0 var(--sc)}
+.grp-btn:hover{background:#E8F2F1}
+.grp-btn .caret{width:14px;color:var(--muted);font-size:12px}
+.grp-btn .gname{font-weight:700;font-size:13.5px}
+.grp-btn .gcount{background:var(--sc);color:#fff;border-radius:999px;padding:0 8px;font-size:12px;font-weight:650}
+.grp-btn .gmeta{color:var(--muted);font-size:12.5px}
+.grp-btn .gbar{width:90px;height:5px;background:#D9E0E6;border-radius:3px;overflow:hidden}
+.grp-btn .gbar i{display:block;height:100%;background:var(--green)}
+.jobs.g-customer .c-cust,.jobs.g-status .c-stat{display:none}
+.jobs.g-customer .c-tk{padding-left:22px}
+.jobs.d-compact td{padding:4px 9px}
+.jobs.d-compact .tk{font-size:14px}
+.jobs.d-compact td.cust{font-size:13.5px}
+.jobs.d-compact .sub{font-size:11.5px}
+.jobs.d-compact td .sub.data{display:inline;margin-left:8px}
+.jobs.d-compact .strip-label{display:inline;margin-left:8px}
+.jobs.d-compact .strip{display:inline-flex}
+.jobs.d-compact .minibar{display:inline-block;vertical-align:middle;width:80px}
+.due small{display:block;font-size:11.5px;font-weight:600}
+.due-soon{color:var(--amber);font-weight:600}
+.pill{border:1px solid transparent}
+.st-in-progress{border-color:#C3D6E6}.st-on-hold{border-color:#D3CBE6}.st-pending{border-color:#EAD3A5}.st-complete{border-color:#B9DCC5}.st-cancelled{border-color:#E3BCBC}
+
+/* priority card */
+.side{display:flex;flex-direction:column;gap:12px;position:sticky;top:72px;max-height:calc(100vh - 92px)}
+.side .feed{position:static;max-height:none;flex:1;min-height:200px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;max-height:300px}
+.pc-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.pc-head h2{font-size:14px;margin:0;font-weight:650}
+.pc-count{font-size:12px;color:var(--muted)}
+.pc-add{margin-left:auto;width:140px;padding:4px 8px;font-size:12.5px}
+.pc-list{list-style:none;margin:0;padding:4px 0;overflow:auto}
+.pc-list li{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-bottom:1px solid #EEF1F1;cursor:grab;font-size:13px}
+.pc-list li:last-child{border-bottom:0}
+.pc-list li.drag{opacity:.4}.pc-list li.over{box-shadow:inset 0 2px 0 var(--accent)}
+.pc-list .rk{font-weight:700;color:var(--accent);text-align:center}
+.pc-list .t{min-width:0}
+.pc-list .t b{font-size:13.5px;color:#0A1417}
+.pc-list .t .l2{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-list .t .pill{font-size:10.5px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.pc-list .acts{display:flex;gap:1px;opacity:.35}
+.pc-list li:hover .acts,.pc-list li:focus-within .acts{opacity:1}
+.pc-list .acts button{background:none;border:0;cursor:pointer;color:var(--muted);padding:2px 5px;border-radius:4px;font-size:13px}
+.pc-list .acts button:hover{background:var(--sunk);color:var(--ink)}
+.pc-empty{padding:12px;color:var(--muted);font-size:12.5px}
+.rank{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:2px}
+.chip-special{display:inline-block;font-size:11.5px;padding:0 6px;border-radius:3px;background:var(--violet-soft);color:var(--violet);font-weight:600}
+/* job type + footer name */
+.seg.jt{width:100%}.seg.jt button{flex:1;padding:7px 8px}
+.typenote{font-size:12.5px;color:var(--muted);margin-top:-6px}
+.foot-name{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-right:auto}
+.foot-name input{width:150px;padding:5px 8px}
+.m-foot .msg{margin-right:0;flex:1;text-align:right}
+/* tools */
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:16px}
+.tools .panel{max-width:none;margin:0}
+.serhealth{font-size:13px;display:flex;flex-direction:column;gap:3px}
+.serhealth .bad{color:var(--red);font-weight:600}.serhealth .ok{color:var(--green);font-weight:600}
+.sertable{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.sertable th{text-align:left;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.sertable td{padding:4px 6px;border-bottom:1px solid #EEF1F1;vertical-align:top}
+.sertable tr.conflict td{background:var(--red-soft)}.sertable tr.waiting td{background:var(--amber-soft)}
+.seracts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.seracts .box{border:1px solid var(--line);border-radius:7px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.seracts h3{font-size:13.5px;margin:0}
+.conn.warn{color:var(--amber);font-weight:600}
+@container app (max-width:1280px){.side{position:static;max-height:none}.pcard{max-height:320px}}
+@media (max-width:640px){.tools{grid-template-columns:1fr}.seracts{grid-template-columns:1fr}}
+
+
+/* header: keep one line on tablets */
+.brand,.conn,.hdr-right .btn{white-space:nowrap}
+@media (max-width:1500px){
+  header{gap:14px;padding:0 14px}
+  .conn{font-size:11.5px;margin-right:0}
+  .hdr-right{gap:6px}
+  .hdr-right .btn{padding:7px 11px}
+}
+@media (max-width:1100px){ #conn{display:none} }
+
+.rw-box{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.rw-qr{width:190px;height:190px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px;display:flex;align-items:center;justify-content:center;font-size:12.5px;color:var(--muted);text-align:center}
+.rw-qr img{width:100%;height:100%}
+.rw-info{flex:1;min-width:260px}
+
+/* data and backups panel */
+.dtab{width:100%;border-collapse:collapse;font-size:13px}
+.dtab th{text-align:left;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.dtab td{padding:9px 8px;border-bottom:1px solid #EEF1F1;vertical-align:top}
+.dtab td b{font-size:13.5px}
+.dtab .pth{font-family:var(--data);font-size:12px;word-break:break-all;color:var(--muted)}
+.dtab .st{font-weight:650;white-space:nowrap}.dtab .st.ok{color:var(--green)}.dtab .st.warn{color:var(--amber)}.dtab .st.bad{color:var(--red)}
+.dtab .sub2{color:var(--muted);font-size:12px;margin-top:2px;font-weight:400;white-space:normal}
+.dwarn{border-radius:8px;padding:9px 12px;margin:6px 0;font-size:13.5px}
+.dwarn.bad{background:var(--red-soft);color:#7A2626}.dwarn.warn{background:var(--amber-soft);color:#6B4207}.dwarn.ok{background:var(--green-soft);color:#1F5A37}
+.dp-bk{margin-top:12px;font-size:13.5px;line-height:1.6;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+/* RFID proofing (proofing/ package) */
+.chip-proof{display:inline-block;font-size:11px;padding:0 6px;border-radius:3px;font-weight:600;margin-left:4px;vertical-align:1px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.chip-proof.ok{background:var(--green-soft);color:var(--green);border-color:transparent}
+.chip-proof.warn{background:var(--amber-soft);color:var(--amber);border-color:transparent}
+.chip-proof.bad{background:var(--red-soft);color:var(--red);border-color:transparent}
+.proof-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}
+.proof-row .pid{font-family:var(--data);font-size:12.5px;color:var(--muted)}
+.proof-row a{font-size:13px}
+#d-proof a.btn,.proof-row a.btn{text-decoration:none}
+</style>
+</head>
+<body>
+<aside class="sidenav" id="sidenav" aria-label="Main">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3v5.8M21 12h-5.8"/></svg>
+    <span class="bt">Job Manager</span>
+  </div>
+  <nav>
+    <button data-view="jobs" class="on" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg><span class="lbl">Jobs</span></button>
+    <button data-view="rolls" title="Roll tracking" aria-label="Roll tracking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="11" r="6.5"/><circle cx="10" cy="11" r="2"/><path d="M15 16l5 4.5h-9"/></svg><span class="lbl">Roll tracking</span></button>
+    <div class="nav-sep" role="separator"></div>
+    <button data-view="archive" title="Archive" aria-label="Archive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.2"/><path d="M5 9v10h14V9M10 13h4"/></svg><span class="lbl">Archive</span></button>
+    <button data-view="proofing" title="Proofing" aria-label="Proofing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></svg><span class="lbl">Proofing</span></button>
+    <button data-view="templates" title="Templates" aria-label="Templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg><span class="lbl">Templates</span></button>
+    <button data-view="tools" title="Tools" aria-label="Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.2a4.2 4.2 0 0 0 5.3 5.3l-9 9a2.1 2.1 0 0 1-3-3z"/><path d="m15 4 5 5"/></svg><span class="lbl">Tools</span></button>
+    <button data-view="settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span class="lbl">Settings</span></button>
+  </nav>
+</aside>
+
+<div class="app">
+<header>
+  <span class="crumb" id="crumb">Jobs</span>
+  <div class="hdr-right">
+    <span class="conn" id="conn">Connecting…</span>
+    <span class="conn" id="serial-status" role="button" tabindex="0" title="Serial records" onclick="openSerialTool()"></span>
+    <span class="conn" id="backup-status" role="button" tabindex="0" title="Backups: open Settings" onclick="showView('settings')" hidden></span>
+    <button class="btn hide-sm" onclick="openBatch()">Batch add</button>
+    <button class="btn primary" onclick="openNewJob()">New job</button>
+  </div>
+</header>
+
+<main>
+  <!-- Jobs -->
+  <section class="view on" id="v-jobs">
+    <div class="bar">
+      <h1>Jobs</h1>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="i" id="q-jobs" placeholder="Ticket, customer, UPC, PO, part…" autocomplete="off">
+      </div>
+      <label class="inline-sel">Status <select class="i" id="status-sel" onchange="STATUS_FILTER=this.value;renderJobs()"></select></label>
+      <div class="bar-right">
+        <label class="inline-sel">Group by
+          <select class="i" id="group-by" onchange="setGroupBy(this.value)">
+            <option value="status">Status</option><option value="customer">Customer</option>
+            <option value="due">Due date</option><option value="none">No grouping</option></select></label>
+        <div class="seg sm icons" id="density-seg" role="group" aria-label="Row density">
+          <button data-d="compact" onclick="setDensity('compact')" title="Compact rows" aria-label="Compact rows">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4.5h14M3 8h14M3 11.5h14M3 15h14"/></svg></button>
+          <button data-d="comfy" onclick="setDensity('comfy')" title="Roomy rows" aria-label="Roomy rows">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h14M3 10h14M3 16h14"/></svg></button></div>
+        <button class="btn sm icon-btn" id="grp-toggle-all" onclick="toggleAllGroups()" title="Collapse all groups" aria-label="Collapse all groups">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 7 5 5 5-5"/></svg></button>
+      </div>
+    </div>
+    <div class="with-feed">
+      <div class="tablewrap jobs-wrap"><table class="jobs" id="jobs-table">
+        <thead><tr><th class="c-tk">Ticket</th><th class="c-cust">Customer</th><th>Item</th><th class="hide-md">Label size</th><th class="num">Qty</th><th>Due</th><th>Rolls</th><th class="c-stat">Status</th><th class="hide-lg">Created</th></tr></thead>
+        <tbody id="jobs-body"></tbody>
+      </table></div>
+      <div class="side">
+      <section class="pcard" aria-label="Priority list">
+        <div class="pc-head"><h2>Priority</h2><span class="pc-count" id="pc-count"></span>
+          <input class="i pc-add" id="pc-add" list="dl-openjobs" placeholder="Add a ticket…" autocomplete="off"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();priorityAddFromInput()}" onchange="priorityAddFromInput()"></div>
+        <ol class="pc-list" id="pc-list"></ol>
+      </section>
+      <aside class="feed" aria-label="Recent activity">
+        <div class="feed-head"><h2>Recent activity</h2>
+          <div class="seg sm" id="feed-seg">
+            <button class="on" data-f="all">All</button><button data-f="notes">Notes</button><button data-f="rolls">Rolls</button>
+          </div></div>
+        <div class="feed-list" id="feed-list"></div>
+      </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roll tracking -->
+  <section class="view" id="v-rolls">
+    <div class="floor">
+      <div class="floor-list">
+        <div class="fl-head">
+          <select class="i" id="floor-sel" aria-label="Show jobs" onchange="FLOOR_FILTER=this.value;renderFloor()"></select>
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="i" id="q-floor" placeholder="Ticket, customer, UPC" autocomplete="off" aria-label="Search jobs"></div>
+        </div>
+        <div id="floor-cards"></div>
+      </div>
+      <div class="work" id="work"><div class="empty">Pick a job on the left to track its rolls.</div></div>
+    </div>
+  </section>
+
+  <!-- Archive -->
+  <section class="view" id="v-archive">
+    <div class="bar">
+      <h1>Archive</h1>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="i" id="q-archive" placeholder="Ticket, customer, item, UPC, PO…" autocomplete="off" aria-label="Search archived jobs">
+      </div>
+      <label class="inline-sel">Customer <select class="i" id="ar-customer" onchange="archiveFilter()"><option value="">All</option></select></label>
+      <label class="inline-sel">Status <select class="i" id="ar-status" onchange="archiveFilter()"><option value="">All</option></select></label>
+      <label class="inline-sel">Archived <select class="i" id="ar-when" onchange="archiveFilter()">
+        <option value="">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Custom range…</option></select></label>
+      <span id="ar-custom" class="ar-custom" hidden>
+        <input class="i" type="date" id="ar-from" aria-label="Archived from" onchange="archiveFilter()">
+        <span aria-hidden="true">to</span>
+        <input class="i" type="date" id="ar-to" aria-label="Archived to" onchange="archiveFilter()"></span>
+      <button class="btn sm quiet" id="ar-clear" onclick="archiveClear()" hidden>Clear filters</button>
+    </div>
+    <div class="tablewrap archive-wrap" id="archive-wrap"><table class="jobs" id="archive-table">
+      <thead><tr id="archive-head"></tr></thead>
+      <tbody id="archive-body"></tbody>
+    </table></div>
+    <div class="pager" id="archive-pager" role="navigation" aria-label="Archive pages"></div>
+  </section>
+
+  <!-- Templates -->
+  <section class="view" id="v-templates">
+    <div class="bar">
+      <h1>BarTender templates</h1>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="i" id="q-templates" placeholder="Customer, UPC or size" autocomplete="off">
+      </div>
+      <span id="tmpl-count" style="color:var(--muted);font-size:13px"></span>
+      <button class="btn" style="margin-left:auto" onclick="syncTemplates(this)">Rescan Master Templates</button>
+    </div>
+    <div class="tgrid" id="tmpl-grid"></div>
+  </section>
+
+  <!-- Tools -->
+  <section class="view" id="v-tools">
+    <div class="bar"><h1>Tools</h1><span style="color:var(--muted);font-size:13px">Standalone helpers. Nothing here creates a job.</span></div>
+    <div class="tools">
+      <div class="panel tool">
+        <h2>Roll tracker and checklist</h2>
+        <p class="d">Print a roll tracker (QC sheet) or an encoding checklist from details you type in. For a job that already exists, use its own Print roll sheet button instead.</p>
+        <div class="grid3">
+          <label class="f">Customer<input class="i" id="t-customer" list="dl-customers"></label>
+          <label class="f">Job ticket #<input class="i" id="t-job_ticket"></label>
+          <label class="f">Item<input class="i" id="t-title"></label>
+          <label class="f">UPC<span class="hint">Blank for jobs without one</span><input class="i data" id="t-upc" maxlength="12"></label>
+          <label class="f">Start serial<span class="hint">Only with a UPC</span><input class="i data" id="t-start_serial"></label>
+          <label class="f">Label size<input class="i" id="t-label_size" list="dl-sizes"></label>
+          <label class="f">Quantity<input class="i" id="t-quantity" type="number" min="1"></label>
+          <label class="f">Overage %<input class="i" id="t-overage_pct" type="number" min="0" step="0.5"></label>
+          <label class="f">Labels per roll<input class="i" id="t-lpr" type="number" min="1"></label>
+          <label class="f">Inlay<input class="i" id="t-inlay_type" list="dl-inlays"></label>
+          <label class="f">PO #<input class="i" id="t-po_number"></label>
+          <label class="f">Part #<input class="i" id="t-part_number"></label>
+        </div>
+        <div class="fieldmsg" id="t-check"></div>
+        <div style="display:flex;gap:8px;margin-top:4px"><button class="btn primary" onclick="toolPrint('roll-sheet')">Print roll tracker</button>
+          <button class="btn" onclick="toolPrint('checklist')">Print checklist</button></div>
+      </div>
+      <div class="panel tool">
+        <h2>Encoding database</h2>
+        <p class="d">Download Serial # / UPC / EPC files. A new range is recorded in the serial registry like a job, so it can never be reused.</p>
+        <div class="seg sm" id="db-mode" style="width:max-content;margin-bottom:12px"><button class="on" data-m="new">New serial range</button><button data-m="job">For an existing job</button></div>
+        <div id="db-new" class="grid3">
+          <label class="f">UPC<input class="i data" id="db-upc" maxlength="12"></label>
+          <label class="f">Quantity<input class="i" id="db-qty" type="number" min="1"></label>
+          <label class="f">Overage %<input class="i" id="db-ov" type="number" min="0" step="0.5"></label>
+          <label class="f">Qty per DB file<span class="hint">Blank = one file</span><input class="i" id="db-qtydb" type="number" min="1"></label>
+          <label class="f" style="grid-column:span 2">What it's for<input class="i" id="db-note" maxlength="120" placeholder="e.g. sample run for Acme, test roll"></label>
+        </div>
+        <div id="db-job" hidden><label class="f">Job<input class="i" id="db-jobq" list="dl-upcjobs" placeholder="Ticket or job number"></label><datalist id="dl-upcjobs"></datalist></div>
+        <div class="fieldmsg" id="db-msg"></div>
+        <button class="btn primary" onclick="toolDatabase(this)">Download database</button>
+      </div>
+      <div class="panel tool" id="serial-tool">
+        <h2>Serial numbers</h2>
+        <p class="d">Look up every range used for a UPC, set a range aside, or record serials that were used outside this app. Nothing here ever lowers the next serial.</p>
+        <div id="ser-health" class="serhealth"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin:10px 0">
+          <label class="f" style="flex:0 1 240px">UPC<input class="i data" id="ser-upc" maxlength="12" onkeydown="if(event.key==='Enter')serialLookup()"></label>
+          <button class="btn" onclick="serialLookup()">Look up</button></div>
+        <div id="ser-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="view" id="v-settings">
+    <div class="bar"><h1>Settings</h1></div>
+    <div class="set-layout">
+    <nav class="set-nav" id="set-nav" aria-label="Settings sections">
+      <button data-sec="data" onclick="setSettingsSection('data')">Data and backups</button>
+      <button data-sec="backup" onclick="setSettingsSection('backup')">Backup schedule</button>
+      <button data-sec="printers" onclick="setSettingsSection('printers')">Printers</button>
+      <button data-sec="shared" onclick="setSettingsSection('shared')">Shared settings</button>
+      <button data-sec="pc" onclick="setSettingsSection('pc')">This PC</button>
+      <button data-sec="tablets" onclick="setSettingsSection('tablets')">Tablets (rewind)</button>
+      <button data-sec="import" onclick="setSettingsSection('import')">Import old app</button>
+    </nav>
+    <div class="set-body">
+    <div class="panel show" data-sec="data" id="data-panel">
+      <h2>Data and backups</h2>
+      <details class="more"><summary>About this</summary><p class="d">There is no single database. Each kind of data has one place that is its source of truth, listed below with whether it can be reached and whether the backups cover it. The app database, serial registry, template previews and config.ini are backed up together; files on the share are not, so the share needs its own backup.</p></details>
+      <div id="dp-warn"></div>
+      <div style="overflow:auto"><table class="dtab"><thead><tr><th>Data</th><th>Source of truth for</th><th>Location</th><th>Status</th><th>In backups?</th></tr></thead><tbody id="dp-rows"></tbody></table></div>
+      <div id="dp-bk" class="dp-bk"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" onclick="backupNow(this)">Back up now</button><button class="btn" onclick="verifyBackup(this)">Check the latest backup</button></div>
+      <div class="fieldmsg" id="dp-verify" style="margin-top:8px"></div>
+    </div>
+    <div class="panel" data-sec="pc">
+      <h2>This computer</h2>
+      <details class="more"><summary>About this</summary><p class="d">Nobody signs in. When the app needs to know who did something (completing a roll, leaving one in progress,
+        adding a note, creating or completing a job) it asks, with this name filled in so you can just press Enter.
+        It's stored in this browser only.</p></details>
+      <div class="grid2"><label class="f">Default name on this PC<input class="i" id="s-operator" maxlength="40" placeholder="e.g. Nima" list="dl-names"></label></div>
+    </div>
+    <div class="panel" data-sec="printers" id="printers-panel">
+      <h2>Printers</h2>
+      <p class="d">One printer name per line. Encoders pick one of these on a roll to say where it is running. Running rolls show their printer in the list.</p>
+      <label class="f">Printer names<textarea class="i" id="s-printers" rows="5" placeholder="Printer 1&#10;Printer 2"></textarea></label>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="savePrinters()">Save printers</button></div>
+    </div>
+    <div class="panel" data-sec="tablets" id="rewind-panel">
+      <h2>Rewind page for tablets and phones</h2>
+      <details class="more"><summary>About this</summary><p class="d">A page just for the rewind operators. They scan this QR code with the tablet camera, pick a job that is running in encoding, and skim its rolls.
+        It isn't in this menu, and it updates by itself as jobs are created or change.</p></details>
+      <div class="rw-box">
+        <div class="rw-qr" id="rw-qr"></div>
+        <div class="rw-info">
+          <div class="data" id="rw-url" style="font-size:15px;word-break:break-all"></div>
+          <div class="fieldmsg" id="rw-note"></div>
+          <label class="f" style="margin-top:8px">Address the tablets use<span class="hint">Only if the address above is wrong. Use the host PC's fixed IP, e.g. http://10.44.4.20:5050</span>
+            <input class="i" id="rw-base" placeholder="http://10.44.4.20:5050"></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn primary" onclick="saveRewind(this)">Save address</button>
+            <a class="btn" href="/rewind/qr" target="_blank">Print QR sign</a>
+            <a class="btn" href="/rewind" target="_blank">Open the page</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-sec="pc">
+      <h2>Open folder on this PC</h2>
+      <details class="more"><summary>About this</summary><p class="d">The app runs on the host PC, so a browser on another PC can't open Explorer by itself.
+        A one-time setup on each PC lets the Open folder button work there. It needs no admin rights and nothing runs in the background.
+        Without it, Open folder copies the path for you to paste into File Explorer.</p></details>
+      <div id="helper-state" class="helper-state"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <a class="btn primary" href="/helper/open-folder-setup.cmd" onclick="setTimeout(showHelperState,300)">Download setup for this PC</a>
+        <button class="btn" onclick="setHelper(true)">I've run the setup</button>
+        <button class="btn quiet" onclick="setHelper(false)">Turn off on this PC</button>
+      </div>
+      <p class="d" style="margin:10px 0 0">Run the downloaded file once. Windows may warn about a downloaded file; choose More info, then Run anyway.
+        The first time you click Open folder, the browser asks to open Job Manager links. Tick Always allow.</p>
+    </div>
+    <div class="panel" data-sec="shared">
+      <h2>Shared settings</h2>
+      <p class="d">Apply to everyone using the app.</p>
+      <div class="stack">
+        <label class="f">Master Templates folder<input class="i" id="s-btw" placeholder="Z:\3 Encoding and Printing Files\Master Templates"></label>
+        <div class="grid3"><label class="f">Default overage %<input class="i" id="s-ovg" type="number" min="0" max="100" step="0.5"></label>
+          <label class="f">Archive completed jobs after (hours)<input class="i" id="s-autoarch" type="number" min="0" max="8760" step="1"><span class="hint">0 turns it off. Jobs marked Complete move to the Archive by themselves.</span></label></div>
+        <div><button class="btn primary" onclick="saveShared(this)">Save shared settings</button></div>
+      </div>
+    </div>
+    <div class="panel" data-sec="backup">
+      <h2>Backups</h2>
+      <details class="more"><summary>About this</summary><p class="d">Each backup zips the database, serial registry, serial journal, template previews and config.ini, then checks that the serial history in the zip is complete. With no folder set, backups go to a <b>backups</b> folder next to the app: that is this PC only, so set a folder on the share. A folder here also switches on the serial journal. To restore in an emergency, close the app and drag a backup zip onto <b>restore_backup.bat</b> (see RESTORE.md). A restore never moves serial numbers backwards.</p></details>
+      <div class="stack">
+        <label class="f">Backup folder<input class="i" id="s-bdir" placeholder="Z:\3 Encoding and Printing Files\Operations\Backups"></label>
+        <div class="grid3">
+          <label class="f">Every (hours)<input class="i" id="s-bint" type="number" min="1"></label>
+          <label class="f">Keep newest<input class="i" id="s-bkeep" type="number" min="5"></label>
+          <label class="f">Automatic<select class="i" id="s-bauto"><option value="1">On</option><option value="0">Off</option></select></label>
+        </div>
+        <div style="display:flex;gap:8px"><button class="btn primary" onclick="saveBackup(this)">Save backup settings</button><button class="btn" onclick="backupNow(this)">Back up now</button></div>
+      </div>
+      <div class="blist" id="blist"></div>
+    </div>
+    <div class="panel" data-sec="import">
+      <h2>Bring data over from the old app</h2>
+      <details class="more"><summary>About this</summary><p class="d">On the host PC, stop Job Manager and drag the old app's folder onto <b>import_old.bat</b> in this app's folder.
+        It shows a preview first. Serial registries are merged so numbers never go backwards; templates, preview images and jobs come along.
+        Running it twice is safe.</p></details>
+    </div>
+    </div></div>
+  </section>
+</main>
+</div>
+
+<!-- Drawer -->
+<aside class="drawer" id="drawer" aria-label="Job details">
+  <div class="d-head" id="d-head"></div>
+  <div class="d-body" id="d-body"></div>
+</aside>
+
+<!-- New job -->
+<div class="ov" id="ov-new"><div class="modal">
+  <div class="m-head"><h2>New job</h2><button class="btn quiet x" onclick="closeOv('ov-new')" aria-label="Close">✕</button></div>
+  <div class="m-body"><div class="cols">
+    <div class="stack">
+      <p class="col-title">Ticket</p>
+      <div class="grid2">
+        <label class="f">Job ticket #<input class="i" id="n-ticket" autocomplete="off"></label>
+        <label class="f">Due date<input class="i" id="n-due" type="date"></label>
+      </div>
+      <div class="fieldmsg" id="n-ticket-msg" style="margin-top:-6px"></div>
+      <label class="f">Customer<input class="i" id="n-customer" list="dl-customers" autocomplete="off"></label>
+      <label class="f">Item / description<input class="i" id="n-title" autocomplete="off"></label>
+      <div class="grid2">
+        <label class="f">Label size<input class="i" id="n-size" list="dl-sizes" autocomplete="off"></label>
+        <label class="f">Inlay type<input class="i" id="n-inlay" list="dl-inlays" autocomplete="off"></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Part #<input class="i" id="n-part" autocomplete="off"></label>
+        <label class="f">PO #<input class="i" id="n-po" autocomplete="off"></label>
+      </div>
+      <label class="f">Notes<textarea class="i" id="n-notes" rows="2"></textarea></label>
+    </div>
+    <div class="stack">
+      <p class="col-title">Encoding</p>
+      <div class="seg jt" id="n-type" role="radiogroup" aria-label="Job type">
+        <button type="button" role="radio" data-t="standard" class="on" aria-checked="true">Standard: UPC + serials</button>
+        <button type="button" role="radio" data-t="special" aria-checked="false">Special: no UPC</button>
+      </div>
+      <div class="typenote" id="n-type-note"></div>
+      <div id="n-std" class="stack">
+      <label class="f">UPC<input class="i data" id="n-upc" maxlength="12" inputmode="numeric" autocomplete="off"></label>
+      <div class="fieldmsg" id="n-upc-msg"></div>
+      <div id="n-start-row" hidden>
+        <label class="f">Start serial<input class="i data" id="n-start" inputmode="numeric" autocomplete="off" placeholder="e.g. 26,004,500,001">
+          <span class="hint" id="n-start-hint"></span></label>
+      </div>
+      </div>
+      <div id="n-go2" class="stack" hidden>
+        <label class="f">Customer data sheet
+          <select class="i" id="n-sheet">
+            <option value="">None</option>
+          </select><span class="hint" id="n-sheet-hint"></span></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Quantity<input class="i" id="n-qty" type="number" min="1"></label>
+        <label class="f">Overage %<input class="i" id="n-ov" type="number" min="0" max="100" step="0.5"></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Labels per roll<input class="i" id="n-lpr" type="number" min="1"></label>
+        <label class="f" id="n-qtydb-wrap">Qty per DB file<span class="hint">Blank = one file</span><input class="i" id="n-qtydb" type="number" min="1"></label>
+      </div>
+      <div class="summary" id="n-summary"></div>
+      <div id="n-attach-row" hidden><label class="f">Attach files<input class="i" type="file" id="n-files" multiple>
+        <span class="hint">Optional: customer data, art or instructions. Saved in the job's Data folder.</span></label></div>
+      <div class="tpl-box">
+        <div class="tpl-head"><b>BarTender template</b><span id="n-tstat" class="tstat"></span></div>
+        <div class="tlist" id="n-tlist"></div>
+        <input class="i" id="n-tq" placeholder="Search all templates instead" autocomplete="off" style="margin-top:8px">
+      </div>
+    </div>
+  </div></div>
+  <div class="m-foot"><label class="foot-name">Your name <input class="i" id="n-by" list="dl-names" maxlength="40" autocomplete="off"></label>
+    <span class="msg" id="n-msg"></span><button class="btn" onclick="closeOv('ov-new')">Cancel</button><button class="btn primary" id="n-create" onclick="submitNewJob()">Create job</button></div>
+</div></div>
+
+<!-- Edit job -->
+<div class="ov" id="ov-edit"><div class="modal">
+  <div class="m-head"><h2 id="e-title">Edit job</h2><button class="btn quiet x" onclick="closeOv('ov-edit')" aria-label="Close">✕</button></div>
+  <div class="m-body">
+    <div class="warnbox">Changing customer, label size, PO or ticket updates the record only. The folder on Z: keeps its name. UPC and quantities can't change after creation because the serials are already allocated.</div>
+    <div class="grid3" style="margin-top:12px">
+      <label class="f">Job ticket #<input class="i" id="e-job_ticket"></label>
+      <label class="f">Customer<input class="i" id="e-customer" list="dl-customers"></label>
+      <label class="f">Due date<input class="i" id="e-due_date" type="date"></label>
+      <label class="f" style="grid-column:span 2">Item / description<input class="i" id="e-title_"></label>
+      <label class="f">Label size<input class="i" id="e-label_size" list="dl-sizes"></label>
+      <label class="f">Inlay type<input class="i" id="e-inlay_type" list="dl-inlays"></label>
+      <label class="f">Part #<input class="i" id="e-part_number"></label>
+      <label class="f">PO #<input class="i" id="e-po_number"></label>
+      <label class="f" style="grid-column:1/-1">Notes<textarea class="i" id="e-notes" rows="3"></textarea></label>
+    </div>
+  </div>
+  <div class="m-foot"><span class="msg" id="e-msg"></span><button class="btn" onclick="closeOv('ov-edit')">Cancel</button><button class="btn primary" onclick="saveEdit(this)">Save changes</button></div>
+</div></div>
+
+<!-- Batch -->
+<div class="ov" id="ov-batch"><div class="modal wide">
+  <div class="m-head"><h2>Batch add</h2><button class="btn quiet x" onclick="closeOv('ov-batch')" aria-label="Close">✕</button></div>
+  <div class="m-body">
+    <p style="margin:0 0 12px;color:var(--muted);font-size:13px">Paste rows from Excel into any cell. Columns are read left to right in this order. When a row's UPC matches a template, it is copied into the job automatically. Rows without a UPC become special jobs (no serials). Rows that fail stay here so you can fix and retry them.</p>
+    <div style="overflow:auto"><table class="bgrid"><thead><tr id="b-head"></tr></thead><tbody id="b-body"></tbody></table></div>
+    <div style="margin-top:10px;display:flex;gap:8px"><button class="btn sm" onclick="addBatchRows(5)">Add 5 rows</button><button class="btn sm quiet" onclick="clearBatch()">Clear all</button></div>
+  </div>
+  <div class="m-foot"><label class="foot-name">Your name <input class="i" id="b-by" list="dl-names" maxlength="40" autocomplete="off"></label>
+    <span class="msg" id="b-msg" style="color:var(--muted)"></span><button class="btn" onclick="closeOv('ov-batch')">Close</button><button class="btn primary" id="b-go" onclick="submitBatch()">Create jobs</button></div>
+</div></div>
+
+<!-- Template picker for existing job -->
+<div class="ov" id="ov-tpick"><div class="modal narrow">
+  <div class="m-head"><h2>Copy template into job</h2><button class="btn quiet x" onclick="closeOv('ov-tpick')" aria-label="Close">✕</button></div>
+  <div class="m-body stack">
+    <input class="i" id="tp-q" placeholder="Search templates" autocomplete="off">
+    <div class="tlist" id="tp-list" style="max-height:320px"></div>
+  </div>
+  <div class="m-foot"><button class="btn" onclick="closeOv('ov-tpick')">Cancel</button><button class="btn primary" onclick="applyTemplate(this)">Copy template</button></div>
+</div></div>
+
+<datalist id="dl-names"></datalist><datalist id="dl-openjobs"></datalist>
+
+<!-- Who did it? (asked at the moment it matters; no sign-in) -->
+<div class="ov" id="ov-name"><div class="modal narrow">
+  <div class="m-head"><h2 id="nm-title">Who did this?</h2></div>
+  <div class="m-body stack"><p id="nm-sub" style="margin:0;color:var(--muted);font-size:13.5px"></p>
+    <label class="f">Name<input class="i" id="nm-input" list="dl-names" maxlength="40" autocomplete="off"></label></div>
+  <div class="m-foot"><span class="msg" id="nm-msg"></span><button class="btn" id="nm-cancel">Cancel</button><button class="btn primary" id="nm-ok">OK</button></div>
+</div></div>
+
+<!-- Serial registry offline: confirm before creating -->
+<div class="ov" id="ov-offline"><div class="modal narrow">
+  <div class="m-head"><h2>Serial registry offline</h2></div>
+  <div class="m-body stack">
+    <div class="warnbox" id="off-why"></div>
+    <p style="margin:0;font-size:13.5px">Only continue if you are sure nobody created a job or file for this UPC anywhere else
+      since the registry went offline. The range is saved in the app database and the journal, and written to the registry
+      when it comes back. If it overlaps something, it is flagged as a conflict.</p>
+    <label class="f">Start serial<input class="i data" id="off-start" inputmode="numeric" autocomplete="off">
+      <span class="hint" id="off-hint"></span></label>
+    <label class="ck" style="display:flex;gap:8px;font-size:13.5px"><input type="checkbox" id="off-ok"> I checked: no jobs were made for this UPC elsewhere while the registry was offline.</label>
+  </div>
+  <div class="m-foot"><span class="msg" id="off-msg"></span><button class="btn" onclick="closeOv('ov-offline')">Cancel</button><button class="btn primary" onclick="confirmOffline()">Create with this start</button></div>
+</div></div>
+<datalist id="dl-customers"></datalist><datalist id="dl-sizes"></datalist><datalist id="dl-inlays"></datalist>
+<div id="toasts"></div>
+
+<script>
+/* ───────────────────────── helpers ───────────────────────── */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString();
+const day = s => s ? s.slice(0, 10) : '';
+async function api(url, opts = {}) {
+  const who = (localStorage.getItem('jm_operator') || '').replace(/[^\x20-\x7E]/g, '');
+  const o = {...opts, headers: {'Content-Type': 'application/json', 'X-Operator': who, ...(opts.headers || {})}};
+  if (o.body && typeof o.body !== 'string' && !(o.body instanceof FormData)) o.body = JSON.stringify(o.body);
+  if (o.body instanceof FormData) delete o.headers['Content-Type'];
+  const r = await fetch(url, o);
+  let d = {};
+  try { d = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error(d.error || `Request failed (${r.status})`); e.data = d; e.status = r.status; throw e; }
+  return d;
+}
+function toast(msg, bad = false) {
+  const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg;
+  $('#toasts').appendChild(t); setTimeout(() => t.remove(), bad ? 6000 : 3200);
+}
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); return Promise.resolve();
+}
+function checkDigit(u11) { const d = [...u11].map(Number); let o = 0, e = 0; d.forEach((v, i) => i % 2 ? e += v : o += v); return (10 - ((o * 3 + e) % 10)) % 10; }
+function upcProblem(u) {
+  if (!u) return null;
+  if (!/^\d+$/.test(u)) return 'Digits only';
+  if (u.length !== 12) return `${u.length} of 12 digits`;
+  const c = checkDigit(u.slice(0, 11)); if (c !== +u[11]) return `Check digit should be ${c}`;
+  return null;
+}
+function prodQty(q, ov) { q = +q || 0; ov = +ov || 0; return ov > 0 ? Math.round(q * (1 + ov / 100)) : q; }
+function dbSplit(total, per) { per = +per || 0; if (!per || per >= total) return [total]; const a = []; for (let i = 0; i * per < total; i++) a.push(Math.min(per, total - i * per)); return a; }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+const operator = () => localStorage.getItem('jm_operator') || '';
+
+/* ───────────────────────── state ───────────────────────── */
+let META = null, JOBS = [], STATUS_FILTER = 'all', CURRENT = null, STAMP = null;
+
+async function loadMeta() {
+  META = await api('/api/meta');
+  $('#dl-customers').innerHTML = META.customers.map(c => `<option value="${esc(c)}">`).join('');
+  $('#dl-sizes').innerHTML = META.label_sizes.map(c => `<option value="${esc(c)}">`).join('');
+  $('#dl-inlays').innerHTML = META.inlays.map(c => `<option value="${esc(c)}">`).join('');
+  const names = [...new Set([operator(), ...(META.names || [])].filter(Boolean))];
+  $('#dl-names').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  showSerialStatus(META.serials); showBackupStatus(META.backup);
+  const c = $('#conn');
+  c.textContent = !META.z_reachable ? 'Job folders not reachable'
+                : !META.z_shared ? 'Job folders: this PC only, not shared' : 'Job folders connected';
+  c.className = 'conn' + (META.z_reachable && META.z_shared ? '' : ' bad');
+}
+
+/* ───────────────────────── navigation ───────────────────────── */
+document.querySelectorAll('.sidenav nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+const VIEW_TITLES = {jobs: 'Jobs', rolls: 'Roll tracking', archive: 'Archive', templates: 'Templates', tools: 'Tools', settings: 'Settings'};
+function showView(v) {
+  if (v === 'proofing') { window.location.href = '/proofing/'; return; }   // its own page (proofing/static)
+  $('#crumb').textContent = VIEW_TITLES[v] || '';
+  document.querySelectorAll('.sidenav nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  closeDrawer();
+  if (v === 'jobs') loadJobs();
+  if (v === 'archive') loadArchive();
+  if (v === 'rolls') loadFloor();
+  if (v === 'jobs') { loadFeed(); loadPriority(); }
+  if (v === 'tools') loadTools();
+  if (v === 'templates') loadTemplates();
+  if (v === 'settings') loadSettings();
+}
+
+/* ───────────────────────── jobs list ───────────────────────── */
+const FILTERS = [['all', 'All'], ['open', 'Open', j => j.status !== 'Complete' && j.status !== 'Cancelled'], ['Pending', 'Pending'], ['In Progress', 'In progress'], ['On Hold', 'On hold'], ['Complete', 'Complete']];
+async function loadJobs() {
+  const d = await api('/api/jobs?view=active&q=' + encodeURIComponent($('#q-jobs').value));
+  JOBS = d.jobs; renderJobs(); if (typeof renderPriority === 'function' && PRIORITY) renderPriority();
+}
+function filterFn(key) { const f = FILTERS.find(x => x[0] === key); return f[2] || (key === 'all' ? () => true : j => j.status === key); }
+function renderJobs() {
+  $('#status-sel').innerHTML = FILTERS.map(([k, label]) =>
+    `<option value="${k}" ${k === STATUS_FILTER ? 'selected' : ''}>${label} (${JOBS.filter(filterFn(k)).length})</option>`).join('');
+  const rows = JOBS.filter(filterFn(STATUS_FILTER));
+  const today = new Date().toISOString().slice(0, 10);
+  const tbl = $('#jobs-table');
+  tbl.className = `jobs g-${GROUP_BY} d-${DENSITY}`;
+  $('#group-by').value = GROUP_BY;
+  document.querySelectorAll('#density-seg button').forEach(b => { const on = b.dataset.d === DENSITY; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  $('#grp-toggle-all').hidden = GROUP_BY === 'none';
+  const rowHtml = j => `
+    <tr data-id="${j.id}" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}" class="${CURRENT && CURRENT.job.id === j.id ? 'sel' : ''}" onclick="openJob(${j.id})">
+      <td class="c-tk"><div class="tk">${esc(j.job_ticket || '—')}${j.priority_rank ? `<span class="rank" title="Priority">#${j.priority_rank}</span>` : ''}</div><div class="sub data">${esc(j.job_number)}</div></td>
+      <td class="cust c-cust">${esc(j.customer)}</td>
+      <td><div class="item" title="${esc(j.title)}">${esc(j.title)}</div>${j.upc ? `<div class="sub data">${esc(j.upc)}${proofChip(j)}</div>` : `<span class="chip-special">Special</span>${proofChip(j)}`}</td>
+      <td class="hide-md nw">${esc(j.label_size || '')}</td>
+      <td class="num data">${fmt(j.quantity)}</td>
+      <td class="nw">${dueHtml(j, today)}</td>
+      <td>${strip(j.roll_done, j.roll_total, (j.roll_running || 0) + (j.roll_paused || 0))}</td>
+      <td class="c-stat"><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td>
+      <td class="hide-lg sub nw">${day(j.created_at)}</td>
+    </tr>`;
+  if (!rows.length) {
+    $('#jobs-body').innerHTML = `<tr><td colspan="9"><div class="empty">${$('#q-jobs').value ? 'No jobs match that search.' : 'No jobs here.'}<br>
+       <button class="btn primary" onclick="openNewJob()">Create a job</button></div></td></tr>`;
+    return;
+  }
+  if (GROUP_BY === 'none') { $('#jobs-body').innerHTML = rows.map(rowHtml).join(''); return; }
+  const groups = groupJobs(rows, today);
+  const allShut = groups.every(g => COLLAPSED.has(GROUP_BY + ':' + g.key)), tg = $('#grp-toggle-all');
+  tg.title = tg.ariaLabel = allShut ? 'Expand all groups' : 'Collapse all groups';
+  tg.querySelector('path').setAttribute('d', allShut ? 'm5 13 5-5 5 5' : 'm5 7 5 5 5-5');
+  $('#jobs-body').innerHTML = groups.map(g => {
+    const closed = COLLAPSED.has(GROUP_BY + ':' + g.key);
+    const tot = g.rows.reduce((a, j) => (a.d += j.roll_done || 0, a.t += j.roll_total || 0, a.q += j.quantity || 0, a), {d: 0, t: 0, q: 0});
+    return `<tr class="grp" style="--sc:${g.color}"><td colspan="9"><button class="grp-btn" aria-expanded="${!closed}" data-key="${esc(g.key)}" onclick="toggleGroup(this.dataset.key)">
+        <span class="caret" aria-hidden="true">${closed ? '▸' : '▾'}</span><span class="gname">${esc(g.label)}</span>
+        <span class="gcount">${g.rows.length} job${g.rows.length > 1 ? 's' : ''}</span>
+        ${tot.q ? `<span class="gmeta">${fmt(tot.q)} labels</span>` : ''}${tot.t ? `<span class="gmeta">${tot.d} of ${tot.t} rolls done</span>
+        <span class="gbar"><i style="width:${tot.d / tot.t * 100}%"></i></span>` : ''}</button></td></tr>${closed ? '' : g.rows.map(rowHtml).join('')}`;
+  }).join('');
+}
+/* Grouping: rows cascade under a header that can be folded away, so long lists stay scannable. */
+const STATUS_COLOR = {'In Progress': 'var(--blue)', 'On Hold': 'var(--violet)', 'Pending': 'var(--amber)', 'Complete': 'var(--green)', 'Cancelled': 'var(--red)'};
+const STATUS_ORDER = ['In Progress', 'On Hold', 'Pending', 'Complete', 'Cancelled'];
+function pref(k, d) { try { return localStorage.getItem('jm_' + k) || d; } catch (_) { return d; } }
+function setPref(k, v) { try { localStorage.setItem('jm_' + k, v); } catch (_) {} }
+let GROUP_BY = pref('group', 'customer'), DENSITY = pref('density', 'compact');
+let COLLAPSED = new Set(JSON.parse(pref('collapsed', '[]')));
+function saveCollapsed() { setPref('collapsed', JSON.stringify([...COLLAPSED])); }
+function setGroupBy(v) { GROUP_BY = v; setPref('group', v); renderJobs(); }
+function setDensity(v) { DENSITY = v; setPref('density', v); renderJobs(); }
+function toggleGroup(key) { const k = GROUP_BY + ':' + key; COLLAPSED.has(k) ? COLLAPSED.delete(k) : COLLAPSED.add(k); saveCollapsed(); renderJobs(); }
+function toggleAllGroups() {
+  const rows = JOBS.filter(filterFn(STATUS_FILTER)), keys = groupJobs(rows, new Date().toISOString().slice(0, 10)).map(g => GROUP_BY + ':' + g.key);
+  const allClosed = keys.every(k => COLLAPSED.has(k));
+  keys.forEach(k => allClosed ? COLLAPSED.delete(k) : COLLAPSED.add(k)); saveCollapsed(); renderJobs();
+}
+function dueHtml(j, today) {
+  if (!j.due_date) return '<span class="sub">—</span>';
+  if (['Complete', 'Cancelled'].includes(j.status)) return esc(j.due_date);
+  const iso = dueIso(j.due_date); if (!iso) return esc(j.due_date);
+  const days = Math.round((new Date(iso) - new Date(today)) / 864e5);
+  if (days < 0) return `<span class="due due-late">${esc(j.due_date)}<small>${-days}d late</small></span>`;
+  if (days <= 3) return `<span class="due due-soon">${esc(j.due_date)}<small>${days === 0 ? 'today' : days + 'd'}</small></span>`;
+  return esc(j.due_date);
+}
+// Due dates are typed as MM/DD/YY or ISO; return ISO or null.
+function dueIso(s) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = /^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/.exec(s.trim()); if (!m) return null;
+  const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+}
+function groupJobs(rows, today) {
+  const rank = j => j.priority_rank || 9999;
+  const inner = (a, b) => rank(a) - rank(b) || (dueIso(a.due_date || '') || '9').localeCompare(dueIso(b.due_date || '') || '9') || String(a.job_ticket).localeCompare(String(b.job_ticket));
+  const by = {}; const keyOf = {
+    status: j => j.status, customer: j => j.customer || 'No customer',
+    due: j => { const i = dueIso(j.due_date || ''); if (!i || ['Complete', 'Cancelled'].includes(j.status)) return i ? 'Later' : 'No due date';
+      const d = Math.round((new Date(i) - new Date(today)) / 864e5); return d < 0 ? 'Overdue' : d <= 7 ? 'Due this week' : 'Later'; }}[GROUP_BY];
+  rows.forEach(j => (by[keyOf(j)] = by[keyOf(j)] || []).push(j));
+  let keys = Object.keys(by);
+  if (GROUP_BY === 'status') keys.sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b));
+  else if (GROUP_BY === 'due') keys.sort((a, b) => ['Overdue', 'Due this week', 'Later', 'No due date'].indexOf(a) - ['Overdue', 'Due this week', 'Later', 'No due date'].indexOf(b));
+  else keys.sort((a, b) => a.localeCompare(b));
+  const dueColor = {'Overdue': 'var(--red)', 'Due this week': 'var(--amber)', 'Later': 'var(--line-strong)', 'No due date': 'var(--line-strong)'};
+  return keys.map(k => ({key: k, label: k, rows: by[k].sort(inner),
+    color: GROUP_BY === 'status' ? STATUS_COLOR[k] : GROUP_BY === 'due' ? dueColor[k] : 'var(--accent)'}));
+}
+function strip(done, total, running = 0, paused = 0) {
+  if (!total) return '<span class="sub">—</span>';
+  let h;
+  if (total <= 12) {
+    h = '<div class="strip">'; for (let i = 0; i < total; i++) h += `<i class="${i < done ? 'd' : i < done + running ? 'r' : i < done + running + paused ? 'p' : ''}"></i>`; h += '</div>';
+  } else h = `<div class="minibar"><i style="width:${done / total * 100}%"></i><i class="r" style="width:${running / total * 100}%"></i><i class="p" style="width:${paused / total * 100}%"></i></div>`;
+  const extra = [running && `${running} running`, paused && `${paused} paused`].filter(Boolean).join(', ');
+  return h + `<div class="strip-label">${done} of ${total}${extra ? ', ' + extra : ''}</div>`;
+}
+$('#q-jobs').oninput = debounce(loadJobs, 250);
+
+/* ───────────────────────── archive ───────────────────────── */
+/* Long-term list: the server pages, sorts and filters; this draws the page and the controls. */
+const AR_COLS = [['ticket', 'Ticket', 'c-tk'], ['customer', 'Customer', ''], ['item', 'Item', ''], ['size', 'Label size', 'hide-sm'],
+  ['qty', 'Qty', 'num'], ['upc', 'UPC', 'hide-sm'], ['status', 'Status', ''], ['archived', 'Archived', '']];
+let AR = {page: 1, size: +pref('ar_size', '50'), sort: pref('ar_sort', 'archived'), dir: pref('ar_dir', 'desc')}, AR_REQ = 0, AR_META = null;
+function archiveParams() {
+  const p = new URLSearchParams({page: AR.page, size: AR.size, sort: AR.sort, dir: AR.dir, q: $('#q-archive').value.trim()});
+  const c = $('#ar-customer').value, st = $('#ar-status').value, w = $('#ar-when').value;
+  if (c) p.set('customer', c); if (st) p.set('status', st);
+  if (w === 'custom') { if ($('#ar-from').value) p.set('from', $('#ar-from').value); if ($('#ar-to').value) p.set('to', $('#ar-to').value); }
+  else if (w) { const d = new Date(Date.now() - w * 864e5); p.set('from', d.toISOString().slice(0, 10)); }
+  return p;
+}
+function archiveFilter() { AR.page = 1; $('#ar-custom').hidden = $('#ar-when').value !== 'custom'; loadArchive(); }
+function archiveClear() {
+  $('#q-archive').value = ''; $('#ar-customer').value = ''; $('#ar-status').value = ''; $('#ar-when').value = '';
+  $('#ar-from').value = $('#ar-to').value = ''; archiveFilter();
+}
+function archiveSort(k) {
+  AR.dir = AR.sort === k ? (AR.dir === 'asc' ? 'desc' : 'asc') : (k === 'qty' || k === 'archived' ? 'desc' : 'asc'); AR.sort = k;
+  setPref('ar_sort', AR.sort); setPref('ar_dir', AR.dir); AR.page = 1; loadArchive();
+}
+function archiveGo(n) { AR.page = n; loadArchive(true); }
+function archiveSize(n) { AR.size = +n; setPref('ar_size', n); AR.page = 1; loadArchive(); }
+async function loadArchive(keepScroll) {
+  const req = ++AR_REQ, wrap = $('#archive-wrap');
+  wrap.setAttribute('aria-busy', 'true'); wrap.classList.add('loading');
+  let d; try { d = await api('/api/archive?' + archiveParams()); } catch (e) { if (req === AR_REQ) { wrap.classList.remove('loading'); toast(e.message, true); } return; }
+  if (req !== AR_REQ) return;                       // a newer request is already on its way
+  wrap.classList.remove('loading'); wrap.setAttribute('aria-busy', 'false');
+  AR.page = d.page;
+  fillSelect('#ar-customer', d.customers, 'All'); fillSelect('#ar-status', d.statuses, 'All');
+  $('#archive-head').innerHTML = AR_COLS.map(([k, l, c]) => {
+    const on = AR.sort === k;
+    return `<th class="${c}" aria-sort="${on ? (AR.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="th-sort ${on ? 'on' : ''}" onclick="archiveSort('${k}')">${l}<span class="arrow" aria-hidden="true">${on ? (AR.dir === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>`;
+  }).join('');
+  const filtered = !!(archiveParams().get('q') || $('#ar-customer').value || $('#ar-status').value || $('#ar-when').value);
+  $('#ar-clear').hidden = !filtered;
+  $('#archive-body').innerHTML = d.jobs.length ? d.jobs.map(j => `
+    <tr tabindex="0" onclick="openJob(${j.id})" onkeydown="if(event.key==='Enter')openJob(${j.id})" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}">
+      <td class="c-tk"><div class="tk">${esc(j.job_ticket || '—')}</div><div class="sub data">${esc(j.job_number)}</div></td>
+      <td class="cust">${esc(j.customer)}</td><td><div class="item" title="${esc(j.title)}">${esc(j.title)}</div></td>
+      <td class="hide-sm">${esc(j.label_size || '')}</td><td class="num data">${fmt(j.quantity)}</td>
+      <td class="hide-sm data">${esc(j.upc || '')}</td>
+      <td><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td><td class="nw">${day(j.archived_at)}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="8"><div class="empty">${filtered ? 'No archived jobs match these filters.<br><button class="btn" onclick="archiveClear()">Clear filters</button>' : 'Nothing has been archived yet. Completed jobs move here by themselves.'}</div></td></tr>`;
+  archivePager(d);
+  if (!keepScroll) wrap.scrollTop = 0; else { wrap.scrollTop = 0; }
+}
+function fillSelect(sel, items, allLabel) {
+  const el = $(sel), cur = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` + items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  el.value = items.includes(cur) ? cur : '';
+}
+function archivePager(d) {
+  const from = d.total ? (d.page - 1) * d.size + 1 : 0, to = Math.min(d.total, d.page * d.size);
+  const nums = []; const add = n => { if (!nums.includes(n) && n >= 1 && n <= d.pages) nums.push(n); };
+  [1, d.page - 2, d.page - 1, d.page, d.page + 1, d.page + 2, d.pages].forEach(add); nums.sort((a, b) => a - b);
+  let btns = '', prev = 0;
+  nums.forEach(n => { if (n - prev > 1) btns += '<span class="gap" aria-hidden="true">…</span>';
+    btns += `<button class="pg ${n === d.page ? 'on' : ''}" ${n === d.page ? 'aria-current="page"' : ''} aria-label="Page ${n}" onclick="archiveGo(${n})">${n}</button>`; prev = n; });
+  $('#archive-pager').innerHTML = `
+    <span class="pg-count" role="status">${d.total ? `Showing <b>${fmt(from)}–${fmt(to)}</b> of <b>${fmt(d.total)}</b> archived job${d.total === 1 ? '' : 's'}` : '0 archived jobs'}</span>
+    <span class="pg-ctl">
+      <label class="inline-sel">Rows <select class="i" onchange="archiveSize(this.value)">${[25, 50, 100, 200].map(n => `<option ${n === d.size ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <button class="pg" onclick="archiveGo(1)" ${d.page <= 1 ? 'disabled' : ''} aria-label="First page">«</button>
+      <button class="pg" onclick="archiveGo(${d.page - 1})" ${d.page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+      ${btns}
+      <button class="pg" onclick="archiveGo(${d.page + 1})" ${d.page >= d.pages ? 'disabled' : ''} aria-label="Next page">›</button>
+      <button class="pg" onclick="archiveGo(${d.pages})" ${d.page >= d.pages ? 'disabled' : ''} aria-label="Last page">»</button>
+      <label class="inline-sel">Go to <input class="i pg-go" type="number" min="1" max="${d.pages}" placeholder="${d.page}/${d.pages}" aria-label="Go to page"
+        onkeydown="if(event.key==='Enter'&&this.value)archiveGo(Math.max(1,Math.min(${d.pages},+this.value)))"></label>
+    </span>`;
+}
+$('#q-archive').oninput = debounce(archiveFilter, 300);
+
+/* ───────────────────────── drawer ───────────────────────── */
+async function openJob(id, keepRoll) {
+  let d;
+  try { d = await api('/api/jobs/' + id); } catch (e) { return toast(e.message, true); }
+  CURRENT = d;
+  document.querySelectorAll('.jobs tbody tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.id === id));
+  renderDrawer(keepRoll);
+  $('#drawer').classList.add('on');
+}
+function closeDrawer() { $('#drawer').classList.remove('on'); CURRENT = null; document.querySelectorAll('.jobs tr.sel').forEach(t => t.classList.remove('sel')); }
+function renderDrawer(keepRoll) {
+  const {job: j, rolls, files, total_qty, end_serial, folder_exists} = CURRENT;
+  const done = rolls.filter(r => r.status === 'complete' || r.status === 'verified').length;
+  const archived = !!j.archived_at;
+  $('#d-head').innerHTML = `
+    <div class="d-title">
+      <div><h2>${esc(j.customer)}, ticket ${esc(j.job_ticket || '—')}</h2>
+      <div class="sub">${esc(j.title)}<br>${esc(j.job_number)}${archived ? ', archived ' + day(j.archived_at) : ''}</div></div>
+      <button class="btn quiet x" onclick="closeDrawer()" aria-label="Close">✕</button>
+    </div>
+    <div class="d-actions">
+      <select class="i" style="width:auto" onchange="setStatus(this.value)" aria-label="Status">
+        ${META.statuses.map(s => `<option ${s === j.status ? 'selected' : ''}>${s}</option>`).join('')}
+      </select>
+      <button class="btn sm" onclick="openFolder()" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
+      <button class="btn sm" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
+      <button class="btn sm" onclick="openEdit()">Edit</button>
+      ${archived ? '' : j.priority_rank ? `<button class="btn sm" onclick="priorityChange('remove', ${j.id})">Remove from priority (#${j.priority_rank})</button>`
+                                         : `<button class="btn sm" onclick="priorityChange('add', ${j.id})">Add to priority</button>`}
+      ${archived ? `<button class="btn sm" onclick="archiveJob(true)">Move back to jobs</button>`
+                 : `<button class="btn sm" onclick="archiveJob(false)">Archive</button>`}
+    </div>`;
+
+  const kv = (k, v, cls = '') => `<div><dt>${k}</dt><dd class="${cls}">${v === '' || v == null ? '—' : v}</dd></div>`;
+  let h = '';
+  if (j.folder_path && !folder_exists) h += `<div class="warnbox">The job folder can't be reached from the server right now.</div>`;
+
+  h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">${j.data_sheet ? 'No UPC, ' + esc((sheetDef(j.data_sheet) || {customer: ''}).customer) + ' data sheet' : 'No UPC, no serials'}</span></h3><dl class="kv">
+    ${kv('Quantity', fmt(j.quantity), 'data')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
+    ${kv('Labels per roll', fmt(j.lpr), 'data')}${kv('Inlay', esc(j.inlay_type || ''))}${kv('Label size', esc(j.label_size || ''))}
+    ${j.data_sheet ? kv('Data sheet', esc((sheetDef(j.data_sheet) || {detail: j.data_sheet}).detail)) : ''}
+    ${j.data_sheet && j.start_serial ? kv('Serial range', `${fmt(j.start_serial)} – ${fmt(j.start_serial + total_qty - 1)}`, 'data') : ''}
+    ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
+    ${kv('UPC', esc(j.upc || ''), 'data')}
+    ${kv('Serial range', j.start_serial ? `${fmt(j.start_serial)} – ${fmt(end_serial)}` : '', 'data')}
+    ${kv('Total to encode', total_qty ? fmt(total_qty) : '', 'data')}
+    ${kv('Base quantity', fmt(j.quantity), 'data')}
+    ${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
+    ${kv('Labels per roll', fmt(j.lpr), 'data')}
+    ${kv('DB files', total_qty ? dbSplit(total_qty, j.qty_db).map(fmt).join(' + ') : '', 'data')}
+    ${kv('Inlay', esc(j.inlay_type || ''))}
+    ${kv('Label size', esc(j.label_size || ''))}
+  </dl></div>`;
+
+  if (rolls.length) {
+    h += `<div class="d-sec"><h3>Rolls<span class="r"><button class="btn sm" onclick="trackJob(${j.id})">Open in roll tracking</button></span></h3>
+      <div class="roll-meta"><span><b style="color:var(--ink)">${done}</b> of ${rolls.length} done</span>${rolls.filter(isRunning).length ? `<span>${rolls.filter(isRunning).length} in progress</span>` : ''}
+      <span>${fmt(rolls.filter(isDone).reduce((a, r) => a + r.quantity, 0))} labels encoded</span></div>
+      <div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div></div>`;
+  }
+
+  h += `<div class="d-sec" id="d-proof"><h3>Proof<span class="r"><a class="btn sm" href="/proofing/?job=${j.id}">Open proof</a></span></h3>
+    <div class="sub" id="d-proof-body" style="color:var(--muted);font-size:13px">Checking for a proof…</div></div>`;
+  h += `<div class="d-sec"><h3>Notes</h3>${composerHtml('d', rolls)}<div id="d-notes">${notesHtml(CURRENT.notes)}</div></div>`;
+
+  h += `<div class="d-sec"><h3>Files<span class="r">
+      <button class="btn sm quiet" onclick="regenerate(this)" ${folder_exists ? '' : 'disabled'}>Rewrite checklist and QC sheet</button>
+      <button class="btn sm quiet" onclick="openTemplatePick()" ${folder_exists ? '' : 'disabled'}>Add template</button></span></h3>
+    ${j.folder_path ? `<div class="path" title="Click to copy" style="cursor:pointer" onclick="copyPath()">${esc(j.folder_path)}</div>` : '<div class="sub">No folder was created for this job.</div>'}
+    <div class="files">${groupFiles(files, j.id, j.folder_path)}</div>
+    ${folder_exists ? `<div class="uprow"><select class="i" id="up-folder" aria-label="Upload into"><option>Proof</option><option>Print</option><option>Data</option></select>
+      <label class="btn sm">Add files<input type="file" multiple hidden onchange="uploadFiles(${j.id}, this)"></label>
+      <span class="sub" style="color:var(--muted);font-size:12.5px">Existing files are never overwritten.</span></div>` : ''}</div>`;
+
+  h += `<div class="d-sec"><h3>Details</h3><dl class="kv">
+    ${kv('PO #', esc(j.po_number || ''))}${kv('Part #', esc(j.part_number || ''))}${kv('Due date', esc(j.due_date || ''))}
+    ${kv('Created', esc(j.created_at))}${kv('Updated', esc(j.updated_at))}${kv('Template', j.template_path ? esc(j.template_path.split(/[\\/]/).pop()) : '')}
+  </dl>${j.notes ? `<div class="ticketnote" style="margin-top:12px"><b>Notes from the ticket</b>${esc(j.notes)}</div>` : ''}
+  <div style="margin-top:16px"><button class="btn sm danger" onclick="deleteJob()">Delete job record</button></div></div>`;
+
+  const draft = $('#d-note-body') ? $('#d-note-body').value : '';
+  $('#d-body').innerHTML = h;
+  if (draft && $('#d-note-body')) $('#d-note-body').value = draft;
+  loadDrawerProof(j.id);
+}
+
+/* ───────────────────────── proofing (proofing/ package) ───────────────────────── */
+const PROOF_CLASS = {'Approved': 'ok', 'Customer Review': 'warn', 'Internal Review': 'warn', 'Changes Requested': 'bad'};
+function proofChip(j) {
+  if (!j.proof_status) return '';
+  const label = j.proof_status === 'Draft' && j.proof_lifecycle === 'generated' ? 'Proof generated' : 'Proof ' + j.proof_status.toLowerCase();
+  return `<span class="chip-proof ${PROOF_CLASS[j.proof_status] || ''}" title="RFID proof: ${esc(j.proof_status)}">${esc(label)}</span>`;
+}
+async function loadDrawerProof(id) {
+  const box = $('#d-proof-body'); if (!box) return;
+  let d;
+  try { d = await api(`/proofing/api/jm/jobs/${id}/proofs`); }
+  catch (e) { box.textContent = e.status === 503 ? e.message : "Couldn't check for a proof: " + e.message; return; }
+  if (!CURRENT || CURRENT.job.id !== id || !$('#d-proof-body')) return;     // another job was opened meanwhile
+  const open = d.proofs.filter(p => p.location !== 'archive');
+  const btn = $('#d-proof .r a');
+  if (!d.proofs.length) {
+    box.innerHTML = 'No proof yet. <b>Start proof</b> fills one in from this job: customer, ticket, part, quantity, UPC, label size, inlay, template, and the first serial and EPC as Job Manager encodes them.';
+    if (btn) btn.textContent = 'Start proof';
+    return;
+  }
+  if (btn) btn.textContent = open.length ? 'Open proof' : 'Start proof';
+  box.innerHTML = d.proofs.map(p => `<div class="proof-row">
+      <span class="chip-proof ${PROOF_CLASS[p.approval_status] || ''}">${esc(p.approval_status || 'Draft')}</span>
+      <b>P${esc(p.proof_revision || '1')}</b><span class="pid">${esc(p.proof_id || '')}</span>
+      ${p.location === 'archive' ? '<span class="sub">archived</span>' : ''}${p.exists ? '' : '<span class="sub" style="color:var(--red)">file missing</span>'}
+      ${p.last_generated_at ? `<span class="sub">generated ${esc(p.last_generated_at.replace('T', ' ').slice(0, 16))}</span>` : '<span class="sub">not generated yet</span>'}
+      <span style="margin-left:auto;display:flex;gap:6px">${p.output_url ? `<a href="${esc(p.output_url)}" target="_blank">${esc(p.output_name || 'Proof PDF')}</a>` : ''}
+      ${p.exists ? `<a class="btn sm quiet" href="${esc(p.open_url)}">Open</a>` : ''}</span></div>`).join('')
+    + (open.length ? `<div style="margin-top:4px"><a class="btn sm quiet" href="/proofing/?job=${id}&new=1">Start another proof for this job</a></div>` : '');
+}
+function fullPath(folder, rel) {                       // as the host PC sees it (same note as Open folder)
+  const sep = folder.includes('\\') ? '\\' : '/';
+  return folder.replace(/[\\/]+$/, '') + sep + rel.split('/').join(sep);
+}
+async function copyThis(btn) { await copyText(btn.dataset.path); toast('Path copied. Paste it into BarTender\'s file box.'); }
+function groupFiles(files, id, folder) {
+  if (!files.length) return '<div class="sub" style="margin-top:8px;color:var(--muted)">No files found in the folder.</div>';
+  let h = '', last = null;
+  files.forEach(f => {
+    if (f.folder !== last) { h += `<div class="fgrp">${esc(f.folder)}</div>`; last = f.folder; }
+    const cp = folder && (f.folder === 'Data' || (f.folder === 'Print' && /\.btw$/i.test(f.name)))
+      ? `<button class="btn sm quiet" data-path="${esc(fullPath(folder, f.path))}" onclick="copyThis(this)">Copy path</button>` : '';
+    h += `<div class="frow"><a href="/api/jobs/${id}/file/${f.path.split('/').map(encodeURIComponent).join('/')}" target="_blank"><span>${esc(f.name)}</span><small>${fmt(f.size_kb)} KB</small></a>${cp}</div>`;
+  });
+  return h;
+}
+async function setStatus(s) {
+  let who = '';
+  if (s === 'Complete') { who = await askName('Who is completing this job?', `${CURRENT.job.customer}, ticket ${CURRENT.job.job_ticket || CURRENT.job.job_number}`); if (!who) { openJob(CURRENT.job.id); return; } }
+  try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body: {status: s, operator: who}}); toast(`Status set to ${s}`); openJob(CURRENT.job.id); refreshList(); }
+  catch (e) { toast(e.message, true); }
+}
+async function archiveJob(undo) {
+  try {
+    await api(`/api/jobs/${CURRENT.job.id}/archive`, {method: 'POST', body: {undo}});
+    toast(undo ? 'Moved back to jobs' : 'Archived'); closeDrawer(); refreshList();
+  } catch (e) { toast(e.message, true); }
+}
+async function deleteJob() {
+  const j = CURRENT.job;
+  if (!confirm(`Delete the record for ${j.job_number}?\n\nThe folder on Z: and the serial range stay as they are. The serials will not be reused.`)) return;
+  try { await api('/api/jobs/' + j.id, {method: 'DELETE'}); toast(`${j.job_number} deleted`); closeDrawer(); refreshList(); }
+  catch (e) { toast(e.message, true); }
+}
+async function openFolder(id, path) {
+  id = id || CURRENT.job.id; path = path || CURRENT.job.folder_path;
+  try { await api(`/api/jobs/${id}/open-folder`, {method: 'POST'}); return; }   // works on the host PC
+  catch (e) { if (e.status !== 403) return toast(e.message, true); }
+  if (localStorage.getItem('jm_helper') === '1') {
+    const hex = [...path].map(c => c.charCodeAt(0).toString(16).padStart(4, '0')).join('');
+    window.location.href = 'jobmanager://open/' + hex;
+    toast('Opening the folder… If nothing happens, run the Open folder setup again in Settings.');
+  } else {
+    await copyText(path);
+    toast('Folder path copied. Paste it into File Explorer, or set up Open folder for this PC in Settings.');
+  }
+}
+async function copyPath() { await copyText(CURRENT.job.folder_path); toast('Folder path copied. Paste it into File Explorer.'); }
+async function regenerate(btn) {
+  btn.disabled = true;
+  try { await api(`/api/jobs/${CURRENT.job.id}/regenerate`, {method: 'POST'}); toast('Checklist and QC sheet rewritten'); openJob(CURRENT.job.id); }
+  catch (e) { toast(e.message, true); btn.disabled = false; }
+}
+function refreshList() {
+  if ($('#v-jobs').classList.contains('on')) { loadJobs(); loadFeed(); loadPriority(); }
+  else if ($('#v-archive').classList.contains('on')) loadArchive();
+  else if ($('#v-rolls').classList.contains('on')) loadFloor();
+}
+
+/* ───────────────────────── edit ───────────────────────── */
+const EDIT_FIELDS = ['job_ticket', 'customer', 'due_date', 'label_size', 'inlay_type', 'part_number', 'po_number', 'notes'];
+function openEdit() {
+  const j = CURRENT.job; $('#e-title').textContent = 'Edit ' + j.job_number;
+  EDIT_FIELDS.forEach(f => $('#e-' + f).value = j[f] || ''); $('#e-title_').value = j.title || ''; $('#e-msg').textContent = '';
+  openOv('ov-edit');
+}
+async function saveEdit(btn) {
+  const body = {title: $('#e-title_').value}; EDIT_FIELDS.forEach(f => body[f] = $('#e-' + f).value);
+  btn.disabled = true;
+  try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body}); closeOv('ov-edit'); toast('Changes saved'); openJob(CURRENT.job.id); refreshList(); }
+  catch (e) { $('#e-msg').textContent = e.message; } finally { btn.disabled = false; }
+}
+
+/* ───────────────────────── modals ───────────────────────── */
+function openOv(id) { $('#' + id).classList.add('on'); }
+const stc = s => 'st-' + String(s || '').toLowerCase().replace(/\s+/g, '-');
+const isDone = r => r.status === 'complete' || r.status === 'verified';
+const isRunning = r => r.status === 'running';
+function closeOv(id) { $('#' + id).classList.remove('on'); }
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.ov.on')].pop();
+  if (open) open.classList.remove('on'); else if ($('#drawer').classList.contains('on')) closeDrawer();
+});
+
+/* ───────────────────────── new job ───────────────────────── */
+const N = id => $('#n-' + id);
+let N_TEMPLATE = null, N_UPC_INFO = null, N_TMANUAL = false, N_MATCH = null, N_LAST_UPC = '', N_START_UPC = '';
+/* Optional start serial: only for a UPC that ran before this app, or to skip ahead. Forward-only. */
+function startValue() { return +(N('start').value.replace(/[^\d]/g, '')) || 0; }
+function startProblem() {
+  const v = startValue(); if (!N('start').value.trim()) return null;
+  if (!N_UPC_INFO || !N_UPC_INFO.valid) return 'Enter a valid UPC first';
+  if (v < N_UPC_INFO.next_start) return `Must be at least ${fmt(N_UPC_INFO.next_start)}, the next free serial for this UPC`;
+  if (v + prodQty(N('qty').value, N('ov').value) > 2 ** 38) return 'Too large for an EPC serial';
+  return null;
+}
+function toggleStart() {
+  const row = $('#n-start-row'); row.hidden = !row.hidden;
+  if (!row.hidden) { N('start').focus(); startHint(); } else N('start').value = '';
+  updateSummary();
+}
+function startHint() {
+  const h = $('#n-start-hint'), p = startProblem(), d = N_UPC_INFO;
+  h.style.color = p ? 'var(--red)' : '';
+  h.textContent = p || (d ? `Use the serial after the last one you ran for this UPC. It can only move forward from ${fmt(d.next_start)}.` : '');
+}
+N('start').addEventListener('input', () => {
+  const raw = N('start').value.replace(/[^\d]/g, ''); N('start').value = raw ? Number(raw).toLocaleString('en-US') : '';
+  startHint(); updateSummary();
+});
+let N_TYPE = 'standard';
+function setJobType(t) {
+  N_TYPE = t;
+  document.querySelectorAll('#n-type button').forEach(b => { const on = b.dataset.t === t; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  const std = t === 'standard';
+  $('#n-std').hidden = !std; $('#n-attach-row').hidden = std; $('#n-go2').hidden = std;
+  if (std) N('sheet').value = '';
+  else if (N_SHEET_AUTO && !N('sheet').value) N('sheet').value = sheetForCustomer();
+  sheetChanged();
+  $('#n-type-note').textContent = std ? 'Serials come from the registry; nothing is ever reused.'
+    : 'For jobs without a UPC or outside the normal process: folder, checklist, template, notes and rolls by quantity. No serials, no encoding database.';
+  if (!std) { N('upc').value = ''; N('start').value = ''; $('#n-start-row').hidden = true; checkNewUpc(); }
+  updateSummary(); runMatch();
+}
+/* Customer data sheets. The sheet picker always shows on Special jobs. Typing a customer that has a sheet (GO2, CDO,
+   any capitalization) switches to Special and selects that customer's sheet. */
+const sheetDefs = () => (META && META.data_sheets) || [];
+const sheetForCustomer = () => { const n = N('customer').value.trim().toLowerCase(); const d = sheetDefs().find(x => x.customer.toLowerCase() === n); return d ? d.key : ''; };
+const sheetDef = k => sheetDefs().find(x => x.key === k);
+let N_SHEET_AUTO = '', N_AUTO_SPECIAL = false;
+function fillSheetOptions() {
+  N('sheet').innerHTML = sheetDefs().map(d => `<option value="${esc(d.key)}">${esc(d.label)}</option>`).join('') + '<option value="">None</option>';
+}
+function syncSheet() {
+  const want = sheetForCustomer();
+  if (want && want !== N_SHEET_AUTO) {
+    if (N_TYPE === 'standard' && !N('upc').value.trim()) { setJobType('special'); N_AUTO_SPECIAL = true; }
+    N_SHEET_AUTO = want;
+    if (N_TYPE === 'special') N('sheet').value = want;
+  } else if (!want && N_SHEET_AUTO) {
+    if (N('sheet').value === N_SHEET_AUTO) N('sheet').value = '';
+    N_SHEET_AUTO = '';
+    if (N_AUTO_SPECIAL && N_TYPE === 'special') setJobType('standard');
+    N_AUTO_SPECIAL = false;
+  }
+  sheetChanged();
+}
+function sheetProblem() {
+  const k = N('sheet').value, d = sheetDef(k); if (!d) return '';
+  const cust = N('customer').value.trim();
+  return cust.toLowerCase() === d.customer.toLowerCase() ? '' : `This sheet is only for customer ${d.customer}. Change the customer to ${d.customer} or choose None.`;
+}
+function sheetChanged() {
+  const v = N('sheet').value, d = sheetDef(v), prob = sheetProblem();
+  $('#n-qtydb-wrap').style.visibility = (N_TYPE === 'standard' || v) ? '' : 'hidden';
+  $('#n-sheet-hint').style.color = prob ? 'var(--red)' : '';
+  $('#n-sheet-hint').textContent = prob || (!d ? 'No data sheet will be written for this job.'
+    : d.sequential ? `Serial counts up in one running series and is never reused. The EPC is the serial as 8 hex digits. Next free serial: ${fmt(META.cdo_next)}.`
+    : 'Every EPC starts with E2004 and is unique. The numbers are written as fixed values and never change.');
+  updateSummary();
+}
+N('sheet').addEventListener('change', sheetChanged);
+N('customer').addEventListener('input', syncSheet);
+N('customer').addEventListener('change', syncSheet);
+document.querySelectorAll('#n-type button').forEach(b => b.onclick = () => { N_AUTO_SPECIAL = false; setJobType(b.dataset.t); });
+function openNewJob() {
+  ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start'].forEach(k => N(k).value = '');
+  fillSheetOptions(); N('sheet').value = ''; N_SHEET_AUTO = ''; N_AUTO_SPECIAL = false;
+  N('ov').value = META.settings.default_overage_pct && +META.settings.default_overage_pct ? META.settings.default_overage_pct : '';
+  N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; $('#n-start-row').hidden = true; $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
+  N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
+  renderTemplateMatch();
+  updateSummary(); openOv('ov-new'); setTimeout(() => N('ticket').focus(), 30);
+  api('/api/meta').then(m => { META.cdo_next = m.cdo_next; sheetChanged(); }).catch(() => {});   // the CDO series moves as jobs are made
+}
+function updateSummary() {
+  const qty = +N('qty').value || 0, ov = +N('ov').value || 0, lpr = +N('lpr').value || 0, per = +N('qtydb').value || 0;
+  const total = prodQty(qty, ov);
+  const rows = [];
+  if (qty) rows.push([N_TYPE === 'special' ? 'Total labels' : 'Total to encode', fmt(total) + (ov ? ` (${fmt(qty)} + ${ov}%)` : '')]);
+  if (N_UPC_INFO && N_UPC_INFO.valid && qty) {
+    const custom = startValue() && !startProblem(), from = custom ? startValue() : N_UPC_INFO.next_start;
+    rows.push([custom ? 'Serials (your start)' : 'Serials (estimated)', `${fmt(from)} – ${fmt(from + total - 1)}`]);
+    if (custom && from > N_UPC_INFO.next_start) rows.push(['Skipped', fmt(from - N_UPC_INFO.next_start)]);
+  }
+  if (qty && lpr) { const full = Math.floor(total / lpr), rest = total % lpr; rows.push(['Rolls', `${full + (rest ? 1 : 0)}` + (rest ? ` (last roll ${fmt(rest)})` : '')]); }
+  let spill = '';
+  const sheet = N('sheet').value;
+  if (N_TYPE === 'special' && qty && !sheet) rows.push(['Serials', 'None (special job)']);
+  const sd = sheetDef(sheet);
+  if (sd && qty) rows.push(sd.sequential ? ['Serials', `${fmt(META.cdo_next)} – ${fmt(META.cdo_next + total - 1)} (EPC = 8 hex digits)`]
+                                         : ['EPCs', `${fmt(total)} random, all E2004…`]);
+  if (sheet && qty) rows.push(['Data files', dbSplit(total, per).map(fmt).join(' + ')]);
+  if (qty && N('upc').value) {
+    const s = dbSplit(total, per); rows.push(['DB files', s.map(fmt).join(' + ')]);
+    if (s.length > 1 && s[s.length - 1] < per * 0.1) spill = `The last DB file only holds ${fmt(s[s.length - 1])} rows because overage pushed past ${fmt(per)}. Leave Qty per DB file blank for a single file.`;
+  }
+  const cust = (sheetDef(sheetForCustomer()) || {}).customer || N('customer').value.trim();
+  if (cust) {
+    const po = N('po').value.trim(), tk = N('ticket').value.trim();
+    const d = new Date(); const ds = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.${String(d.getFullYear()).slice(2)}`;
+    rows.push(['Folder', `<span class="data" style="font-size:12px">${esc([cust, N('size').value.trim(), `${ds} - ${tk || 'JOB-####'}`].filter(Boolean).join(' \\ '))}</span>`]);
+  }
+  $('#n-summary').innerHTML = rows.length ? rows.map(([a, b]) => `<div class="row"><span>${a}</span><span>${b}</span></div>`).join('') + (spill ? `<div class="spill">${spill}</div>` : '')
+    : '<span style="color:var(--muted)">Fill in quantity and UPC to see serials, rolls and files.</span>';
+}
+['qty', 'ov', 'lpr', 'qtydb', 'customer', 'size', 'po', 'ticket'].forEach(k => N(k).addEventListener('input', () => { updateSummary(); if (!$('#n-start-row').hidden) startHint(); }));
+N('upc').addEventListener('input', debounce(checkNewUpc, 250));
+async function checkNewUpc() {
+  const u = N('upc').value.trim(), msg = $('#n-upc-msg'); N_UPC_INFO = null; N('upc').classList.remove('bad');
+  if (u !== N_START_UPC) { N_START_UPC = u; N('start').value = ''; $('#n-start-row').hidden = true; }   // a start serial belongs to one UPC
+  if (!u) { msg.textContent = ''; msg.className = 'fieldmsg'; updateSummary(); return; }
+  const p = upcProblem(u);
+  if (p) {
+    if (u.length === 12) { N('upc').classList.add('bad'); msg.className = 'fieldmsg bad';
+      const fixed = u.slice(0, 11) + checkDigit(u.slice(0, 11));
+      msg.innerHTML = `${esc(p)}. <a onclick="N('upc').value='${fixed}';checkNewUpc()">Use ${fixed}</a>`; }
+    else { msg.className = 'fieldmsg'; msg.textContent = p; }
+    updateSummary(); return;
+  }
+  try {
+    const d = await api('/api/upc/' + u); N_UPC_INFO = d;
+    msg.className = 'fieldmsg ok';
+    const la = d.last_alloc;
+    msg.innerHTML = d.is_new ? `New UPC. Serials start at ${fmt(d.next_start)}. <a onclick="toggleStart()">Ran before this app? Set the start</a>`
+      : `${d.allocations ? `Used on ${d.allocations} earlier job${d.allocations > 1 ? 's' : ''}` : 'Earlier runs are on record'}${la ? `, last ended at ${fmt(la.end)} (${esc(la.job_number)}, ${esc(la.date)})` : ''}. Next serial ${fmt(d.next_start)}. <a onclick="toggleStart()">Set a different start</a>`;
+    if (d.last_job) msg.innerHTML += ` <a onclick="fillFromLast()">Fill from last job</a>`;
+    startHint();
+  } catch (e) { msg.className = 'fieldmsg bad'; msg.textContent = e.message; }
+  updateSummary();
+}
+function confirmOffline() {
+  const v = +($('#off-start').value.replace(/[^\d]/g, '')) || 0;
+  if (v < N_OFFLINE.next) return $('#off-msg').textContent = `Must be at least ${fmt(N_OFFLINE.next)}`;
+  if (!$('#off-ok').checked) return $('#off-msg').textContent = 'Tick the box to confirm';
+  submitNewJob(false, v);
+}
+function fillFromLast() {
+  const l = N_UPC_INFO.last_job;
+  const map = {customer: 'customer', size: 'label_size', inlay: 'inlay_type', lpr: 'lpr', title: 'title', part: 'part_number'};
+  Object.entries(map).forEach(([k, f]) => { if (!N(k).value && l[f]) N(k).value = l[f]; });
+  updateSummary(); runMatch();
+}
+async function searchTemplates(q, listEl, selectedId, name) {
+  if (!q.trim()) { listEl.innerHTML = '<div class="none">Type to search templates.</div>'; return; }
+  const d = await api('/api/templates?q=' + encodeURIComponent(q));
+  listEl.innerHTML = d.templates.length ? d.templates.map(t => `<label><input type="radio" name="${name}" value="${t.id}" ${t.id === selectedId ? 'checked' : ''}>
+    <span>${esc(t.name)}<small>${esc(t.file_path)}</small></span></label>`).join('')
+    : `<div class="none">No templates match "${esc(q)}".</div>`;
+}
+/* Template matching: the UPC decides, customer / size / part # break ties.
+   The best match is picked automatically until the user picks one themselves. */
+const runMatch = debounce(async () => {
+  const upc = N('upc').value.trim();
+  if (upc !== N_LAST_UPC) { N_LAST_UPC = upc; N_TMANUAL = false; }      // new UPC: let matching take over again
+  const usableUpc = upc && !upcProblem(upc) ? upc : '';
+  const cust = N('customer').value.trim();
+  if (!usableUpc && !cust) { N_MATCH = null; if (!N_TMANUAL) N_TEMPLATE = null; return renderTemplateMatch(); }
+  const qs = new URLSearchParams({upc: usableUpc, customer: cust, label_size: N('size').value.trim(), part_number: N('part').value.trim()});
+  try { N_MATCH = await api('/api/templates/match?' + qs); } catch (_) { return; }
+  if (!N_TMANUAL) N_TEMPLATE = N_MATCH.auto_id;
+  renderTemplateMatch();
+}, 250);
+function renderTemplateMatch() {
+  if (N('tq').value.trim()) return;                  // the user is searching; leave their results alone
+  const st = $('#n-tstat'), list = $('#n-tlist'), m = N_MATCH;
+  const set = (cls, txt) => { st.className = 'tstat ' + cls; st.textContent = txt; };
+  if (!m) { set('muted', ''); list.innerHTML = '<div class="none">Enter the UPC (or customer) and the best template is picked for you.</div>'; return; }
+  const c = m.candidates, upcOk = N('upc').value.trim() && !upcProblem(N('upc').value.trim());
+  if (N_TMANUAL) set(N_TEMPLATE ? 'ok' : 'muted', N_TEMPLATE ? 'Picked by you' : 'No template');
+  else if (m.auto_id && m.confidence === 'upc') set('ok', 'Matched by UPC');
+  else if (m.auto_id && m.confidence === 'history') set('ok', 'Used before for this UPC');
+  else if (m.ambiguous) set('warn', 'More than one template has this UPC. Pick one.');
+  else if (m.auto_id) set('warn', 'Best guess from customer and size. Check it.');
+  else if (upcOk) set('warn', c.length ? 'No template has this UPC. Pick one or search.' : 'No template has this UPC.');
+  else set('muted', c.length ? 'Pick one, or enter the UPC' : '');
+  const strong = r => r.startsWith('UPC') || r.startsWith('Used before for this UPC');
+  list.innerHTML = c.map(t => `<label class="${t.id === N_TEMPLATE ? 'sel' : ''}"><input type="radio" name="ntpl" value="${t.id}" ${t.id === N_TEMPLATE ? 'checked' : ''}>
+      <span>${esc(t.file_name)}<span class="why">${t.reasons.map(r => `<i class="${strong(r) ? 'k' : ''}">${esc(r)}</i>`).join('')}</span><small>${esc(t.file_path)}</small></span></label>`).join('')
+    + `<label class="${!N_TEMPLATE ? 'sel' : ''}"><input type="radio" name="ntpl" value="" ${!N_TEMPLATE ? 'checked' : ''}><span>No template</span></label>`;
+}
+['upc', 'customer', 'size', 'part'].forEach(k => N(k).addEventListener('input', runMatch));
+N('customer').addEventListener('change', runMatch);
+N('tq').addEventListener('input', debounce(() => {
+  const q = N('tq').value.trim();
+  if (!q) return renderTemplateMatch();
+  $('#n-tstat').className = 'tstat muted'; $('#n-tstat').textContent = 'Searching all templates';
+  searchTemplates(q, $('#n-tlist'), N_TEMPLATE, 'ntpl');
+}, 250));
+$('#n-tlist').addEventListener('change', e => {
+  if (e.target.name !== 'ntpl') return;
+  N_TEMPLATE = e.target.value ? +e.target.value : null; N_TMANUAL = true;
+  if (!N('tq').value.trim()) renderTemplateMatch();
+  else { $('#n-tstat').className = 'tstat ok'; $('#n-tstat').textContent = N_TEMPLATE ? 'Picked by you' : 'No template'; }
+});
+
+/* A ticket can only have one job. Say so as soon as the ticket is typed. */
+let N_TICKET_DUP = null;
+async function checkTicket() {
+  const t = N('ticket').value.trim(), el = $('#n-ticket-msg'); N_TICKET_DUP = null; el.className = 'fieldmsg'; el.textContent = '';
+  if (!t) return;
+  try {
+    const d = await api('/api/ticket-check?ticket=' + encodeURIComponent(t));
+    if (N('ticket').value.trim() !== t) return;                       // typed on since
+    if (d.exists) {
+      N_TICKET_DUP = d.jobs; el.className = 'fieldmsg bad';
+      el.innerHTML = `Ticket ${esc(t)} already has ${d.jobs.map(j => `${esc(j.job_number)} (${esc(j.status)})`).join(', ')}. ` +
+        `<a style="cursor:pointer" onclick="closeOv('ov-new');openJob(${d.jobs[0].id})">Open it</a>`;
+    }
+  } catch (_) {}
+}
+N('ticket').addEventListener('input', debounce(checkTicket, 300));
+let N_OFFLINE = null;
+async function submitNewJob(allowDup = false, offline = null) {
+  const body = {
+    job_type: N_TYPE, created_by: N('by').value.trim(),
+    offline_confirm: !!offline, offline_start: offline || '',
+    job_ticket: N('ticket').value, due_date: N('due').value, customer: N('customer').value, title: N('title').value,
+    label_size: N('size').value, inlay_type: N('inlay').value, part_number: N('part').value, po_number: N('po').value,
+    notes: N('notes').value, upc: N('upc').value.trim(), quantity: N('qty').value, overage_pct: N('ov').value,
+    lpr: N('lpr').value, qty_db: N('qtydb').value, template_id: N_TEMPLATE,
+    start_serial: startValue() || '',
+    data_sheet: N_TYPE === 'special' ? N('sheet').value : '',
+  };
+  const msg = $('#n-msg'); msg.textContent = '';
+  if (N_TICKET_DUP) return msg.textContent = `Ticket ${body.job_ticket.trim()} already has ${N_TICKET_DUP[0].job_number}. A ticket can only have one job.`, N('ticket').focus();
+  if (!body.customer.trim()) return msg.textContent = 'Customer is required', N('customer').focus();
+  if (!body.title.trim()) return msg.textContent = 'Item / description is required', N('title').focus();
+  if (body.upc && upcProblem(body.upc)) return msg.textContent = 'Fix the UPC first', N('upc').focus();
+  if (!body.created_by) return msg.textContent = 'Enter your name', N('by').focus();
+  if (N_TYPE === 'standard' && !body.upc) return msg.textContent = 'A standard job needs a UPC. Choose Special for jobs without one.', N('upc').focus();
+  if (body.upc && !body.quantity) return msg.textContent = 'Quantity is required when there is a UPC', N('qty').focus();
+  if (startProblem()) return msg.textContent = 'Start serial: ' + startProblem(), N('start').focus();
+  if (body.data_sheet && sheetProblem()) return msg.textContent = sheetProblem(), N('customer').focus();
+  if (body.data_sheet && !body.quantity) return msg.textContent = 'Quantity is required for a data sheet', N('qty').focus();
+  const btn = $('#n-create'); btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    localStorage.setItem('jm_operator', body.created_by);
+    const r = await api('/api/jobs', {method: 'POST', body});
+    closeOv('ov-new'); closeOv('ov-offline');
+    const files = N('files').files;
+    if (N_TYPE === 'special' && files.length) {
+      const fd = new FormData(); fd.append('folder', 'Data'); [...files].forEach(f => fd.append('files', f));
+      try { await api(`/api/jobs/${r.job.id}/upload`, {method: 'POST', body: fd}); } catch (e) { toast('Files not attached: ' + e.message, true); }
+    }
+    toast(`${r.job_number} created` + (r.serial_alloc ? ` — serials ${fmt(r.serial_alloc.start)}–${fmt(r.serial_alloc.end)}` : ''));
+    r.warnings.forEach(w => toast(w, true));
+    STATUS_FILTER = 'all'; if (!$('#v-rolls').classList.contains('on')) { showView('jobs'); await loadJobs(); openJob(r.job.id); } else loadFloor();
+    loadMeta();
+  } catch (e) {
+    if (e.status === 409 && e.data.duplicate_of) {
+      msg.innerHTML = `${esc(e.message)} <a style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="closeOv('ov-new');openJob(${e.data.duplicate_ids[0]})">Open ${esc(e.data.duplicate_of[0])}</a>`;
+      checkTicket();
+    } else if (e.status === 423 && e.data.serial_offline) {
+      N_OFFLINE = {next: e.data.next_known};
+      $('#off-why').textContent = `${e.message} The highest serial the app database and journal know for UPC ${body.upc} ends just before ${fmt(e.data.next_known)}.`;
+      $('#off-start').value = Number(e.data.next_known).toLocaleString('en-US'); $('#off-ok').checked = false;
+      $('#off-hint').textContent = `At least ${fmt(e.data.next_known)}.`; $('#off-msg').textContent = '';
+      openOv('ov-offline'); msg.textContent = 'Serial registry offline. Confirm to continue.';
+    } else { msg.textContent = e.message; if (offline) $('#off-msg').textContent = e.message; }
+  } finally { btn.disabled = false; btn.textContent = 'Create job'; }
+}
+
+/* ───────────────────────── batch ───────────────────────── */
+const BCOLS = [['job_ticket', 'Ticket', 90], ['customer', 'Customer', 150], ['title', 'Item', 170], ['label_size', 'Label size', 100], ['inlay_type', 'Inlay', 130],
+  ['part_number', 'Part #', 100], ['po_number', 'PO #', 100], ['upc', 'UPC', 120], ['quantity', 'Qty', 80], ['lpr', 'LPR', 70], ['qty_db', 'Qty/DB', 80], ['overage_pct', 'Over %', 60]];
+function openBatch() {
+  $('#b-head').innerHTML = BCOLS.map(c => `<th style="min-width:${c[2]}px">${c[1]}</th>`).join('') + '<th>Result</th>';
+  if (!$('#b-body').children.length) addBatchRows(8);
+  $('#b-msg').textContent = ''; $('#b-by').value = operator(); validateBatch(); openOv('ov-batch');
+}
+function addBatchRows(n) {
+  for (let i = 0; i < n; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = BCOLS.map(([k]) => `<td><input data-k="${k}" ${['customer'].includes(k) ? 'list="dl-customers"' : k === 'label_size' ? 'list="dl-sizes"' : k === 'inlay_type' ? 'list="dl-inlays"' : ''} ${k === 'upc' ? 'class="data" maxlength="12"' : ''}></td>`).join('') + '<td class="res"></td>';
+    $('#b-body').appendChild(tr);
+  }
+}
+function clearBatch() { $('#b-body').innerHTML = ''; addBatchRows(8); $('#b-msg').textContent = ''; }
+$('#b-body').addEventListener('paste', e => {
+  const t = e.target; if (t.tagName !== 'INPUT') return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text.includes('\t') && !text.includes('\n')) return;
+  e.preventDefault();
+  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
+  let tr = t.closest('tr'); const startCol = BCOLS.findIndex(c => c[0] === t.dataset.k);
+  lines.forEach(line => {
+    if (!tr) { addBatchRows(1); tr = $('#b-body').lastElementChild; }
+    const inputs = tr.querySelectorAll('input');
+    line.split('\t').forEach((v, i) => { if (inputs[startCol + i]) inputs[startCol + i].value = v.trim(); });
+    tr = tr.nextElementSibling;
+  });
+  validateBatch();
+});
+$('#b-body').addEventListener('input', debounce(() => validateBatch(), 200));
+function batchRows() {
+  return [...$('#b-body').children].map(tr => {
+    const o = {}; tr.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value.trim()); return {tr, o};
+  }).filter(r => !r.tr.classList.contains('done') && Object.values(r.o).some(v => v));
+}
+function validateBatch(quiet) {
+  let bad = 0;
+  batchRows().forEach(({tr, o}) => {
+    const set = (k, isBad) => tr.querySelector(`[data-k="${k}"]`).classList.toggle('bad', isBad);
+    const b1 = !o.customer, b2 = !o.title, b3 = !!upcProblem(o.upc), b4 = !!o.upc && !o.quantity;
+    set('customer', b1); set('title', b2); set('upc', b3); set('quantity', b4);
+    if (b1 || b2 || b3 || b4) bad++;
+  });
+  const n = batchRows().length;
+  if (!quiet) $('#b-msg').textContent = n ? `${n} row${n > 1 ? 's' : ''} ready` + (bad ? `, ${bad} need fixing` : '') : '';
+  $('#b-go').disabled = !n || bad > 0;
+  return bad === 0;
+}
+async function submitBatch() {
+  if (!validateBatch()) return;
+  const rows = batchRows(); const btn = $('#b-go'); btn.disabled = true; btn.textContent = 'Creating…';
+  const by = $('#b-by').value.trim();
+  if (!by) { $('#b-msg').textContent = 'Enter your name'; $('#b-by').focus(); btn.disabled = false; btn.textContent = 'Create jobs'; return; }
+  localStorage.setItem('jm_operator', by);
+  const jobs = rows.map(({tr, o}) => ({...o, created_by: by, job_type: o.upc ? 'standard' : 'special'}));
+  try {
+    const d = await api('/api/jobs/batch', {method: 'POST', body: {jobs}});
+    d.results.forEach(res => {
+      const {tr} = rows[res.row]; const cell = tr.querySelector('.res');
+      if (res.ok) { tr.classList.add('done'); tr.querySelectorAll('input').forEach(i => i.readOnly = true); cell.className = 'res ok'; cell.textContent = res.job_number + (jobs[res.row].job_type === 'special' ? ', special (no serials)' : '') + (res.template ? ', template ' + res.template : ', no template') + (res.warnings.length ? ' (see warnings)' : ''); res.warnings.forEach(w => toast(`${res.job_number}: ${w}`, true)); }
+      else if (res.duplicate_of) { cell.className = 'res bad'; cell.textContent = `Not created: ticket already has ${res.duplicate_of.join(', ')}`; }
+      else { cell.className = 'res bad'; cell.textContent = res.error; }
+    });
+    $('#b-msg').textContent = `${d.created} created` + (d.failed ? `, ${d.failed} not created` : '');
+    if (d.created) { loadJobs(); loadMeta(); }
+  } catch (e) { $('#b-msg').textContent = e.message; }
+  finally { btn.textContent = 'Create jobs'; validateBatch(true); }
+}
+
+/* ───────────────────────── template pick (existing job) ───────────────────────── */
+let TP_ID = null;
+function openTemplatePick() {
+  TP_ID = null; const j = CURRENT.job;
+  $('#tp-q').value = [j.customer.split(/\s+/)[0], j.label_size].filter(Boolean).join(' ');
+  searchTemplates($('#tp-q').value, $('#tp-list'), null, 'tp'); openOv('ov-tpick');
+}
+$('#tp-q').addEventListener('input', debounce(() => searchTemplates($('#tp-q').value, $('#tp-list'), TP_ID, 'tp'), 250));
+$('#tp-list').addEventListener('change', e => { if (e.target.name === 'tp') TP_ID = +e.target.value; });
+async function applyTemplate(btn) {
+  if (!TP_ID) return toast('Pick a template first', true);
+  btn.disabled = true;
+  try { await api(`/api/jobs/${CURRENT.job.id}/template`, {method: 'POST', body: {template_id: TP_ID}}); closeOv('ov-tpick'); toast('Template copied into Print'); openJob(CURRENT.job.id); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+}
+
+/* ───────────────────────── templates page ───────────────────────── */
+async function loadTemplates() {
+  const q = $('#q-templates').value;
+  const d = await api('/api/templates?q=' + encodeURIComponent(q));
+  $('#tmpl-count').textContent = `${fmt(d.total)} templates` + (q ? `, showing first ${d.templates.length} matches` : ', search to find one');
+  $('#tmpl-grid').innerHTML = d.templates.map(t => `<div class="tcard">
+      <div class="img">${t.has_thumb ? `<img src="/api/templates/${t.id}/thumbnail?${Date.now()}" alt="">` : 'No preview'}</div>
+      <div class="b">${esc(t.name)}<small>${esc(t.file_path)}</small></div>
+      <div class="f"><label class="btn sm quiet" style="display:inline-block">${t.has_thumb ? 'Replace preview' : 'Add preview'}
+        <input type="file" accept="image/*" hidden onchange="uploadThumb(${t.id}, this)"></label></div>
+    </div>`).join('') || `<div class="empty" style="grid-column:1/-1">${q ? 'No templates match.' : 'No templates yet. Set the Master Templates folder in Settings, then rescan.'}</div>`;
+}
+$('#q-templates').oninput = debounce(loadTemplates, 250);
+async function uploadThumb(id, input) {
+  const fd = new FormData(); fd.append('file', input.files[0]);
+  try { await api(`/api/templates/${id}/thumbnail`, {method: 'POST', body: fd}); toast('Preview saved'); loadTemplates(); }
+  catch (e) { toast(e.message, true); }
+}
+async function syncTemplates(btn) {
+  btn.disabled = true; btn.textContent = 'Scanning…';
+  try { const d = await api('/api/templates/sync', {method: 'POST'}); toast(`Found ${fmt(d.found)} templates. ${d.added} added, ${d.hidden} no longer on disk.`); if (d.warning) toast(d.warning, true); loadTemplates(); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = 'Rescan Master Templates'; }
+}
+
+/* ───────────────────────── settings ───────────────────────── */
+async function loadSettings() {
+  await loadMeta(); const s = META.settings;
+  $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct; $('#s-autoarch').value = s.auto_archive_hours;
+  $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
+  $('#s-printers').value = s.printers || '';
+  loadDataPanel(); loadBackups(); showHelperState(); loadRewind();
+  setSettingsSection(pref('setsec', 'data'));
+}
+function setSettingsSection(k) {
+  if (!document.querySelector(`#set-nav [data-sec="${k}"]`)) k = 'data';
+  setPref('setsec', k);
+  document.querySelectorAll('#set-nav button').forEach(b => { const on = b.dataset.sec === k; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  document.querySelectorAll('#v-settings .panel[data-sec]').forEach(el => el.classList.toggle('show', el.dataset.sec === k));
+}
+async function saveShared(btn) {
+  btn.disabled = true;
+  try { await api('/api/settings', {method: 'POST', body: {btw_template_dir: $('#s-btw').value.trim(), default_overage_pct: $('#s-ovg').value || 0, auto_archive_hours: $('#s-autoarch').value === '' ? 32 : $('#s-autoarch').value}}); await loadMeta(); toast('Shared settings saved'); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+}
+async function savePrinters() {
+  try { await api('/api/settings', {method: 'POST', body: {printers: $('#s-printers').value}}); await loadMeta(); $('#s-printers').value = META.settings.printers; toast('Printers saved'); loadPrinters(); }
+  catch (e) { toast(e.message, true); }
+}
+function copyPlain(btn) { copyText(btn.dataset.path); toast('Path copied'); }
+async function loadDataPanel() {
+  let d;
+  try { d = await api('/api/data/status'); } catch (e) { $('#dp-warn').innerHTML = `<div class="dwarn bad">${esc(e.message)}</div>`; return; }
+  $('#dp-warn').innerHTML = d.warnings.length ? d.warnings.map(w => `<div class="dwarn ${w.level}">${esc(w.text)}</div>`).join('')
+    : `<div class="dwarn ok">No problems found. ${esc(d.health.text)}.</div>`;
+  $('#dp-rows').innerHTML = d.stores.map(x => `<tr><td><b>${esc(x.name)}</b></td>
+    <td>${esc(x.holds)}${x.detail ? `<div class="sub2">${esc(x.detail)}</div>` : ''}</td>
+    <td><div class="pth">${esc(x.path)}</div>${x.path.includes(':') || x.path.includes('/') || x.path.includes('\\') ? `<button class="btn sm quiet" data-path="${esc(x.path)}" onclick="copyPlain(this)">Copy path</button>` : ''}</td>
+    <td><span class="st ${x.level}">${esc(x.status)}</span></td><td>${esc(x.backup)}</td></tr>`).join('');
+  const b = d.backups, v = b.verify;
+  $('#dp-bk').innerHTML = `<div><b>Backups</b> go to <span class="data">${esc(b.dir)}</span> ${b.explicit ? '(set in Settings)' : '<span style="color:var(--amber);font-weight:600">(on this PC only)</span>'}.
+    Automatic: ${b.auto ? `every ${b.interval_hours} h, keeping the newest ${b.keep}` : '<b style="color:var(--amber)">off</b>'}. ${b.count} on hand${b.newest ? `, newest ${esc(b.newest.file)}, made ${esc(b.age_text)} (${esc(b.newest.size)})` : ''}.</div>
+    <div>${v ? (v.ok ? `<span style="color:var(--green);font-weight:650">✓ Last check passed</span>: ${esc(v.file)}, serial history complete for ${fmt(v.upcs_checked)} UPCs; ${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files${v.has_journal ? ', journal' : ''}${v.has_config ? ', config.ini' : ''}.`
+        : `<span style="color:var(--red);font-weight:650">✗ Last check failed</span>: ${esc(v.error || v.integrity || 'the zip is damaged')}.`) : 'Not checked since the app started. Every backup is checked as it is made; use the button below to check the newest one again.'}</div>`;
+}
+async function verifyBackup(btn) {
+  const m = $('#dp-verify'); m.className = 'fieldmsg'; m.textContent = ''; btn.disabled = true;
+  try {
+    const v = await api('/api/backups/verify', {method: 'POST'});
+    m.className = 'fieldmsg ' + (v.ok ? 'ok' : 'bad');
+    m.textContent = v.ok ? `✓ ${v.file}: the zip is sound, the database passes SQLite's integrity check, and the serial history is complete for ${fmt(v.upcs_checked)} UPCs (${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files).`
+      : `✗ ${v.file}: ${v.error || v.integrity || 'damaged'}. Make a new backup now.`;
+    loadDataPanel();
+  } catch (e) { m.className = 'fieldmsg bad'; m.textContent = e.message; } finally { btn.disabled = false; }
+}
+function showBackupStatus(b) {
+  const el = $('#backup-status'); if (!el) return;
+  if (!b || b.level === 'ok') { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false; el.textContent = '⚠ ' + b.text; el.className = 'conn ' + (b.level === 'bad' ? 'bad' : 'warn');
+}
+async function saveBackup(btn) {
+  btn.disabled = true;
+  try { await api('/api/settings', {method: 'POST', body: {backup_dir: $('#s-bdir').value, backup_interval_hours: $('#s-bint').value || 6, backup_keep: $('#s-bkeep').value || 60, backup_auto: $('#s-bauto').value}}); toast('Backup settings saved'); loadBackups(); loadDataPanel(); loadMeta(); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+}
+async function backupNow(btn) {
+  btn.disabled = true; btn.textContent = 'Backing up…';
+  try { const r = await api('/api/backups', {method: 'POST'}); toast(`Backed up and checked: ${r.file}`); loadBackups(); if ($('#dp-rows')) loadDataPanel(); loadMeta(); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = 'Back up now'; }
+}
+async function loadBackups() {
+  const d = await api('/api/backups');
+  $('#blist').innerHTML = !d.reachable ? `<div style="color:var(--red)">Backup folder not reachable: ${esc(d.dir)}</div>`
+    : d.backups.length ? d.backups.map(b => `<div><span class="data">${esc(b.file)}</span><span>${esc(b.modified || '')} · ${fmt(b.size_kb)} KB</span></div>`).join('') : '<div>No backups yet.</div>';
+}
+
+/* ───────────────────────── notes (shared by drawer + roll tracking) ───────────────────────── */
+function ago(ts) {
+  if (!ts) return '';
+  const d = new Date(ts.replace(' ', 'T')), s = (Date.now() - d) / 1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400 && d.getDate() === new Date().getDate()) return d.toTimeString().slice(0, 5);
+  return ts.slice(5, 10).replace('-', '/') + ' ' + ts.slice(11, 16);
+}
+function composerHtml(ctx, rolls, sel = '') {
+  return `<div class="composer">
+    <textarea id="${ctx}-note-body" placeholder="Add a note: lane issue, swapped inlay roll, customer request…" maxlength="2000"></textarea>
+    <div class="row">
+      <select class="i" id="${ctx}-note-roll" aria-label="Note is about">
+        <option value="">Whole job</option>${(rolls || []).map(r => `<option value="${r.roll_number}" ${String(sel) === String(r.roll_number) ? 'selected' : ''}>Roll ${r.roll_number}</option>`).join('')}
+      </select>
+      <label class="ck"><input type="checkbox" id="${ctx}-note-imp"> Important</label>
+      <button class="btn sm primary" onclick="addNote('${ctx}')">Add note</button>
+    </div></div>`;
+}
+function notesHtml(notes) {
+  if (!notes || !notes.length) return '<div style="color:var(--muted);font-size:13px">No notes yet.</div>';
+  return notes.map(n => `<div class="note ${n.important ? 'important' : ''}">
+    <div class="m"><b style="color:var(--ink)">${esc(n.author || 'Someone')}</b><span>${ago(n.created_at)}</span>
+      ${n.roll_number ? `<span class="tag">Roll ${n.roll_number}</span>` : ''}${n.important ? '<span class="tag" style="color:var(--amber)">Important</span>' : ''}
+      <span class="acts"><button onclick="toggleImportant(${n.id}, ${n.important ? 0 : 1})">${n.important ? 'Unmark' : 'Mark important'}</button>
+      <button onclick="deleteNote(${n.id})">Delete</button></span></div>
+    <p>${esc(n.body)}</p></div>`).join('');
+}
+function noteJobId(ctx) { return ctx === 'd' ? CURRENT.job.id : WORK.job.id; }
+async function addNote(ctx) {
+  const body = $(`#${ctx}-note-body`).value.trim();
+  if (!body) return $(`#${ctx}-note-body`).focus();
+  const who = await askName('Who is adding this note?'); if (!who) return;
+  try {
+    await api(`/api/jobs/${noteJobId(ctx)}/notes`, {method: 'POST', body: {
+      body, author: who, roll_number: +$(`#${ctx}-note-roll`).value || null, important: $(`#${ctx}-note-imp`).checked}});
+    $(`#${ctx}-note-body`).value = ''; $(`#${ctx}-note-imp`).checked = false;
+    toast('Note added'); afterNoteChange();
+  } catch (e) { toast(e.message, true); }
+}
+async function toggleImportant(id, imp) {
+  try { await api('/api/notes/' + id, {method: 'PATCH', body: {important: !!imp}}); afterNoteChange(); }
+  catch (e) { toast(e.message, true); }
+}
+async function deleteNote(id) {
+  if (!confirm('Delete this note?')) return;
+  try { await api('/api/notes/' + id, {method: 'DELETE'}); afterNoteChange(); }
+  catch (e) { toast(e.message, true); }
+}
+function afterNoteChange() {
+  if ($('#v-rolls').classList.contains('on') && WORK) { openWork(WORK.job.id); loadFloor(true); }
+  if (CURRENT && $('#drawer').classList.contains('on')) openJob(CURRENT.job.id);
+  if ($('#v-jobs').classList.contains('on')) loadFeed();
+}
+
+/* ───────────────────────── uploads ───────────────────────── */
+async function uploadFiles(jobId, input) {
+  if (!input.files.length) return;
+  const fd = new FormData(); fd.append('folder', $('#up-folder').value);
+  [...input.files].forEach(f => fd.append('files', f));
+  try { const r = await api(`/api/jobs/${jobId}/upload`, {method: 'POST', body: fd}); toast(`Added ${r.saved.join(', ')}`); openJob(jobId); }
+  catch (e) { toast(e.message, true); }
+  input.value = '';
+}
+
+/* ───────────────────────── who did it? (asked when it matters) ───────────────────────── */
+let NM_RESOLVE = null;
+function askName(title, sub = '') {
+  return new Promise(resolve => {
+    $('#nm-title').textContent = title; $('#nm-sub').textContent = sub; $('#nm-msg').textContent = '';
+    $('#nm-input').value = operator(); NM_RESOLVE = resolve; openOv('ov-name');
+    setTimeout(() => { $('#nm-input').focus(); $('#nm-input').select(); }, 30);
+  });
+}
+function nmDone(ok) {
+  const v = $('#nm-input').value.trim();
+  if (ok && !v) { $('#nm-msg').textContent = 'Enter a name'; return; }
+  if (ok) localStorage.setItem('jm_operator', v);
+  closeOv('ov-name'); const r = NM_RESOLVE; NM_RESOLVE = null; if (r) r(ok ? v : null);
+}
+$('#nm-ok').onclick = () => nmDone(true);
+$('#nm-cancel').onclick = () => nmDone(false);
+$('#nm-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nmDone(true); } if (e.key === 'Escape') { e.stopPropagation(); nmDone(false); } });
+
+/* ───────────────────────── roll tracking page ───────────────────────── */
+let FLOOR = [], FLOOR_FILTER = 'running', WORK = null, WORK_ROLL = null, ROLL_FILTER = 'all', RECS = {}; const VERIFY = {};
+let PRINTERS = {printers: [], busy: []};
+function setRollFilter(k) { ROLL_FILTER = k; renderWork(); }
+const FFILTERS = [['all', 'All', () => true], ['running', 'Active', j => j.status === 'In Progress'], ['queued', 'Queued', j => j.status === 'Pending'],
+  ['hold', 'On hold', j => j.status === 'On Hold']];
+async function loadFloor(keepWork) {
+  const d = await api('/api/floor'); FLOOR = d.jobs;
+  await loadPrinters();
+  renderFloor();
+  if (WORK && !keepWork) openWork(WORK.job.id, true);
+}
+function renderFloor() {
+  $('#floor-sel').innerHTML = FFILTERS.map(([k, l, f]) =>
+    `<option value="${k}" ${k === FLOOR_FILTER ? 'selected' : ''}>${l} (${FLOOR.filter(f).length})</option>`).join('');
+  const q = $('#q-floor').value.toLowerCase().trim();
+  const f = FFILTERS.find(x => x[0] === FLOOR_FILTER)[2];
+  const rows = FLOOR.filter(f).filter(j => !q || [j.job_ticket, j.customer, j.title, j.upc, j.job_number].join(' ').toLowerCase().includes(q));
+  $('#floor-cards').innerHTML = rows.length ? rows.map(j => {
+    const pct = j.roll_total ? j.roll_done / j.roll_total * 100 : 0;
+    return `<button class="fc ${WORK && WORK.job.id === j.id ? 'on' : ''}" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}" onclick="openWork(${j.id})">
+      <div class="t"><b>${esc(j.customer)}</b><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+      <div class="c"><span class="data">${esc(j.job_ticket || j.job_number)}</span><span class="s"> · ${esc(j.title)}</span></div>
+      <div class="p"><span class="bar"><i style="width:${pct}%"></i><i class="r" style="width:${j.roll_total ? ((j.running_rolls ? j.running_rolls.split(',').length : 0) + (j.paused_count || 0)) / j.roll_total * 100 : 0}%"></i></span>${j.roll_done} of ${j.roll_total} done${j.due_date ? ` · due ${esc(j.due_date)}` : ''}</div>
+      ${j.running_rolls ? `<div class="runners">${esc(runnersText(j.running_rolls))}</div>` : ''}${j.paused_count ? `<div class="runners">${j.paused_count} left in progress</div>` : ''}
+      ${j.important_count ? `<span class="flag">${j.important_count} important note${j.important_count > 1 ? 's' : ''}</span>` : ''}
+    </button>`;
+  }).join('') : `<div class="empty" style="padding:24px 10px">${q ? 'No jobs match.' : FLOOR_FILTER === 'running' ? 'No jobs are running. Start one from Queued.' : 'Nothing here.'}</div>`;
+}
+$('#q-floor').addEventListener('input', debounce(renderFloor, 150));
+function runnersText(s) {
+  return s.split(',').map(x => { const [n, w, p] = x.split(':'); return `Roll ${n} ${p ? 'on ' + p : '(no printer)'}${w ? ', ' + w : ''}`; }).join('; ');
+}
+async function loadPrinters() {
+  try { PRINTERS = await api('/api/printers'); } catch (_) { /* keep what we had */ }
+  updatePrinterBar();
+}
+const busyOn = (name, job, roll) => PRINTERS.busy.find(b => b.printer.toLowerCase() === name.toLowerCase() && !(b.job_id === job && b.roll_number === roll));
+function printerBarHtml(r) {
+  const j = WORK.job, st = RSTATE(r);
+  if (st === 'done') return r.printer ? `<div class="rc-printer"><span class="pl">Ran on</span><b>${esc(r.printer)}</b></div>` : '';
+  const names = [...PRINTERS.printers]; if (r.printer && !names.some(n => n.toLowerCase() === r.printer.toLowerCase())) names.push(r.printer);
+  const cur = names.find(n => n.toLowerCase() === (r.printer || '').toLowerCase()) || '';
+  return `<div class="rc-printer"><label class="pl" for="printer-sel">${st === 'pending' ? 'Start on printer' : 'Running on'}</label>
+    <select class="i" id="printer-sel" onchange="setPrinter(this.value)">
+      <option value="" ${cur ? '' : 'selected'}>${st === 'pending' ? 'Choose a printer to start…' : 'No printer'}</option>
+      ${names.map(n => { const o = busyOn(n, j.id, r.roll_number);
+        return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${o ? ` (busy: ${esc(o.customer)} roll ${o.roll_number})` : ''}</option>`; }).join('')}
+    </select></div>`;
+}
+function updatePrinterBar() {
+  const el = $('#rc-printer'); if (!el || !WORK || !currentRoll()) return;
+  el.innerHTML = printerBarHtml(currentRoll());
+}
+async function setPrinter(name) {
+  const r = currentRoll(), j = WORK.job; if (!r) return;
+  const o = name && busyOn(name, j.id, r.roll_number);
+  if (o && !confirm(`${name} is running ${o.customer} ${o.job_ticket || o.job_number}, roll ${o.roll_number}. Put roll ${r.roll_number} on it too?`)) return updatePrinterBar();
+  const who = await askName(name ? `Who is loading roll ${r.roll_number} on ${name}?` : `Who is taking roll ${r.roll_number} off its printer?`); if (!who) return updatePrinterBar();
+  try {
+    await api(`/api/jobs/${j.id}/rolls/${r.roll_number}/printer`, {method: 'POST', body: {printer: name, operator: who}});
+    toast(name ? `Roll ${r.roll_number} is on ${name}` : `Roll ${r.roll_number} taken off its printer`);
+    await openWork(j.id); loadFloor(true);
+  } catch (e) { toast(e.message, true); }
+}
+function trackJob(id) { closeDrawer(); showView('rolls'); openWork(id); }
+
+async function openWork(id, quiet) {
+  let d;
+  try { d = await api('/api/jobs/' + id); } catch (e) { if (!quiet) toast(e.message, true); return; }
+  const draft = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-roll').value, $('#w-note-imp').checked] : null;
+  const sameJob = WORK && WORK.job.id === id;
+  if (!sameJob) { WORK_ROLL = null; ROLL_FILTER = 'all'; }
+  const vfocus = document.activeElement && document.activeElement.id === 'verify-in' ? $('#verify-in').value : null;
+  WORK = d; renderWork();
+  if (vfocus !== null && $('#verify-in')) { $('#verify-in').value = vfocus; $('#verify-in').focus(); }
+  if (draft && sameJob && $('#w-note-body')) { $('#w-note-body').value = draft[0]; $('#w-note-roll').value = draft[1]; $('#w-note-imp').checked = draft[2]; }
+  renderFloor();
+}
+// "In progress" = started or left unfinished (older "paused" rolls count as in progress).
+const RSTATE = r => isDone(r) ? 'done' : (r.status === 'running' || r.status === 'paused') ? 'running' : 'pending';
+const RLABEL = {pending: 'Not started', running: 'In progress', done: 'Done'};
+const RGLYPH = {pending: '○', running: '▶', done: '✓'};   // not shown with colour alone
+function pickDefaultRoll(rolls) {
+  const me = operator();
+  const f = pred => rolls.find(pred);
+  const r = f(x => RSTATE(x) === 'running' && x.started_by === me) || f(x => RSTATE(x) === 'running')
+         || f(x => !isDone(x)) || rolls[0];
+  return r ? r.roll_number : null;
+}
+/* Rolls are listed as rectangles joined into one continuous rail (green done, blue in progress, grey waiting).
+   Past 10 rolls they cascade into blocks of 10 whose headers show that block's progress; numbering keeps
+   counting on from one block to the next, and finished blocks fold away. */
+const BATCH = 10, BATCH_OPEN = {};
+function toggleBatch(b) {
+  const k = WORK.job.id + ':' + b, el = document.querySelector(`.rb[data-b="${b}"]`);
+  BATCH_OPEN[k] = el.classList.contains('closed'); renderWork();
+}
+/* Record numbers: what an encoder types into BarTender ("print records 1 to 500"). A roll's records follow on from
+   the rolls before it. When the job's database is split into files of qty_db rows, numbering restarts in each file. */
+function recSegs(before, qty, qdb) {
+  const segs = []; let a = before + 1; const end = before + qty;
+  while (a <= end) {
+    const file = qdb ? Math.floor((a - 1) / qdb) + 1 : 1, fileEnd = qdb ? file * qdb : end, b = Math.min(end, fileEnd);
+    segs.push({file, from: qdb ? (a - 1) % qdb + 1 : a, to: qdb ? (b - 1) % qdb + 1 : b}); a = b + 1;
+  }
+  return segs;
+}
+function recMap(job, rolls) {
+  const m = {}; let cum = 0; const total = rolls.reduce((a, r) => a + r.quantity, 0), qdb = job.qty_db && job.qty_db < total ? job.qty_db : 0;
+  rolls.forEach(r => { m[r.roll_number] = {segs: recSegs(cum, r.quantity, qdb), multi: !!qdb}; cum += r.quantity; });
+  return m;
+}
+const recText = sg => `${fmt(sg.from)}–${fmt(sg.to)}`;
+const recCopy = sg => `${sg.from}-${sg.to}`;
+function rollRowHtml(r, noteRolls) {
+  const st = RSTATE(r), who = st === 'done' ? r.completed_by : st === 'pending' ? '' : (r.paused_by || r.started_by);
+  const on = r.roll_number === WORK_ROLL, rec = RECS[r.roll_number], sg = rec.segs[0];
+  const rng = recText(sg) + (rec.segs.length > 1 ? ' +' : '');
+  const right = st === 'running' ? (r.printer ? `<span class="pchip">${esc(r.printer)}</span>` : '<span class="pchip none">No printer</span>') : esc(who || '');
+  const lbl = `Roll ${r.roll_number}, records ${recText(sg)}${rec.multi ? ` in database file ${sg.file}` : ''}, ${RLABEL[st]}${r.printer ? ' on ' + r.printer : ''}${who ? ' by ' + who : ''}${noteRolls.has(r.roll_number) ? ', has notes' : ''}`;
+  return `<button class="ri s-${st} ${on ? 'on' : ''}" role="option" aria-selected="${on}" data-n="${r.roll_number}" title="${esc(lbl)}" aria-label="${esc(lbl)}" onclick="openRoll(${r.roll_number})">
+    <span class="rno">${r.roll_number}</span><span class="g" aria-hidden="true">${RGLYPH[st]}</span>
+    <span class="rec data">${esc(rng)}${rec.multi ? `<small>DB ${sg.file}</small>` : ''}</span><span class="who">${right}</span>
+    ${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</button>`;
+}
+function rollBatchesHtml(rolls, noteRolls) {
+  const shown = rolls.filter(r => ROLL_FILTER === 'all' || RSTATE(r) === ROLL_FILTER || r.roll_number === WORK_ROLL);
+  if (!shown.length) return '<div class="empty" style="padding:18px 8px">No rolls here.</div>';
+  if (rolls.length <= BATCH) return `<div class="rb-body">${shown.map(r => rollRowHtml(r, noteRolls)).join('')}</div>`;
+  const blocks = {};
+  shown.forEach(r => (blocks[Math.floor((r.roll_number - 1) / BATCH)] = blocks[Math.floor((r.roll_number - 1) / BATCH)] || []).push(r));
+  return Object.keys(blocks).map(b => {
+    const all = rolls.filter(r => Math.floor((r.roll_number - 1) / BATCH) === +b), n = all.filter(isDone).length;
+    const lo = all[0].roll_number, hi = all[all.length - 1].roll_number;
+    const dflt = all.some(r => !isDone(r)) || all.some(r => r.roll_number === WORK_ROLL);
+    const open = BATCH_OPEN[WORK.job.id + ':' + b] ?? dflt;
+    return `<div class="rb ${open ? '' : 'closed'} ${n === all.length ? 'full' : ''}" data-b="${b}">
+      <button class="rb-head" aria-expanded="${open}" onclick="toggleBatch(${b})"><span class="caret" aria-hidden="true">${open ? '▾' : '▸'}</span>
+        <b>Rolls ${lo}–${hi}</b><span class="rb-n">${n === all.length ? '✓ all done' : `${n} of ${all.length} done`}</span>
+        <span class="rb-bar" aria-hidden="true"><i style="width:${n / all.length * 100}%"></i></span></button>
+      ${open ? `<div class="rb-body">${blocks[b].map(r => rollRowHtml(r, noteRolls)).join('')}</div>` : ''}</div>`;
+  }).join('');
+}
+function renderWork() {
+  const {job: j, rolls, notes, total_qty} = WORK;
+  RECS = recMap(j, rolls);
+  if (!rolls.some(r => r.roll_number === WORK_ROLL)) WORK_ROLL = pickDefaultRoll(rolls);
+  const cnt = s => rolls.filter(r => RSTATE(r) === s).length;
+  const done = cnt('done');
+  const important = notes.filter(n => n.important);
+  const noteRolls = new Set(notes.filter(n => n.roll_number).map(n => n.roll_number));
+  const statusBtns = {
+    'Pending': `<button class="btn primary" onclick="workStatus('In Progress')">Start job</button>`,
+    'In Progress': `<button class="btn" onclick="workStatus('On Hold')">Put job on hold</button>`,
+    'On Hold': `<button class="btn primary" onclick="workStatus('In Progress')">Resume job</button>`,
+  }[j.status] || '';
+  const dbf = (WORK.files || []).filter(f => f.folder === 'Data' && /\.(xlsx|csv)$/i.test(f.name));
+  const tpl = (WORK.files || []).filter(f => f.folder === 'Print' && /\.btw$/i.test(f.name));
+  const btLine = j.folder_path && (dbf.length || tpl.length) ? `<div class="btline"><b>BarTender</b>` +
+    tpl.map(f => `<span>Template <span class="data">${esc(f.name)}</span> <button class="btn sm quiet" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy path</button></span>`).join('') +
+    dbf.map(f => `<span>Database <span class="data">${esc(f.name)}</span> <button class="btn sm quiet" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy path</button></span>`).join('') + `</div>` : '';
+  const chips = [j.upc && `<span class="chip data">${esc(j.upc)}</span>`, j.label_size && `<span class="chip">${esc(j.label_size)}</span>`,
+    j.inlay_type && `<span class="chip">${esc(j.inlay_type)}</span>`, total_qty && `<span class="chip">${fmt(total_qty)} labels, ${rolls.length} rolls of ${fmt(j.lpr)}</span>`,
+    j.due_date && `<span class="chip">Due ${esc(j.due_date)}</span>`].filter(Boolean).join('');
+  const pct = n => rolls.length ? n / rolls.length * 100 : 0;
+
+  const listHtml = !rolls.length ? `<div class="ticketnote">This job has no rolls to track (no UPC or labels per roll).</div>` : `
+    ${done === rolls.length ? `<div class="alldone"><b>All ${rolls.length} rolls done.</b>
+      ${j.status !== 'Complete' ? `<button class="btn primary sm" onclick="workStatus('Complete')">Mark job complete</button>` : ''}</div>` : ''}
+    <div class="seg sm rfilter" role="group" aria-label="Filter rolls">${[['all', 'All', rolls.length], ['pending', 'Not started', cnt('pending')], ['running', 'In progress', cnt('running')], ['done', 'Done', done]].map(([k, l, n]) =>
+      `<button class="${k === ROLL_FILTER ? 'on' : ''}" aria-pressed="${k === ROLL_FILTER}" onclick="setRollFilter('${k}')">${l}<b>${n}</b></button>`).join('')}</div>
+    <div class="rlist" role="listbox" aria-label="Rolls">${rollBatchesHtml(rolls, noteRolls)}</div>`;
+
+  const pctDone = rolls.length ? Math.round(done / rolls.length * 100) : 0;
+  const prog = rolls.length ? `<div class="wh-prog" role="group" aria-label="Job progress">
+      <div class="stack-bar" aria-hidden="true"><i class="d" style="width:${pct(done)}%"></i><i class="r" style="width:${pct(cnt('running'))}%"></i></div>
+      <div class="rsum"><span><b>${done}</b> of ${rolls.length} rolls done (${pctDone}%)</span><span class="r-run"><b>${cnt('running')}</b> in progress</span>
+        <span><b>${cnt('pending')}</b> not started</span></div></div>` : '';
+  const copyBtns = btLine ? `<div class="btcopy"><span>BarTender</span>` +
+    tpl.map(f => `<button class="btn sm quiet" title="${esc(f.name)}" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy template path</button>`).join('') +
+    dbf.map(f => `<button class="btn sm quiet" title="${esc(f.name)}" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy database path</button>`).join('') + `</div>` : '';
+  const impHtml = important.length ? `<div class="imp"><b>Important</b>${important.map(n => `<p>${n.roll_number ? `<b style="display:inline;color:inherit">Roll ${n.roll_number}:</b> ` : ''}${esc(n.body)} <span style="color:var(--muted);font-size:12px">— ${esc(n.author || '')}</span></p>`).join('')}</div>` : '';
+  const tkHtml = j.notes ? `<div class="ticketnote"><b>Notes from the ticket</b>${esc(j.notes)}</div>` : '';
+  $('#work').innerHTML = `
+    <div class="w-head" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}">
+      <div class="wh-main">
+        <div class="wh-title"><h2>${esc(j.customer)} <span class="wh-tk">ticket ${esc(j.job_ticket || '—')}</span></h2><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
+        <div class="sub">${esc(j.title)} · ${esc(j.job_number)}</div><div class="chips">${chips}</div>${prog}</div>
+      <div class="acts"><div class="acts-row">${statusBtns}
+        <button class="btn" onclick="openFolder(${j.id}, ${esc(JSON.stringify(j.folder_path || ''))})" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
+        <button class="btn" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
+        <button class="btn quiet" onclick="openJob(${j.id})">Job details</button></div>${copyBtns}</div>
+    </div>
+    ${impHtml || tkHtml ? `<div class="w-top ${impHtml && tkHtml ? 'two' : ''}">${impHtml}${tkHtml}</div>` : ''}
+    <div class="w-body2">
+      <div class="w-rolls">${listHtml}</div>
+      <div class="w-roll" id="rollpanel">${rollPanelHtml()}</div>
+    </div>`;
+  if (NOTE_TAB === 'hist') loadJobHistory(j.id);
+}
+
+/* One card per roll: header with the actions, what the roll is (strip + tag range), the tag check, and
+   notes/history in tabs. On a wide card the notes sit beside the data; on a narrow one they stack under it. */
+let NOTE_TAB = 'roll';
+const currentRoll = () => (WORK.rolls || []).find(x => x.roll_number === WORK_ROLL) || null;
+function notesBlockHtml(r) {
+  const {rolls, notes} = WORK, tab = (!r && NOTE_TAB === 'roll') ? 'job' : NOTE_TAB;
+  const rn = r ? notes.filter(n => n.roll_number === r.roll_number) : [];
+  const tabs = [...(r ? [['roll', `Roll ${r.roll_number} notes`, rn.length]] : []), ['job', 'Job notes', notes.length], ['hist', 'History']];
+  const body = tab === 'hist' ? '<div id="w-hist" class="feed-list"></div>'
+    : `${composerHtml('w', rolls, tab === 'roll' && r ? r.roll_number : '')}<div>${tab === 'roll' && !rn.length ? `<div style="color:var(--muted);font-size:13px">No notes on roll ${r.roll_number} yet.</div>` : notesHtml(tab === 'roll' ? rn : notes)}</div>`;
+  return `<div class="rtabs" role="tablist" aria-label="Notes and history">${tabs.map(([k, l, n]) =>
+    `<button role="tab" aria-selected="${k === tab}" class="${k === tab ? 'on' : ''}" onclick="setNoteTab('${k}')">${l}${n !== undefined ? `<b>${n}</b>` : ''}</button>`).join('')}</div>${body}`;
+}
+function setNoteTab(t) {
+  const d = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-imp').checked] : null;
+  NOTE_TAB = t; $('#rollnotes').innerHTML = notesBlockHtml(currentRoll());
+  if (d && $('#w-note-body')) { $('#w-note-body').value = d[0]; $('#w-note-imp').checked = d[1]; }
+  if (t === 'hist') loadJobHistory(WORK.job.id);
+}
+function refreshCard() {
+  const d = $('#w-note-body') ? [$('#w-note-body').value, $('#w-note-imp').checked] : null;
+  $('#rollpanel').innerHTML = rollPanelHtml();
+  if (d && $('#w-note-body')) { $('#w-note-body').value = d[0]; $('#w-note-imp').checked = d[1]; }
+  if (NOTE_TAB === 'hist') loadJobHistory(WORK.job.id);
+}
+function copyRaw(btn) { copyText(btn.dataset.copy); toast('Copied'); }
+function rollPanelHtml() {
+  const {job: j, rolls} = WORK;
+  const r = currentRoll();
+  if (!r) return `<div class="rc"><div class="rc-body one"><div class="rc-notes" id="rollnotes">${notesBlockHtml(null)}</div></div></div>`;
+  const st = RSTATE(r), idx = rolls.indexOf(r);
+  const prev = rolls[idx - 1], next = rolls[idx + 1];
+  const t = s => s ? esc(s.slice(5, 16).replace('-', '/')) : '';
+  const epc = e => `${esc(e.slice(0, -5))}<b>${esc(e.slice(-5))}</b>`;
+  const lastAt = r.paused_at || r.started_at, lastBy = r.paused_by || r.started_by;
+  const timeline = st === 'running' && lastAt ? `In progress since ${t(lastAt)}${lastBy ? ' by ' + esc(lastBy) : ''}`
+    : st === 'done' ? `Done ${t(r.completed_at)}${r.completed_by ? ' by ' + esc(r.completed_by) : ''}` : 'Not started';
+  const actions = {
+    pending: `<button class="btn primary big" onclick="rollAction('complete')">Complete roll ${r.roll_number}</button>
+              <button class="btn" onclick="showLeft()">Left in progress…</button>`,
+    running: `<button class="btn primary big" onclick="rollAction('complete')">Complete roll ${r.roll_number}</button>
+              <button class="btn" onclick="showLeft()">Update where it stopped…</button>`,
+    done:    `<button class="btn" onclick="rollAction('running', 'Reopen roll ${r.roll_number}? It goes back to in progress.')">Reopen</button>`,
+  }[st];
+  const checks = (VERIFY[`${j.id}:${r.roll_number}`] || []);
+  const cp = (v, what) => `<button class="btn sm quiet" data-copy="${esc(String(v))}" onclick="copyRaw(this)" aria-label="Copy ${what}">Copy</button>`;
+  return `<div class="rc">
+    <div class="rc-head">
+      <div class="rc-nav">
+        <button class="btn sm quiet" onclick="openRoll(${prev ? prev.roll_number : r.roll_number})" ${prev ? '' : 'disabled'} aria-label="Previous roll">‹</button>
+        <h3>Roll ${r.roll_number} <span>of ${rolls.length}</span></h3>
+        <button class="btn sm quiet" onclick="openRoll(${next ? next.roll_number : r.roll_number})" ${next ? '' : 'disabled'} aria-label="Next roll">›</button>
+        <span class="rstate s-${st}">${RLABEL[st]}</span>
+      </div>
+      <div class="rc-acts">${actions}${st !== 'pending' && st !== 'done' ? `<button class="btn quiet sm" onclick="rollAction('pending', 'Reset roll ${r.roll_number} to not started?')">Reset</button>` : ''}</div>
+      <div class="rc-sub">${timeline}${r.printer && st !== 'done' ? ' · on ' + esc(r.printer) : ''}</div>
+    </div>
+    <div id="rc-printer">${printerBarHtml(r)}</div>
+    <div class="pausebox" id="pausebox"><input class="i" id="pause-why" aria-label="Where did it stop" placeholder="Where did it stop? (optional, saved as a note)" maxlength="300"
+        onkeydown="if(event.key==='Enter')rollAction('running')"><button class="btn" onclick="rollAction('running')">Save as in progress</button>
+        <button class="btn quiet" onclick="$('#pausebox').classList.remove('on')">Cancel</button></div>
+    <div class="rc-body">
+      <div class="rc-main">
+        <dl class="rc-strip">
+          <div class="rc-rec"><dt>BarTender records${RECS[r.roll_number].multi ? ' (numbering restarts in each database file)' : ''}</dt>
+            ${RECS[r.roll_number].segs.map(sg => `<dd class="data big">${RECS[r.roll_number].multi ? `<small>File ${sg.file}</small> ` : ''}${recText(sg)}
+              <button class="btn sm quiet" data-copy="${recCopy(sg)}" onclick="copyRaw(this)" aria-label="Copy records ${recCopy(sg)}">Copy</button></dd>`).join('')}</div>
+          <div><dt>Labels</dt><dd class="data">${fmt(r.quantity)}</dd></div>
+          <div><dt>Size</dt><dd>${esc(j.label_size || '—')}</dd></div>
+          <div><dt>Inlay</dt><dd>${esc(j.inlay_type || '—')}</dd></div>
+          ${j.upc ? `<div><dt>UPC</dt><dd class="data">${esc(j.upc)}</dd></div>` : ''}
+        </dl>
+        ${r.serial_start ? `<table class="trange"><caption class="sr">Tag range for roll ${r.roll_number}</caption><tbody>
+          <tr><th scope="row">Serials</th><td class="data">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</td><td>${cp(r.serial_start + '-' + r.serial_end, 'serial range')}</td></tr>
+          <tr><th scope="row">First EPC</th><td class="data epc">${epc(r.epc_start)}</td><td>${cp(r.epc_start, 'first EPC')}</td></tr>
+          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr></tbody></table>
+        ${!j.upc ? `<div class="ticketnote" style="margin:0"><span class="chip-special">Data sheet</span> Serials and EPCs for this roll come from the customer's data sheet. The tag check is for UPC jobs.</div>` : `<div class="verify">
+          <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll.</span>
+            <input class="i data" id="verify-in" placeholder="24-character EPC" autocomplete="off" spellcheck="false"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();verifyEpc()}"></label>
+          <div class="vlist" role="status" aria-live="polite">${checks.slice(-3).reverse().map(c => `<div class="v ${c.ok ? 'ok' : 'bad'}"><span class="data">${esc(c.epc)}</span>${c.ok ? '✓ ' : '✗ '}${esc(c.msg)}${c.go ? ` <button class="btn sm" onclick="openRoll(${c.go})">Go to roll ${c.go}</button>` : ''}</div>`).join('')}</div>
+        </div>`}` : `<div class="ticketnote" style="margin:0"><span class="chip-special">Special job</span> No UPC, so no serials are given out and there is no tag to check.</div>`}
+      </div>
+      <div class="rc-notes" id="rollnotes">${notesBlockHtml(r)}</div>
+    </div>
+  </div>`;
+}
+function openRoll(n) {
+  WORK_ROLL = n;
+  refreshCard();
+  document.querySelectorAll('.rlist .ri').forEach(b => { const on = +b.dataset.n === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  let b = document.querySelector('.rlist .ri.on');
+  if (!b) { delete BATCH_OPEN[WORK.job.id + ':' + Math.floor((n - 1) / BATCH)]; renderWork(); b = document.querySelector('.rlist .ri.on'); }
+  if (b) b.scrollIntoView({block: 'nearest'});
+}
+function showLeft() { $('#pausebox').classList.add('on'); $('#pause-why').focus(); }
+async function rollAction(status, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  const n = WORK_ROLL;
+  const note = status === 'running' ? ($('#pause-why')?.value || '').trim() : '';
+  const q = {complete: `Who completed roll ${n}?`, running: `Who is leaving roll ${n} in progress?`, pending: `Who is resetting roll ${n}?`}[status];
+  const who = await askName(q, status === 'complete' ? `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}` : '');
+  if (!who) return;
+  try {
+    await api(`/api/jobs/${WORK.job.id}/rolls/${n}`, {method: 'POST', body: {status, note, operator: who}});
+    toast({running: `Roll ${n} saved as in progress`, complete: `Roll ${n} done`, pending: `Roll ${n} reset`}[status]);
+    // After completing, move on to the next roll that still needs work.
+    if (status === 'complete') {
+      const after = WORK.rolls.find(x => x.roll_number > n && !isDone(x) && x.roll_number !== n) || WORK.rolls.find(x => !isDone(x) && x.roll_number !== n);
+      if (after) WORK_ROLL = after.roll_number;
+    }
+    await openWork(WORK.job.id); loadFloor(true);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* EPC check: decode the tag and compare with this roll's product prefix and serial range. */
+function epcParts(hex) {
+  const bits = BigInt('0x' + hex).toString(2).padStart(96, '0');
+  return {prefix: bits.slice(0, 58), serial: BigInt('0b' + bits.slice(58))};
+}
+function verifyEpc() {
+  const inp = $('#verify-in'); const raw = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw) return;
+  const {job: j, rolls} = WORK, r = rolls.find(x => x.roll_number === WORK_ROLL);
+  let ok = false, msg, go = null;
+  if (!/^[0-9A-F]{24}$/.test(raw)) msg = 'Not an EPC: needs 24 characters, 0–9 and A–F.';
+  else {
+    const got = epcParts(raw), exp = epcParts(r.epc_start), s = got.serial;
+    const fmtS = x => Number(x).toLocaleString();
+    if (got.prefix !== exp.prefix) msg = `Wrong product: this tag is not encoded for UPC ${j.upc}.`;
+    else if (s >= BigInt(r.serial_start) && s <= BigInt(r.serial_end)) {
+      ok = true; msg = `Belongs to roll ${r.roll_number}: serial ${fmtS(s)}, label ${fmtS(s - BigInt(r.serial_start) + 1n)} of ${fmt(r.quantity)}.`;
+    } else {
+      const other = rolls.find(x => s >= BigInt(x.serial_start) && s <= BigInt(x.serial_end));
+      go = other ? other.roll_number : null;
+      msg = other ? `Serial ${fmtS(s)} belongs to roll ${other.roll_number}, not roll ${r.roll_number}.`
+                  : `Serial ${fmtS(s)} is not part of this job.`;
+    }
+  }
+  const key = `${j.id}:${r.roll_number}`; (VERIFY[key] = VERIFY[key] || []).push({epc: raw, ok, msg, go});
+  refreshCard(); $('#verify-in').focus();
+}
+
+function rangesText(nums) {
+  const a = [...nums].sort((x, y) => x - y), out = [];
+  for (let i = 0; i < a.length; i++) { let k = i; while (k + 1 < a.length && a[k + 1] === a[k] + 1) k++; out.push(k > i ? `${a[i]}–${a[k]}` : `${a[i]}`); i = k; }
+  return out.join(', ');
+}
+async function workStatus(s) {
+  let who = '';
+  if (s === 'Complete') { who = await askName('Who is completing this job?', `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}`); if (!who) return; }
+  try { await api('/api/jobs/' + WORK.job.id, {method: 'PATCH', body: {status: s, operator: who}}); toast(`Status set to ${s}`);
+    await openWork(WORK.job.id); loadFloor(true); }
+  catch (e) { toast(e.message, true); }
+}
+async function loadJobHistory(id) {
+  try {
+    const d = await api('/api/activity?limit=30&job_id=' + id); const el = $('#w-hist'); if (!el) return;
+    const j = WORK.job, label = `${j.customer} ${j.job_ticket || j.job_number}`;
+    d.items.forEach(it => { it.message = it.message.replace(label + ': ', '').replace(label + ' ', ''); it.message = it.message.charAt(0).toUpperCase() + it.message.slice(1); });
+    el.innerHTML = feedHtml(d.items, false) || '<div class="fi day">Nothing yet.</div>';
+  }
+  catch (_) {}
+}
+
+/* ───────────────────────── activity feed ───────────────────────── */
+let FEED_FILTER = 'all';
+document.querySelectorAll('#feed-seg button').forEach(b => b.onclick = () => {
+  FEED_FILTER = b.dataset.f; document.querySelectorAll('#feed-seg button').forEach(x => x.classList.toggle('on', x === b)); loadFeed();
+});
+function feedHtml(items, withDays = true) {
+  let h = '', lastDay = null;
+  const today = new Date().toISOString().slice(0, 10);
+  items.forEach(it => {
+    const d = it.ts.slice(0, 10);
+    if (withDays && d !== lastDay) { h += `<div class="fi day">${d === today ? 'Today' : d}</div>`; lastDay = d; }
+    h += `<button class="fi k-${esc(it.kind)}" ${it.job_id && withDays ? `onclick="openJob(${it.job_id})"` : 'style="cursor:default"'}>
+      ${esc(it.message)}<span class="meta">${esc(it.actor || '')}${it.actor ? ', ' : ''}${ago(it.ts)}</span></button>`;
+  });
+  return h;
+}
+async function loadFeed() {
+  try {
+    const d = await api('/api/activity?limit=80');
+    const keep = {all: () => true, notes: i => i.kind.startsWith('note'), rolls: i => i.kind.startsWith('roll')}[FEED_FILTER];
+    const items = d.items.filter(keep).slice(0, 50);
+    $('#feed-list').innerHTML = items.length ? feedHtml(items) : '<div class="empty" style="padding:24px 12px">Activity shows up here as jobs are created, rolls are checked off and notes are added.</div>';
+  } catch (_) {}
+}
+
+/* ───────────────────────── open folder helper (settings) ───────────────────────── */
+function showHelperState() {
+  const on = localStorage.getItem('jm_helper') === '1';
+  $('#helper-state').innerHTML = on
+    ? '<span class="pill st-complete">On for this PC</span> Open folder opens File Explorer here.'
+    : '<span class="pill st-pending">Not set up on this PC</span> Open folder copies the path instead.';
+}
+function setHelper(on) { localStorage.setItem('jm_helper', on ? '1' : '0'); showHelperState(); toast(on ? 'Open folder will open Explorer on this PC' : 'Open folder will copy the path on this PC'); }
+
+/* ───────────────────────── serial records status (header) ───────────────────────── */
+function showSerialStatus(h) {
+  const el = $('#serial-status'); if (!el || !h) return;
+  if (h.registry_gaps) { el.textContent = 'Serial registry incomplete: see Tools'; el.className = 'conn bad'; }
+  else if (h.conflicts && h.conflicts.length) { el.textContent = `Serial conflict (${h.conflicts.length}): check`; el.className = 'conn bad'; }
+  else if (!h.registry_ok) { el.textContent = 'Serial registry offline'; el.className = 'conn bad'; }
+  else if (h.pending) { el.textContent = `Serials: ${h.pending} waiting to sync`; el.className = 'conn warn'; }
+  else { el.textContent = 'Serial records OK'; el.className = 'conn'; }
+  el.title = `Registry: ${h.registry_dir}${h.journal_path ? '\nJournal: ' + h.journal_path : '\nJournal: off (set a backup folder in Settings)'}`;
+}
+
+/* ───────────────────────── priority list (Jobs page card) ───────────────────────── */
+let PRIORITY = [];
+async function loadPriority() {
+  try { PRIORITY = (await api('/api/priority')).jobs; } catch (_) { return; }
+  renderPriority();
+}
+function renderPriority() {
+  $('#pc-count').textContent = PRIORITY.length ? `${PRIORITY.length}` : '';
+  const ids = new Set(PRIORITY.map(p => p.id));
+  $('#dl-openjobs').innerHTML = JOBS.filter(j => !ids.has(j.id))
+    .map(j => `<option value="${esc((j.job_ticket || j.job_number) + ' — ' + j.customer)}">`).join('');
+  const L = $('#pc-list');
+  if (!PRIORITY.length) { L.innerHTML = '<li class="pc-empty" style="cursor:default;display:block">Nothing prioritized. Add a ticket above, or use "Add to priority" on a job.</li>'; return; }
+  L.innerHTML = PRIORITY.map((p, i) => `<li draggable="true" data-id="${p.id}" tabindex="0">
+      <span class="rk">${i + 1}</span>
+      <span class="t" onclick="openJob(${p.id})" style="cursor:pointer"><b>${esc(p.job_ticket || p.job_number)}</b> <span class="pill ${stc(p.status)}">${esc(p.status)}</span>
+        <span class="l2">${esc(p.customer)}${p.roll_total ? ` · ${p.roll_done}/${p.roll_total} rolls` : ''}${p.due_date ? ` · due ${esc(p.due_date)}` : ''}</span></span>
+      <span class="acts"><button title="Move up" aria-label="Move up" onclick="priorityMove(${p.id},-1)" ${i ? '' : 'disabled'}>↑</button>
+        <button title="Move down" aria-label="Move down" onclick="priorityMove(${p.id},1)" ${i < PRIORITY.length - 1 ? '' : 'disabled'}>↓</button>
+        <button title="Remove" aria-label="Remove from priority" onclick="priorityChange('remove',${p.id})">✕</button></span></li>`).join('');
+  let dragId = null;
+  L.querySelectorAll('li[draggable]').forEach(li => {
+    li.addEventListener('dragstart', e => { dragId = +li.dataset.id; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; });
+    li.addEventListener('dragend', () => { li.classList.remove('drag'); L.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+    li.addEventListener('dragover', e => { e.preventDefault(); L.querySelectorAll('.over').forEach(x => x.classList.remove('over')); li.classList.add('over'); });
+    li.addEventListener('drop', e => {
+      e.preventDefault(); const target = +li.dataset.id; if (!dragId || dragId === target) return;
+      const order = PRIORITY.map(p => p.id).filter(id => id !== dragId);
+      order.splice(order.indexOf(target), 0, dragId); prioritySave(order, dragId);
+    });
+    li.addEventListener('keydown', e => {
+      if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); priorityMove(+li.dataset.id, -1); }
+      if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); priorityMove(+li.dataset.id, 1); }
+    });
+  });
+}
+function priorityMove(id, d) {
+  const order = PRIORITY.map(p => p.id), i = order.indexOf(id), k = i + d;
+  if (k < 0 || k >= order.length) return;
+  [order[i], order[k]] = [order[k], order[i]]; prioritySave(order, id);
+}
+async function prioritySave(order, moved) {
+  try { PRIORITY = (await api('/api/priority', {method: 'POST', body: {action: 'order', ids: order, moved_id: moved}})).jobs; renderPriority(); loadJobs(); }
+  catch (e) { toast(e.message, true); }
+}
+async function priorityChange(action, id) {
+  try {
+    PRIORITY = (await api('/api/priority', {method: 'POST', body: {action, job_id: id}})).jobs; renderPriority();
+    toast(action === 'add' ? 'Added to priority' : 'Removed from priority');
+    loadJobs(); if (CURRENT && CURRENT.job.id === id) openJob(id);
+  } catch (e) { toast(e.message, true); }
+}
+function priorityAddFromInput() {
+  const v = $('#pc-add').value.trim(); if (!v) return;
+  const key = v.split(' — ')[0].trim().toLowerCase();
+  const j = JOBS.find(x => (x.job_ticket || '').toLowerCase() === key || x.job_number.toLowerCase() === key);
+  if (!j) return toast('No open job with that ticket', true);
+  $('#pc-add').value = ''; priorityChange('add', j.id);
+}
+
+/* ───────────────────────── tools page ───────────────────────── */
+const TF = ['customer', 'job_ticket', 'title', 'upc', 'start_serial', 'label_size', 'quantity', 'overage_pct', 'lpr', 'inlay_type', 'po_number', 'part_number'];
+let DB_MODE = 'new';
+async function loadTools() {
+  try { const h = await api('/api/serials/health'); renderSerialHealth(h); } catch (_) {}
+  const jobs = (await api('/api/jobs?view=active')).jobs.filter(j => j.upc && j.start_serial);
+  $('#dl-upcjobs').innerHTML = jobs.map(j => `<option value="${esc((j.job_ticket || j.job_number) + ' — ' + j.customer + ' — ' + j.job_number)}">`).join('');
+  TOOL_JOBS = jobs;
+}
+let TOOL_JOBS = [];
+document.querySelectorAll('#db-mode button').forEach(b => b.onclick = () => {
+  DB_MODE = b.dataset.m; document.querySelectorAll('#db-mode button').forEach(x => x.classList.toggle('on', x === b));
+  $('#db-new').hidden = DB_MODE !== 'new'; $('#db-job').hidden = DB_MODE !== 'job'; $('#db-msg').textContent = '';
+});
+async function toolPrint(kind) {
+  const q = new URLSearchParams({print: '1'});
+  TF.forEach(k => { const v = $('#t-' + k).value.trim(); if (v) q.set(k, v.replace(/,/g, k === 'start_serial' ? '' : ',')); });
+  const msg = $('#t-check'); msg.className = 'fieldmsg'; msg.textContent = '';
+  const upc = $('#t-upc').value.trim(), start = +($('#t-start_serial').value.replace(/[^\d]/g, '')) || 0;
+  if (upc && upcProblem(upc)) { msg.className = 'fieldmsg bad'; msg.textContent = 'UPC: ' + upcProblem(upc); return; }
+  if (upc && start) {
+    const total = prodQty($('#t-quantity').value, $('#t-overage_pct').value) || 1;
+    try {
+      const c = await api(`/api/serials/${upc}/check?start=${start}&end=${start + total - 1}`);
+      msg.className = 'fieldmsg ' + (c.covered ? 'ok' : 'bad');
+      msg.textContent = c.covered ? `These serials are recorded for this UPC (${c.jobs.join(', ')}).`
+        : 'These serials are not recorded for this UPC. Fine for paper, but never encode from them.';
+    } catch (_) {}
+  }
+  window.open(`/tools/${kind}?${q}`, '_blank');
+}
+async function toolDatabase(btn) {
+  const msg = $('#db-msg'); msg.className = 'fieldmsg'; msg.textContent = '';
+  let body;
+  if (DB_MODE === 'job') {
+    const v = $('#db-jobq').value.trim(), jn = v.split(' — ').pop().trim();
+    const j = TOOL_JOBS.find(x => x.job_number === jn || x.job_ticket === v || x.job_number === v);
+    if (!j) { msg.className = 'fieldmsg bad'; msg.textContent = 'Pick a job from the list'; return; }
+    body = {mode: 'job', job_id: j.id};
+  } else {
+    const upc = $('#db-upc').value.trim();
+    if (upcProblem(upc) || !upc) { msg.className = 'fieldmsg bad'; msg.textContent = 'UPC: ' + (upcProblem(upc) || 'required'); return; }
+    if (!$('#db-qty').value) { msg.className = 'fieldmsg bad'; msg.textContent = 'Quantity is required'; return; }
+    if (!$('#db-note').value.trim()) { msg.className = 'fieldmsg bad'; msg.textContent = "Say what it's for (it goes in the serial history)"; return; }
+    const who = await askName('Who is taking these serials?', 'A new range is recorded in the serial registry under your name.'); if (!who) return;
+    body = {mode: 'new', upc, quantity: $('#db-qty').value, overage_pct: $('#db-ov').value, qty_db: $('#db-qtydb').value, note: $('#db-note').value.trim(), operator: who};
+  }
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/tools/database', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Operator': operator()}, body: JSON.stringify(body)});
+    if (!r.ok) { let d = {}; try { d = await r.json(); } catch (_) {} throw new Error(d.error || `Failed (${r.status})`); }
+    const blob = await r.blob(), name = r.headers.get('X-File-Name') || 'database.xlsx', range = r.headers.get('X-Serial-Range');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    msg.className = 'fieldmsg ok';
+    msg.textContent = `Downloaded ${name}` + (range ? `, serials ${range.split('-').map(Number).map(fmt).join(' – ')}` : '') + (DB_MODE === 'new' ? '. Recorded in the serial registry.' : '');
+    if (DB_MODE === 'new') { $('#db-note').value = ''; }
+  } catch (e) { msg.className = 'fieldmsg bad'; msg.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+function renderSerialHealth(h) {
+  $('#ser-health').innerHTML = `
+    <div>Registry: <span class="${h.registry_ok ? 'ok' : 'bad'}">${h.registry_ok ? 'reachable' : 'NOT reachable'}</span> <span class="data" style="color:var(--muted)">${esc(h.registry_dir)}</span>${h.registry_ok ? '' : ` — ${esc(h.registry_message)}`}</div>
+    <div>Journal: ${h.journal_path ? `<span class="${h.journal_ok ? 'ok' : 'bad'}">${h.journal_ok ? 'on' : 'folder not reachable'}</span> <span class="data" style="color:var(--muted)">${esc(h.journal_path)}</span>` : '<span class="bad">off</span>: set a backup folder in Settings to keep a third copy on the share'}</div>
+    ${h.registry_gaps ? `<div class="bad">${h.registry_gaps} UPC(s) have jobs that used serials past the end of their registry file. The old app's serial_registry folder was probably not copied: stop the app, copy it in, start again. Until then new jobs still start after the highest job in the database.</div>` : ''}
+    <div>App database copy: <span class="ok">on</span>${h.pending ? `, <span class="bad">${h.pending} range(s) waiting for the registry</span>` : ''}</div>
+    ${h.conflicts.length ? `<div class="bad" style="margin-top:4px">Conflicts: a range made while the registry was offline overlaps one made elsewhere. Check the jobs before encoding.</div>
+      ${h.conflicts.map(c => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${esc(c.job_number)}, UPC <span class="data">${esc(c.upc)}</span>, ${fmt(c.start)}–${fmt(c.end)}
+        <button class="btn sm" onclick="resolveConflict(${c.id}, '${esc(c.job_number)}')">I've checked this</button></div>`).join('')}` : ''}`;
+}
+async function resolveConflict(id, job) {
+  const note = prompt(`What did you check for ${job}? (saved in the serial history)`); if (!note || !note.trim()) return;
+  const who = await askName('Who reviewed this conflict?'); if (!who) return;
+  try { const r = await api(`/api/serials/conflicts/${id}/resolve`, {method: 'POST', body: {operator: who, note: note.trim()}});
+    renderSerialHealth(r.health); showSerialStatus(r.health); toast('Conflict marked as reviewed. The range stays recorded.'); }
+  catch (e) { toast(e.message, true); }
+}
+function openSerialTool() { showView('tools'); setTimeout(() => { $('#serial-tool').scrollIntoView({behavior: 'smooth'}); $('#ser-upc').focus(); }, 50); }
+async function serialLookup() {
+  const upc = $('#ser-upc').value.trim(), out = $('#ser-out');
+  if (upcProblem(upc) || !upc) { out.innerHTML = `<div class="fieldmsg bad">${esc(upcProblem(upc) || 'Enter a UPC')}</div>`; return; }
+  let h; try { h = await api('/api/serials/' + upc); } catch (e) { out.innerHTML = `<div class="fieldmsg bad">${esc(e.message)}</div>`; return; }
+  out.innerHTML = `
+    <div style="font-size:14px"><b>Next free serial: <span class="data">${fmt(h.next_start)}</span></b>
+      <span style="color:var(--muted);font-size:13px"> · ${h.jobs} job(s), ${fmt(h.used)} serials recorded${h.registry_ok ? '' : ' · registry offline: showing the app database copy'}</span></div>
+    ${h.rows.length ? `<div style="overflow:auto;max-height:280px"><table class="sertable"><thead><tr><th>Job / record</th><th>Serials</th><th class="num">Qty</th><th>When / who</th><th>Note</th><th>State</th></tr></thead><tbody>
+      ${h.rows.map(r => `<tr class="${r.state === 'CONFLICT' ? 'conflict' : r.state.startsWith('waiting') ? 'waiting' : ''}"><td class="data">${esc(r.job_number)}</td>
+        <td class="data">${fmt(r.start)} – ${fmt(r.end)}</td><td class="num">${fmt(r.qty)}</td><td>${esc((r.when || '').slice(0, 16))}${r.by ? '<br>' + esc(r.by) : ''}</td>
+        <td>${esc(r.note)}</td><td>${esc(r.state)}${r.in_registry === false ? ' (database only)' : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p style="color:var(--muted);font-size:13px">Nothing recorded for this UPC. The first job will start at 26,000,000,001.</p>'}
+    <div class="seracts">
+      <div class="box"><h3>Set a range aside</h3>
+        <div class="grid2"><label class="f">Quantity<input class="i" id="sr-qty" type="number" min="1"></label>
+          <label class="f">Start at (optional)<input class="i data" id="sr-start" placeholder="${fmt(h.next_start)}"></label></div>
+        <label class="f">Why<input class="i" id="sr-note" maxlength="200" placeholder="e.g. held for Acme reorder"></label>
+        <button class="btn" onclick="serialChange('reserve')">Reserve</button></div>
+      <div class="box"><h3>Record serials used outside this app</h3>
+        <label class="f">Last serial used<input class="i data" id="sh-last" placeholder="e.g. 26,004,500,000"></label>
+        <label class="f">Where / why<input class="i" id="sh-note" maxlength="200" placeholder="e.g. 2025 runs before Job Manager"></label>
+        <button class="btn" onclick="serialChange('history')">Record</button></div>
+    </div>`;
+}
+async function serialChange(kind) {
+  const upc = $('#ser-upc').value.trim(), num = id => +($(id).value.replace(/[^\d]/g, '')) || 0;
+  const body = kind === 'reserve' ? {kind, qty: num('#sr-qty'), start: num('#sr-start') || '', note: $('#sr-note').value.trim()}
+                                  : {kind, last_used: num('#sh-last'), note: $('#sh-note').value.trim()};
+  if (kind === 'reserve' && !body.qty) return toast('Enter a quantity', true);
+  if (kind === 'history' && !body.last_used) return toast('Enter the last serial used', true);
+  if (!body.note) return toast('Add a note saying why', true);
+  const who = await askName(kind === 'reserve' ? 'Who is reserving these serials?' : 'Who is recording this?'); if (!who) return;
+  try {
+    const r = await api('/api/serials/' + upc, {method: 'POST', body: {...body, operator: who}});
+    toast(r.changed === false ? 'No change: the registry already starts after that serial' : kind === 'reserve' ? `Reserved ${fmt(r.start)} – ${fmt(r.end)}` : `Recorded. Next serial is ${fmt(r.next_start)}`);
+    serialLookup();
+  } catch (e) { toast(e.message, true); }
+}
+
+
+/* Rewind page link + QR code */
+async function loadRewind() {
+  try {
+    const d = await api('/api/rewind/link');
+    $('#rw-url').textContent = d.url;
+    $('#rw-base').value = (META.settings.rewind_base_url || '');
+    $('#rw-qr').innerHTML = d.qr ? `<img alt="QR code for the rewind page" src="/rewind/qr.svg?t=${Date.now()}">` : 'QR needs one extra package. Run run.bat again.';
+    const n = $('#rw-note'); n.className = 'fieldmsg ' + (d.shareable ? 'ok' : 'bad');
+    n.textContent = d.shareable ? `Address taken from ${d.source}.` : 'This address only works on this PC. Open Settings from another PC, or type the host PC\'s address below.';
+  } catch (e) { $('#rw-note').textContent = e.message; }
+}
+async function saveRewind(btn) {
+  btn.disabled = true;
+  try { await api('/api/settings', {method: 'POST', body: {rewind_base_url: $('#rw-base').value.trim()}}); await loadMeta(); toast('Address saved'); loadRewind(); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+}
+
+/* ───────────────────────── live refresh ───────────────────────── */
+async function poll() {
+  try {
+    const {stamp, serials, backup} = await api('/api/stamp');
+    showSerialStatus(serials); showBackupStatus(backup);
+    if (STAMP && stamp !== STAMP && !document.querySelector('.ov.on')) {
+      refreshList(); if (CURRENT && $('#drawer').classList.contains('on')) openJob(CURRENT.job.id);
+    }
+    STAMP = stamp;
+    if ($('#conn').textContent === 'Server not responding') loadMeta();
+  } catch (_) { const c = $('#conn'); c.textContent = 'Server not responding'; c.className = 'conn bad'; }
+}
+
+(async function start() {
+  try { await loadMeta(); await loadJobs(); loadFeed(); loadPriority(); } catch (e) { toast('Could not reach the server: ' + e.message, true); }
+  const deep = new URLSearchParams(location.search).get('job');               // /?job=<id> opens that job
+  if (deep && /^\d+$/.test(deep)) { history.replaceState(null, '', '/'); openJob(+deep); }
+  setInterval(poll, 15000); poll();
+})();
+</script>
+</body>
+</html>
