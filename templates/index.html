@@ -1585,7 +1585,7 @@ function updateSummary() {
     const s = dbSplit(total, per); rows.push(['DB files', s.map(fmt).join(' + ')]);
     if (s.length > 1 && s[s.length - 1] < per * 0.1) spill = `The last DB file only holds ${fmt(s[s.length - 1])} rows because overage pushed past ${fmt(per)}. Leave Qty per DB file blank for a single file.`;
   }
-  const cust = N('customer').value.trim();
+  const cust = isGo2() ? 'GO2' : N('customer').value.trim();
   if (cust) {
     const po = N('po').value.trim(), tk = N('ticket').value.trim();
     const d = new Date(); const ds = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.${String(d.getFullYear()).slice(2)}`;
