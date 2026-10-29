@@ -33,6 +33,8 @@ class JM:
         """(Re)import the app modules from this install."""
         for m in APP_MODULES:
             sys.modules.pop(m, None)
+        for m in [m for m in sys.modules if m == "proofing" or m.startswith("proofing.")]:
+            sys.modules.pop(m)
         sys.path.insert(0, self.root)
         try:
             self.config = importlib.import_module("config")
@@ -83,7 +85,7 @@ def jm(tmp_path):
     root = str(tmp_path / "app")
     shutil.copytree(SRC, root, ignore=shutil.ignore_patterns(
         "tests", ".git", "__pycache__", ".pytest_cache", "local.db*", "serial_registry",
-        "backups", "template_thumbnails", "config.ini"))
+        "backups", "template_thumbnails", "config.ini", "proofing_data"))
     h = JM(root)
     os.makedirs(h.customers)
     with open(os.path.join(root, "config.ini"), "w") as fh:
@@ -94,3 +96,5 @@ def jm(tmp_path):
     yield h
     for m in APP_MODULES:
         sys.modules.pop(m, None)
+    for m in [m for m in sys.modules if m == "proofing" or m.startswith("proofing.")]:
+        sys.modules.pop(m)
