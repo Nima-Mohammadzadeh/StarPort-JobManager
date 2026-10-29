@@ -20,6 +20,18 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
 
 - **Jobs**: open jobs, search, status, roll progress, a **Priority** card you can
   reorder, and a recent activity feed.
+- **Needs attention** (card on the Jobs page; the header shows the count from any page): open jobs
+  that are overdue, marked complete with rolls not done, due today or tomorrow and not started, on
+  hold, have a roll still in progress 12 hours after it was started, have every roll done but aren't
+  marked complete, are queued with no BarTender template in `Print\`, or have a missing job folder,
+  plus serial conflicts. Problems (red) come before things to look at (amber). Job folders are checked by
+  a background thread every 5 minutes, never while a page waits, so a slow Z: drive can't hold the
+  page up; **Check now** starts a check.
+- **On hold needs a reason**: putting a job on hold asks why (Material, Printer, Encoding, Data / file,
+  Customer, Quality, Scheduling, Other) and what it is waiting for. The reason shows on the job, the
+  roll tracking cards and the rewind page, can be changed while the job is held, and is cleared when
+  the job resumes (the activity log keeps it, with how long the job was held). Jobs that were on hold
+  before this show "no reason recorded" with an **Add a reason** button.
 - **New job**: Standard (UPC + serials) or **Special** (no UPC, nothing outside the
   normal process gets serials). Folder: `Customer\Label size\MM.DD.YY - <ticket>`.
 - **GO2 data sheet** (customer GO2 only): typing the customer as GO2 (any capitalization) switches

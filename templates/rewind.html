@@ -55,6 +55,10 @@ section[hidden]{display:none}
 .bar i{display:block;height:100%}
 .bar .d{background:var(--green)}.bar .r{background:#4F8FCB}
 .flag{margin-top:8px;font-size:14px;font-weight:700;color:var(--amber)}
+.hold{margin-top:8px;font-size:14px;font-weight:650;color:#5B4B8A}
+.hold.none{color:var(--amber)}
+.note.hold-n{background:#ECE8F5;border:1px solid #D4CCEC}
+.note.hold-n b.l{color:#5B4B8A}
 .empty{padding:40px 14px;text-align:center;color:var(--muted)}
 .jh{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
 .jh .cu{font-size:22px}
@@ -300,6 +304,7 @@ function drawList() {
       <div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span>${j.priority_rank ? `<span class="badge">#${j.priority_rank}</span>` : ''}${isNew ? '<span class="badge new">NEW</span>' : ''}<span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
       <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}${meta ? ' · ' + esc(meta) : ''}</div>
       ${j.roll_total ? `<div class="pr"><span class="bar"><i class="d" style="width:${pct}%"></i><i class="r" style="width:${run}%"></i></span><span>${j.roll_done} of ${j.roll_total} rolls done${j.roll_running ? ', ' + j.roll_running + ' in progress' : ''}</span></div>` : '<div class="pr">No rolls set up yet</div>'}
+      ${j.status === 'On Hold' ? `<div class="hold ${j.hold_reason ? '' : 'none'}">On hold: ${j.hold_reason ? esc(j.hold_reason) + (j.hold_note ? ', ' + esc(j.hold_note) : '') : 'no reason recorded'}</div>` : ''}
       ${j.important_count ? `<div class="flag">⚑ ${j.important_count} important note${j.important_count > 1 ? 's' : ''}</div>` : ''}
     </button>`; }).join('')
     : `<div class="empty">${q ? 'No jobs match that search.' : tab === 'running' ? 'No job is marked In Progress right now.<br><br><button class="chip" onclick="setTab(\'open\')">Show all open jobs</button>' : tab === 'open' ? 'No open jobs in encoding right now.' : 'No completed jobs.'}</div>`;
@@ -318,6 +323,7 @@ function drawJob() {
   const imp = notes.filter(n => n.important);
   $('#jhead').innerHTML = `<div class="jh"><div class="jt"><span class="tk" style="font-size:24px;font-weight:800">${esc(j.job_ticket || j.job_number)}</span>${j.priority_rank ? `<span class="badge">#${j.priority_rank}</span>` : ''}<span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
       <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div><div class="cl">${chips}</div></div>
+    ${j.status === 'On Hold' ? `<div class="note hold-n"><b class="l">On hold${j.hold_reason ? ': ' + esc(j.hold_reason) : ''}</b>${esc(j.hold_note || 'No reason was recorded.')}<small>${[j.hold_by, j.hold_since && 'since ' + when(j.hold_since)].filter(Boolean).map(esc).join(' · ')}</small></div>` : ''}
     ${imp.map(n => `<div class="note imp"><b class="l">Important${n.roll_number ? ' · roll ' + n.roll_number : ''}</b>${esc(n.body)}<small>${esc(n.author || '')} · ${when(n.created_at)}</small></div>`).join('')}
     ${j.ticket_notes ? `<div class="note tk"><b class="l" style="color:var(--muted)">Notes from the ticket</b>${esc(j.ticket_notes)}</div>` : ''}`;
   const f = S.rf;

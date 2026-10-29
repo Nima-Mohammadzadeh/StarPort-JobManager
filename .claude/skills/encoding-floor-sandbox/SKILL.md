@@ -46,10 +46,11 @@ python mock_demo/run_mock.py --reset    # delete demo data and re-seed
 
 | Ticket | State | Use it to check |
 |---|---|---|
-| 40121 Acme | In progress, roll 4 left with a note, important note | Left-in-progress display, notes, "who is on which roll" |
+| 40121 Acme | In progress, roll 4 left with a note (started 19 h ago), important note | Left-in-progress display, notes, "who is on which roll", "Roll left in progress" in Needs attention |
 | 40133 Northwind | 12 rolls, 8 done, 2 running | Long list scrolling, roll filter, auto-advance after Complete |
 | 40152 Fabrikam | All rolls done | "Mark job complete" prompt, done styling |
-| 40140 Contoso | On hold | On-hold tab, resume flow |
+| 40140 Contoso | On hold (Customer: waiting on artwork) | On-hold tab, hold banner, Change reason, resume flow |
+| 41007 Stark | On hold with no reason (as before reasons existed) | "No reason recorded" and Add a reason |
 | 40161 Tailspin, 40170 Initech | Queued (Initech is special, no UPC) | Queued tab, Start job, no-serial roll panel |
 
 ## Test pass for the roll tracking page

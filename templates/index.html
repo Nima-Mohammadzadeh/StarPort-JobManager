@@ -634,6 +634,46 @@ details.more p.d{margin:6px 0 0}
 .dwarn{border-radius:8px;padding:9px 12px;margin:6px 0;font-size:13.5px}
 .dwarn.bad{background:var(--red-soft);color:#7A2626}.dwarn.warn{background:var(--amber-soft);color:#6B4207}.dwarn.ok{background:var(--green-soft);color:#1F5A37}
 .dp-bk{margin-top:12px;font-size:13.5px;line-height:1.6;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+/* Hold reasons */
+.holdbox{display:flex;gap:10px;align-items:flex-start;background:var(--violet-soft);border:1px solid #D4CCEC;border-radius:8px;padding:9px 12px;margin:0 0 14px;font-size:13.5px;color:#2E2459}
+.holdbox .hb-main{flex:1;min-width:0}
+.holdbox b{color:var(--violet)}
+.holdbox .hb-meta{display:block;font-size:12px;color:#5D5683;margin-top:2px}
+.holdbox.none{background:var(--amber-soft);border-color:#EBC983;color:#6B4207}
+.holdbox.none b{color:var(--amber)}
+.w-hold{padding:0 18px}.w-hold .holdbox{margin:12px 0 0}
+.holdline{display:block;font-size:12px;color:var(--violet);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.holdline.none{color:var(--amber)}
+.hold-sub{font-size:11.5px;color:var(--violet);margin-top:2px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.reasons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.reasons button{border:1px solid var(--line-strong);background:#fff;border-radius:7px;padding:7px 10px;text-align:left;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink)}
+.reasons button small{display:block;color:var(--muted);font-size:11.5px;font-weight:400;margin-top:1px}
+.reasons button:hover{border-color:var(--violet)}
+.reasons button.on{border-color:var(--violet);background:var(--violet-soft);box-shadow:inset 0 0 0 1px var(--violet)}
+.reasons-l{font-size:13px;color:var(--muted);font-weight:500;margin-bottom:6px}
+/* Needs attention */
+.acard{max-height:360px;transition:box-shadow .3s}
+.acard.flash{box-shadow:0 0 0 3px var(--accent)}
+.acard .pc-count.bad{color:var(--red);font-weight:650}
+.a-filters{display:flex;flex-wrap:wrap;gap:4px;padding:7px 10px 3px}
+.a-filters:empty{display:none}
+.a-filters button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:1px 8px;font-size:11.5px;cursor:pointer;color:var(--muted)}
+.a-filters button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.a-list{overflow:auto;padding:2px 0}
+.ai{display:block;width:100%;text-align:left;background:none;border:0;border-left:3px solid #E0A93B;border-bottom:1px solid #EEF1F1;padding:7px 12px 7px 10px;font-size:13px;line-height:1.35;color:inherit}
+button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
+.ai.bad{border-left-color:var(--red)}
+.ai .t b{font-size:13.5px;color:#0A1417}
+.ai .t span{color:var(--muted);font-size:12px}
+.ai .is{display:block;margin-top:2px}
+.ai .is i{font-style:normal;font-weight:650;font-size:11.5px;margin-right:5px;color:var(--amber)}
+.ai .is.bad i{color:var(--red)}
+.ai .is span{color:#3A4A4E;font-size:12.5px}
+.a-empty{padding:12px;color:var(--green);font-size:13px;font-weight:600}
+.a-foot{padding:5px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.a-foot button{background:none;border:0;color:var(--accent);cursor:pointer;font-size:11.5px;padding:0;margin-left:auto}
+.conn.attn{cursor:pointer;font-weight:600;color:var(--amber)}
+.conn.attn.bad{color:var(--red)}
 </style>
 </head>
 <body>
@@ -658,6 +698,7 @@ details.more p.d{margin:6px 0 0}
   <span class="crumb" id="crumb">Jobs</span>
   <div class="hdr-right">
     <span class="conn" id="conn">Connecting…</span>
+    <span class="conn attn" id="attn-status" role="button" tabindex="0" title="Jobs that need attention" onclick="showAttention()" onkeydown="if(event.key==='Enter')showAttention()" hidden></span>
     <span class="conn" id="serial-status" role="button" tabindex="0" title="Serial records" onclick="openSerialTool()"></span>
     <span class="conn" id="backup-status" role="button" tabindex="0" title="Backups: open Settings" onclick="showView('settings')" hidden></span>
     <button class="btn hide-sm" onclick="openBatch()">Batch add</button>
@@ -695,6 +736,12 @@ details.more p.d{margin:6px 0 0}
         <tbody id="jobs-body"></tbody>
       </table></div>
       <div class="side">
+      <section class="pcard acard" id="attn-card" aria-label="Needs attention">
+        <div class="pc-head"><h2>Needs attention</h2><span class="pc-count" id="attn-count"></span></div>
+        <div class="a-filters" id="attn-filters" role="group" aria-label="Show"></div>
+        <div class="a-list" id="attn-list"><div class="a-empty" style="color:var(--muted)">Checking…</div></div>
+        <div class="a-foot" id="attn-foot"></div>
+      </section>
       <section class="pcard" aria-label="Priority list">
         <div class="pc-head"><h2>Priority</h2><span class="pc-count" id="pc-count"></span>
           <input class="i pc-add" id="pc-add" list="dl-openjobs" placeholder="Add a ticket…" autocomplete="off"
@@ -1046,6 +1093,16 @@ details.more p.d{margin:6px 0 0}
   <div class="m-foot"><span class="msg" id="nm-msg"></span><button class="btn" id="nm-cancel">Cancel</button><button class="btn primary" id="nm-ok">OK</button></div>
 </div></div>
 
+<!-- Putting a job on hold: why, and what it is waiting for -->
+<div class="ov" id="ov-hold"><div class="modal narrow">
+  <div class="m-head"><h2 id="hd-title">Put job on hold</h2></div>
+  <div class="m-body stack"><p id="hd-sub" style="margin:0;color:var(--muted);font-size:13.5px"></p>
+    <div><div class="reasons-l" id="hd-rl">Why is it on hold?</div><div class="reasons" id="hd-reasons" role="radiogroup" aria-labelledby="hd-rl"></div></div>
+    <label class="f">What is it waiting for?<input class="i" id="hd-note" maxlength="300" autocomplete="off" placeholder="e.g. Monza R6 inlays, due Thursday"></label>
+    <label class="f">Your name<input class="i" id="hd-name" list="dl-names" maxlength="40" autocomplete="off"></label></div>
+  <div class="m-foot"><span class="msg" id="hd-msg" role="alert"></span><button class="btn" id="hd-cancel">Cancel</button><button class="btn primary" id="hd-ok">Put on hold</button></div>
+</div></div>
+
 <!-- Serial registry offline: confirm before creating -->
 <div class="ov" id="ov-offline"><div class="modal narrow">
   <div class="m-head"><h2>Serial registry offline</h2></div>
@@ -1130,7 +1187,7 @@ function showView(v) {
   if (v === 'jobs') loadJobs();
   if (v === 'archive') loadArchive();
   if (v === 'rolls') loadFloor();
-  if (v === 'jobs') { loadFeed(); loadPriority(); }
+  if (v === 'jobs') { loadFeed(); loadPriority(); loadAttention(); }
   if (v === 'tools') loadTools();
   if (v === 'templates') loadTemplates();
   if (v === 'settings') loadSettings();
@@ -1162,7 +1219,8 @@ function renderJobs() {
       <td class="num data">${fmt(j.quantity)}</td>
       <td class="nw">${dueHtml(j, today)}</td>
       <td>${strip(j.roll_done, j.roll_total, (j.roll_running || 0) + (j.roll_paused || 0))}</td>
-      <td class="c-stat"><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td>
+      <td class="c-stat"><span class="pill ${stc(j.status)}">${esc(j.status)}</span>${j.status === 'On Hold'
+        ? `<div class="hold-sub" title="${esc(j.hold_reason ? j.hold_reason + ': ' + (j.hold_note || '') : 'No hold reason recorded')}">${esc(j.hold_reason || 'No reason')}</div>` : ''}</td>
       <td class="hide-lg sub nw">${day(j.created_at)}</td>
     </tr>`;
   if (!rows.length) {
@@ -1354,7 +1412,7 @@ function renderDrawer(keepRoll) {
     </div>`;
 
   const kv = (k, v, cls = '') => `<div><dt>${k}</dt><dd class="${cls}">${v === '' || v == null ? '—' : v}</dd></div>`;
-  let h = '';
+  let h = holdHtml(j, 'drawer');
   if (j.folder_path && !folder_exists) h += `<div class="warnbox">The job folder can't be reached from the server right now.</div>`;
 
   h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">${j.data_sheet ? 'No UPC, ' + esc((sheetDef(j.data_sheet) || {customer: ''}).customer) + ' data sheet' : 'No UPC, no serials'}</span></h3><dl class="kv">
@@ -1419,10 +1477,11 @@ function groupFiles(files, id, folder) {
   return h;
 }
 async function setStatus(s) {
-  let who = '';
+  let who = '', hold = {};
   if (s === 'Complete') { who = await askName('Who is completing this job?', `${CURRENT.job.customer}, ticket ${CURRENT.job.job_ticket || CURRENT.job.job_number}`); if (!who) { openJob(CURRENT.job.id); return; } }
-  try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body: {status: s, operator: who}}); toast(`Status set to ${s}`); openJob(CURRENT.job.id); refreshList(); }
-  catch (e) { toast(e.message, true); }
+  if (s === 'On Hold') { hold = await askHold(CURRENT.job); if (!hold) { openJob(CURRENT.job.id); return; } who = hold.operator; }
+  try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body: {...hold, status: s, operator: who}}); toast(`Status set to ${s}`); openJob(CURRENT.job.id); refreshList(); }
+  catch (e) { toast(e.message, true); openJob(CURRENT.job.id); }
 }
 async function archiveJob(undo) {
   try {
@@ -1456,6 +1515,7 @@ async function regenerate(btn) {
   catch (e) { toast(e.message, true); btn.disabled = false; }
 }
 function refreshList() {
+  loadAttention();
   if ($('#v-jobs').classList.contains('on')) { loadJobs(); loadFeed(); loadPriority(); }
   else if ($('#v-archive').classList.contains('on')) loadArchive();
   else if ($('#v-rolls').classList.contains('on')) loadFloor();
@@ -1484,7 +1544,10 @@ function closeOv(id) { $('#' + id).classList.remove('on'); }
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const open = [...document.querySelectorAll('.ov.on')].pop();
-  if (open) open.classList.remove('on'); else if ($('#drawer').classList.contains('on')) closeDrawer();
+  // The two prompts that something is waiting on must answer "cancelled", not just disappear.
+  if (open && open.id === 'ov-hold') hdDone(false);
+  else if (open && open.id === 'ov-name') nmDone(false);
+  else if (open) open.classList.remove('on'); else if ($('#drawer').classList.contains('on')) closeDrawer();
 });
 
 /* ───────────────────────── new job ───────────────────────── */
@@ -2033,6 +2096,102 @@ $('#nm-ok').onclick = () => nmDone(true);
 $('#nm-cancel').onclick = () => nmDone(false);
 $('#nm-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nmDone(true); } if (e.key === 'Escape') { e.stopPropagation(); nmDone(false); } });
 
+/* ───────────────────────── on hold: why, and what it is waiting for ───────────────────────── */
+const HOLD_HINT = {'Material': 'Inlays, label stock, ribbon', 'Printer': 'Printer or encoder down', 'Encoding': 'Tags failing, wrong data',
+  'Data / file': 'Database, UPC list, art file', 'Customer': 'Approval, changes, paused order', 'Quality': 'QC check or rework',
+  'Scheduling': 'Bumped by other work', 'Other': 'Say what in the note'};
+let HD_RESOLVE = null, HD_REASON = '';
+// Resolves to {hold_reason, hold_note, operator} or null. Pass the job; for a job already on hold its reason is filled in.
+function askHold(j) {
+  return new Promise(resolve => {
+    const held = j.status === 'On Hold', reasons = (META && META.hold_reasons) || Object.keys(HOLD_HINT);
+    HD_REASON = (held && j.hold_reason) || '';
+    $('#hd-title').textContent = held ? 'Why is this job on hold?' : 'Put job on hold';
+    $('#hd-ok').textContent = held ? 'Save' : 'Put on hold';
+    $('#hd-sub').textContent = `${j.customer}, ticket ${j.job_ticket || j.job_number}`;
+    $('#hd-reasons').innerHTML = reasons.map(r => `<button type="button" role="radio" aria-checked="${r === HD_REASON}" class="${r === HD_REASON ? 'on' : ''}"
+      data-r="${esc(r)}">${esc(r)}${HOLD_HINT[r] ? `<small>${esc(HOLD_HINT[r])}</small>` : ''}</button>`).join('');
+    $('#hd-note').value = (held && j.hold_note) || ''; $('#hd-name').value = operator(); $('#hd-msg').textContent = '';
+    HD_RESOLVE = resolve; openOv('ov-hold');
+    setTimeout(() => (HD_REASON ? $('#hd-note') : $('#hd-reasons button')).focus(), 30);
+  });
+}
+$('#hd-reasons').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; HD_REASON = b.dataset.r;
+  document.querySelectorAll('#hd-reasons button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+  $('#hd-msg').textContent = ''; $('#hd-note').focus();
+});
+function hdDone(ok) {
+  let out = null;
+  if (ok) {
+    const note = $('#hd-note').value.trim(), who = $('#hd-name').value.trim();
+    const miss = !HD_REASON ? 'Choose why it is on hold' : note.length < 3 ? 'Say what it is waiting for' : !who ? 'Enter your name' : '';
+    if (miss) { $('#hd-msg').textContent = miss; return; }
+    localStorage.setItem('jm_operator', who); out = {hold_reason: HD_REASON, hold_note: note, operator: who};
+  }
+  closeOv('ov-hold'); const r = HD_RESOLVE; HD_RESOLVE = null; if (r) r(out);
+}
+$('#hd-ok').onclick = () => hdDone(true);
+$('#hd-cancel').onclick = () => hdDone(false);
+$('#ov-hold').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); hdDone(false); }
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); hdDone(true); }
+});
+function holdHtml(j, where) {
+  if (j.status !== 'On Hold') return '';
+  const span = j.hold_since ? (() => { const m = Math.max(0, (Date.now() - new Date(j.hold_since.replace(' ', 'T'))) / 6e4);
+    return m < 1 ? 'under a minute' : m < 60 ? `${Math.floor(m)} min` : m < 2880 ? `${Math.floor(m / 60)} h` : `${Math.floor(m / 1440)} days`; })() : '';
+  const recent = j.hold_since && (Date.now() - new Date(j.hold_since.replace(' ', 'T'))) < 36e5;
+  const since = !j.hold_since ? '' : recent ? ago(j.hold_since) : `since ${ago(j.hold_since)} (${span})`;
+  const btn = `<button class="btn sm" onclick="changeHold('${where}')">${j.hold_reason ? 'Change reason' : 'Add a reason'}</button>`;
+  if (!j.hold_reason) return `<div class="holdbox none"><div class="hb-main"><b>On hold</b>. No reason was recorded.<span class="hb-meta">${since}</span></div>${btn}</div>`;
+  return `<div class="holdbox"><div class="hb-main"><b>On hold: ${esc(j.hold_reason)}</b> · ${esc(j.hold_note || '')}
+    <span class="hb-meta">${[j.hold_by && 'by ' + esc(j.hold_by), since].filter(Boolean).join(', ')}</span></div>${btn}</div>`;
+}
+async function changeHold(where) {
+  const j = where === 'work' ? WORK.job : CURRENT.job;
+  const h = await askHold(j); if (!h) return;
+  try {
+    await api('/api/jobs/' + j.id, {method: 'PATCH', body: h}); toast('Hold reason saved');
+    if (where === 'work') { await openWork(j.id); loadFloor(true); loadAttention(); } else { openJob(j.id); refreshList(); }
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ───────────────────────── needs attention ───────────────────────── */
+/* Open jobs with something wrong (red) or waiting on someone (amber), worked out by the server. The list sits
+   above Priority on the Jobs page; the header shows the count from any page. */
+let ATTN = null, ATTN_FILTER = 'all';
+async function loadAttention(refresh) {
+  try { ATTN = await api('/api/attention' + (refresh ? '?refresh=1' : '')); } catch (_) { return; }
+  renderAttention();
+}
+function renderAttention() {
+  const a = ATTN; if (!a) return;
+  const n = a.items.length + a.global.length, chip = $('#attn-status');
+  chip.hidden = !n; chip.className = 'conn attn' + (a.bad ? ' bad' : '');
+  chip.textContent = `${n} need${n === 1 ? 's' : ''} attention`;
+  const cnt = $('#attn-count'); cnt.className = 'pc-count' + (a.bad ? ' bad' : '');
+  cnt.textContent = n ? (a.bad ? `${a.bad} problem${a.bad === 1 ? '' : 's'}, ${n} in all` : `${n}`) : '';
+  const present = a.kinds.filter(k => a.counts[k.kind]);          // in order: problems first
+  if (ATTN_FILTER !== 'all' && !present.some(k => k.kind === ATTN_FILTER)) ATTN_FILTER = 'all';
+  $('#attn-filters').innerHTML = present.length > 1 ? [['all', 'All', a.items.length], ...present.map(k => [k.kind, k.label, a.counts[k.kind]])]
+    .map(([k, l, c]) => `<button class="${k === ATTN_FILTER ? 'on' : ''}" aria-pressed="${k === ATTN_FILTER}" onclick="ATTN_FILTER='${k}';renderAttention()">${esc(l)} ${c}</button>`).join('') : '';
+  const isHtml = i => `<span class="is ${i.level}"><i>${esc(i.label)}</i><span>${esc(i.detail)}</span></span>`;
+  const glob = ATTN_FILTER === 'all' ? a.global.map(g => g.kind === 'serial_conflict'
+    ? `<button class="ai ${g.level}" onclick="openSerialTool()">${isHtml(g)}</button>` : `<div class="ai ${g.level}">${isHtml(g)}</div>`) : [];
+  const rows = a.items.filter(it => ATTN_FILTER === 'all' || it.issues.some(i => i.kind === ATTN_FILTER)).slice(0, 80).map(it => {
+    const j = it.job, iss = ATTN_FILTER === 'all' ? it.issues : it.issues.filter(i => i.kind === ATTN_FILTER);
+    return `<button class="ai ${it.level}" onclick="openJob(${j.id})"><span class="t"><b>${esc(j.job_ticket || j.job_number)}</b> <span>${esc(j.customer)} · ${esc(j.title)}</span></span>${iss.map(isHtml).join('')}</button>`;
+  });
+  $('#attn-list').innerHTML = glob.concat(rows).join('') || '<div class="a-empty">✓ Nothing needs attention.</div>';
+  $('#attn-foot').innerHTML = `<span>${a.folders_checked_at ? 'Job folders checked ' + esc(ago(a.folders_checked_at)) : 'Job folders not checked yet'}</span>
+    <button onclick="loadAttention(true);setTimeout(loadAttention,2500)">Check now</button>`;
+}
+function showAttention() {
+  if (!$('#v-jobs').classList.contains('on')) showView('jobs');
+  const c = $('#attn-card'); c.scrollIntoView({block: 'nearest'}); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1200);
+}
+
 /* ───────────────────────── roll tracking page ───────────────────────── */
 let FLOOR = [], FLOOR_FILTER = 'running', WORK = null, WORK_ROLL = null, ROLL_FILTER = 'all', RECS = {}; const VERIFY = {};
 let PRINTERS = {printers: [], busy: []};
@@ -2056,6 +2215,8 @@ function renderFloor() {
     return `<button class="fc ${WORK && WORK.job.id === j.id ? 'on' : ''}" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}" onclick="openWork(${j.id})">
       <div class="t"><b>${esc(j.customer)}</b><span class="pill ${stc(j.status)}">${esc(j.status)}</span></div>
       <div class="c"><span class="data">${esc(j.job_ticket || j.job_number)}</span><span class="s"> · ${esc(j.title)}</span></div>
+      ${j.status === 'On Hold' ? (j.hold_reason ? `<span class="holdline" title="${esc(j.hold_note || '')}">On hold: ${esc(j.hold_reason)}${j.hold_note ? ', ' + esc(j.hold_note) : ''}</span>`
+                                                : '<span class="holdline none">On hold, no reason recorded</span>') : ''}
       <div class="p"><span class="bar"><i style="width:${pct}%"></i><i class="r" style="width:${j.roll_total ? ((j.running_rolls ? j.running_rolls.split(',').length : 0) + (j.paused_count || 0)) / j.roll_total * 100 : 0}%"></i></span>${j.roll_done} of ${j.roll_total} done${j.due_date ? ` · due ${esc(j.due_date)}` : ''}</div>
       ${j.running_rolls ? `<div class="runners">${esc(runnersText(j.running_rolls))}</div>` : ''}${j.paused_count ? `<div class="runners">${j.paused_count} left in progress</div>` : ''}
       ${j.important_count ? `<span class="flag">${j.important_count} important note${j.important_count > 1 ? 's' : ''}</span>` : ''}
@@ -2227,6 +2388,7 @@ function renderWork() {
         <button class="btn" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
         <button class="btn quiet" onclick="openJob(${j.id})">Job details</button></div>${copyBtns}</div>
     </div>
+    ${j.status === 'On Hold' ? `<div class="w-hold">${holdHtml(j, 'work')}</div>` : ''}
     ${impHtml || tkHtml ? `<div class="w-top ${impHtml && tkHtml ? 'two' : ''}">${impHtml}${tkHtml}</div>` : ''}
     <div class="w-body2">
       <div class="w-rolls">${listHtml}</div>
@@ -2383,10 +2545,11 @@ function rangesText(nums) {
   return out.join(', ');
 }
 async function workStatus(s) {
-  let who = '';
+  let who = '', hold = {};
   if (s === 'Complete') { who = await askName('Who is completing this job?', `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}`); if (!who) return; }
-  try { await api('/api/jobs/' + WORK.job.id, {method: 'PATCH', body: {status: s, operator: who}}); toast(`Status set to ${s}`);
-    await openWork(WORK.job.id); loadFloor(true); }
+  if (s === 'On Hold') { hold = await askHold(WORK.job); if (!hold) return; who = hold.operator; }
+  try { await api('/api/jobs/' + WORK.job.id, {method: 'PATCH', body: {...hold, status: s, operator: who}}); toast(`Status set to ${s}`);
+    await openWork(WORK.job.id); loadFloor(true); loadAttention(); }
   catch (e) { toast(e.message, true); }
 }
 async function loadJobHistory(id) {
@@ -2651,8 +2814,9 @@ async function poll() {
 }
 
 (async function start() {
-  try { await loadMeta(); await loadJobs(); loadFeed(); loadPriority(); } catch (e) { toast('Could not reach the server: ' + e.message, true); }
+  try { await loadMeta(); await loadJobs(); loadFeed(); loadPriority(); loadAttention(); } catch (e) { toast('Could not reach the server: ' + e.message, true); }
   setInterval(poll, 15000); poll();
+  setInterval(loadAttention, 120000);       // overdue and left-in-progress change with the clock, not only with edits
 })();
 </script>
 </body>

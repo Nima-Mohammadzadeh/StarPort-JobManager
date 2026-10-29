@@ -24,7 +24,7 @@ import threading
 import subprocess
 import io
 from html import escape
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request, send_file, abort, Response
 
@@ -45,6 +45,8 @@ from lists import CUSTOMERS, LABEL_SIZES
 APP_VERSION = "3.3"
 DEFAULT_TEMPLATE_DIR = r"Z:\3 Encoding and Printing Files\Master Templates"
 STATUSES    = ["Pending", "In Progress", "On Hold", "Complete", "Cancelled"]
+# Why a job is on hold. Asked every time a job goes on hold (see api_job_edit).
+HOLD_REASONS = ["Material", "Printer", "Encoding", "Data / file", "Customer", "Quality", "Scheduling", "Other"]
 JUNK_PO     = {"0", "00", "000", "na", "n/a", "none", "-", "--", "tbd", "x"}
 EDITABLE    = ["title", "job_ticket", "customer", "status", "due_date", "notes",
                "inlay_type", "part_number", "po_number", "label_size"]
@@ -140,6 +142,13 @@ def init_db():
     add_col("jobs", "created_by", "created_by TEXT")
     add_col("jobs", "completed_at", "completed_at TEXT")
     add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
+    for col in ("hold_reason", "hold_note", "hold_since", "hold_by"):   # set while a job is On Hold
+        add_col("jobs", col, f"{col} TEXT")
+    # Jobs already on hold before reasons were asked: they have no reason, but use when they were put on hold.
+    cur.execute("""UPDATE jobs SET hold_since = COALESCE(
+                       (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
+                          AND a.message LIKE '%set to On Hold%'), updated_at)
+                   WHERE status = 'On Hold' AND hold_since IS NULL""")
     # Jobs already marked Complete before this column existed: use when they were set to Complete.
     cur.execute("""UPDATE jobs SET completed_at = COALESCE(
                        (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
@@ -623,7 +632,7 @@ def api_meta():
         "z_reachable": os.path.isdir(Z_DRIVE_BASE), "z_shared": not Z_IS_DEFAULT,
         "customers": _dedupe(CUSTOMERS + hist_c + _customer_folders()),
         "label_sizes": _dedupe(LABEL_SIZES + hist_s),
-        "inlays": _dedupe(inlays), "statuses": STATUSES,
+        "inlays": _dedupe(inlays), "statuses": STATUSES, "hold_reasons": HOLD_REASONS,
         "names": _recent_names(), "serials": {**SS.health(), "registry_gaps": _registry_gap_count["n"]},
         "settings": get_settings(), "backup": backup_health(),
         "data_sheets": [{"key": k, "customer": c["customer"], "label": c["label"], "detail": c["detail"],
@@ -814,8 +823,34 @@ def api_job_detail(job_id):
                     "folder_exists": bool(job["folder_path"] and os.path.isdir(job["folder_path"]))})
 
 
+def _hold_input(data) -> tuple:
+    """(reason, note) for putting a job on hold, or ValueError saying what is missing."""
+    reason = " ".join(str(data.get("hold_reason") or "").split())
+    note = " ".join(str(data.get("hold_note") or "").split())[:300]
+    match = next((r for r in HOLD_REASONS if r.lower() == reason.lower()), None)
+    if not match:
+        raise ValueError("Choose why the job is on hold.")
+    if len(note) < 3:
+        raise ValueError("Say what the job is waiting for.")
+    return match, note
+
+
+def _span(ts) -> str:
+    """How long ago a 'YYYY-MM-DD HH:MM:SS' time was, in words: 'under a minute', '25 min', '3 h', '2 days'."""
+    try:
+        mins = max(0, int((datetime.now() - datetime.strptime(str(ts)[:19], "%Y-%m-%d %H:%M:%S")).total_seconds() // 60))
+    except (TypeError, ValueError):
+        return ""
+    if mins < 1:
+        return "under a minute"
+    return f"{mins} min" if mins < 60 else f"{mins // 60} h" if mins < 48 * 60 else f"{mins // 1440} days"
+
+
 @app.route("/api/jobs/<int:job_id>", methods=["PATCH"])
 def api_job_edit(job_id):
+    """Edit a job. Putting it On Hold needs hold_reason (one of HOLD_REASONS) and hold_note; while
+    it is on hold the two can be changed on their own. Leaving On Hold clears them (the activity
+    log keeps what they were)."""
     data = request.get_json(silent=True) or {}
     if "status" in data and data["status"] not in STATUSES:
         return err("Unknown status")
@@ -826,37 +861,65 @@ def api_job_edit(job_id):
             if f in ("title", "customer") and not v:
                 return err(f"{f.title()} can't be empty")
             sets.append(f"{f}=?"); vals.append(v or None)
-    if not sets:
+    hold_fields = "hold_reason" in data or "hold_note" in data
+    if not sets and not hold_fields:
         return err("Nothing to update")
-    sets.append("updated_at=?"); vals += [now_str(), job_id]
     conn = get_db()
     before = _load_job(conn, job_id)
+    if not before:
+        conn.close(); return err("Job not found", 404)
     who = (data.get("operator") or "").strip()[:40] or actor()
-    if before:
-        new_ticket = (data["job_ticket"] if "job_ticket" in data else before.get("job_ticket")) or ""
-        new_status = data.get("status", before["status"])
-        changed = ("job_ticket" in data and new_ticket.strip().lower() != (before.get("job_ticket") or "").strip().lower()) \
-                  or (before["status"] == "Cancelled" and new_status != "Cancelled")
-        if changed and new_status != "Cancelled":
-            same = _same_ticket(conn, new_ticket, exclude_id=job_id)
-            if same:
-                conn.close()
-                return err(f"Ticket {new_ticket.strip()} already belongs to {', '.join(j['job_number'] for j in same)}. "
-                           "Two jobs can't share a ticket.", 409)
-    cur = conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", vals)
-    if before:
-        if "status" in data and data["status"] != before["status"]:
-            log_activity(conn, "status", job_id, f"{job_label(before)} set to {data['status']}", who)
-            conn.execute("UPDATE jobs SET completed_at=? WHERE id=?",
-                         (now_str() if data["status"] == "Complete" else None, job_id))
-        changed = [f.replace("_", " ") for f in EDITABLE if f != "status" and f in data
-                   and (data[f] or None) != (before.get(f) or None)]
-        if changed:
-            log_activity(conn, "edited", job_id, f"{job_label(before)}: changed {', '.join(changed)}")
+    new_status = data.get("status", before["status"])
+    new_ticket = (data["job_ticket"] if "job_ticket" in data else before.get("job_ticket")) or ""
+    changed = ("job_ticket" in data and new_ticket.strip().lower() != (before.get("job_ticket") or "").strip().lower()) \
+              or (before["status"] == "Cancelled" and new_status != "Cancelled")
+    if changed and new_status != "Cancelled":
+        same = _same_ticket(conn, new_ticket, exclude_id=job_id)
+        if same:
+            conn.close()
+            return err(f"Ticket {new_ticket.strip()} already belongs to {', '.join(j['job_number'] for j in same)}. "
+                       "Two jobs can't share a ticket.", 409)
+
+    was_held, held = before["status"] == "On Hold", new_status == "On Hold"
+    hold = None
+    if held and (not was_held or hold_fields):
+        given = data if not was_held else {"hold_reason": data.get("hold_reason", before.get("hold_reason")),
+                                           "hold_note": data.get("hold_note", before.get("hold_note"))}
+        try:
+            hold = _hold_input(given)
+        except ValueError as e:
+            conn.close(); return err(str(e))
+    elif hold_fields and not sets:
+        conn.close(); return err("This job isn't on hold.")
+
+    ts = now_str()
+    sets.append("updated_at=?"); vals.append(ts)
+    if hold and not was_held:
+        sets += ["hold_reason=?", "hold_note=?", "hold_since=?", "hold_by=?"]; vals += [*hold, ts, who]
+    elif hold:
+        sets += ["hold_reason=?", "hold_note=?"]; vals += list(hold)
+    elif was_held and not held:
+        sets += ["hold_reason=NULL", "hold_note=NULL", "hold_since=NULL", "hold_by=NULL"]
+    conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", vals + [job_id])
+
+    if "status" in data and data["status"] != before["status"]:
+        msg = f"{job_label(before)} set to {data['status']}"
+        if hold:
+            msg += f": {hold[0]}, {hold[1]}"
+        if was_held:
+            span = _span(before.get("hold_since"))
+            msg += f" (was on hold{' ' + span if span else ''}{' for ' + before['hold_reason'] if before.get('hold_reason') else ''})"
+        log_activity(conn, "status", job_id, msg, who)
+        conn.execute("UPDATE jobs SET completed_at=? WHERE id=?",
+                     (ts if data["status"] == "Complete" else None, job_id))
+    elif hold and was_held and hold != (before.get("hold_reason"), before.get("hold_note")):
+        log_activity(conn, "hold", job_id, f"{job_label(before)}: on hold for {hold[0]}, {hold[1]}", who)
+    changed = [f.replace("_", " ") for f in EDITABLE if f != "status" and f in data
+               and (data[f] or None) != (before.get(f) or None)]
+    if changed:
+        log_activity(conn, "edited", job_id, f"{job_label(before)}: changed {', '.join(changed)}")
     conn.commit()
     job = _load_job(conn, job_id); conn.close()
-    if not cur.rowcount:
-        return err("Job not found", 404)
     return jsonify({"success": True, "job": job})
 
 
@@ -1141,7 +1204,8 @@ def api_floor():
     conn = get_db()
     rows = [dict(r) for r in conn.execute(f"""
         SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.due_date,
-               j.label_size, j.inlay_type, j.upc, j.created_at, j.notes, {ROLL_SUMMARY},
+               j.label_size, j.inlay_type, j.upc, j.created_at, j.notes,
+               j.hold_reason, j.hold_note, j.hold_since, j.hold_by, {ROLL_SUMMARY},
                (SELECT MIN(roll_number) FROM job_rolls r WHERE r.job_id=j.id AND r.status='pending') AS next_roll,
                (SELECT GROUP_CONCAT(roll_number || ':' || COALESCE(started_by, '') || ':' || COALESCE(printer, ''), ',') FROM job_rolls r
                   WHERE r.job_id=j.id AND r.status='running') AS running_rolls,
@@ -1255,7 +1319,7 @@ h1{{font-size:44pt;margin:.1in 0 0}}p.s{{font-size:18pt;margin:.05in 0 .25in;col
 
 _REWIND_FIELDS = """j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.job_type, j.upc, j.label_size,
     j.inlay_type, j.quantity, j.lpr, j.overage_pct, j.due_date, j.part_number, j.po_number, j.created_at,
-    j.updated_at, j.priority_rank"""
+    j.updated_at, j.priority_rank, j.hold_reason, j.hold_note, j.hold_since, j.hold_by"""
 
 
 @app.route("/api/rewind/jobs")
@@ -2551,6 +2615,190 @@ def api_serials_check(upc):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Needs attention: open jobs with something wrong or waiting on someone
+# ══════════════════════════════════════════════════════════════════════════════
+ATTN_STALE_ROLL_HOURS = 12      # a roll still in progress this long after it was started was probably left open
+ATTN_FOLDER_EVERY = 300         # seconds between background checks of the job folders on the share
+# kind: (level, label, sort order). bad = something is wrong; warn = needs someone to look.
+ATTN_KINDS = {
+    "serial_conflict":     ("bad",  "Serial conflict", 0),
+    "folder_missing":      ("bad",  "Job folder missing", 1),
+    "overdue":             ("bad",  "Overdue", 2),
+    "complete_open_rolls": ("bad",  "Complete, rolls not done", 3),
+    "due_soon":            ("warn", "Due soon, not started", 4),
+    "on_hold":             ("warn", "On hold", 5),
+    "stale_rolls":         ("warn", "Roll left in progress", 6),
+    "rolls_done":          ("warn", "All rolls done", 7),
+    "no_template":         ("warn", "No template", 8),
+}
+
+# Job folders live on the share. Requests never look at them: a background thread does, every
+# ATTN_FOLDER_EVERY seconds, and requests read the last result, so a slow or dropped share can't
+# hold up the page.
+_folders = {"at": None, "base_ok": None, "jobs": {}, "busy": False, "error": None}
+_folders_lock = threading.Lock()
+
+
+def check_job_folders() -> bool:
+    """Look at every open job's folder: does it exist, and is there a .btw in its Print folder?
+    Returns False without doing anything if a check is already running."""
+    with _folders_lock:
+        if _folders["busy"]:
+            return False
+        _folders["busy"] = True
+    try:
+        conn = get_db()
+        rows = conn.execute("""SELECT id, folder_path FROM jobs WHERE archived_at IS NULL AND status != 'Cancelled'
+                               AND folder_path IS NOT NULL AND folder_path != ''""").fetchall()
+        conn.close()
+        base_ok, jobs = os.path.isdir(Z_DRIVE_BASE), {}
+        if base_ok:
+            for r in rows:
+                exists, btw = os.path.isdir(r["folder_path"]), False
+                if exists:
+                    try:
+                        btw = any(e.name.lower().endswith(".btw") and e.is_file()
+                                  for e in os.scandir(os.path.join(r["folder_path"], "Print")))
+                    except OSError:
+                        pass
+                jobs[r["id"]] = {"exists": exists, "btw": btw}
+        _folders.update(at=now_str(), base_ok=base_ok, jobs=jobs, error=None)
+    except Exception as e:
+        _folders.update(error=str(e))
+    finally:
+        _folders["busy"] = False
+    return True
+
+
+def start_folder_watch():
+    def run():
+        while True:
+            check_job_folders()
+            time.sleep(ATTN_FOLDER_EVERY)
+    threading.Thread(target=run, daemon=True, name="folder-watch").start()
+
+
+def _due(s):
+    """A due date as typed (YYYY-MM-DD, or MM/DD/YY or MM/DD/YYYY, as the Jobs list reads them), or None."""
+    s = (s or "").strip()
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        y, mo, d = (int(x) for x in m.groups())
+    else:
+        m = re.fullmatch(r"(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})", s)
+        if not m:
+            return None
+        mo, d, y = int(m[1]), int(m[2]), int(m[3])
+        y += 2000 if y < 100 else 0
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
+def attention(conn, today=None) -> dict:
+    """Every open job with at least one issue, worst first, plus issues that aren't about one job.
+    Reads the database and the last background folder check only (see check_job_folders)."""
+    today = today or date.today()
+    stale_before = (datetime.now() - timedelta(hours=ATTN_STALE_ROLL_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    jobs = {r["id"]: dict(r) for r in conn.execute(f"""
+        SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.due_date, j.upc, j.job_type,
+               j.template_path, j.folder_path, j.hold_reason, j.hold_note, j.hold_since, j.hold_by, {ROLL_SUMMARY}
+        FROM jobs j WHERE j.archived_at IS NULL AND j.status != 'Cancelled'""")}
+    issues = {jid: [] for jid in jobs}
+    glob = []
+
+    def add(jid, kind, detail):
+        level, label, _ = ATTN_KINDS[kind]
+        (issues[jid] if jid is not None else glob).append({"kind": kind, "level": level, "label": label, "detail": detail})
+
+    folders = dict(_folders)
+    if folders["at"] and folders["base_ok"] is False:
+        glob.append({"kind": "folder_missing", "level": "bad", "label": "Job folders not reachable",
+                     "detail": f"The host PC can't reach {Z_DRIVE_BASE}, so job folders weren't checked."})
+    for jid, j in jobs.items():
+        open_ = j["status"] not in ("Complete", "Cancelled")
+        due = _due(j["due_date"])
+        if open_ and due:
+            days = (due - today).days
+            if days < 0:
+                add(jid, "overdue", f"Due {j['due_date']}, {-days} day{'s' if days != -1 else ''} late")
+            elif days <= 1 and j["status"] == "Pending" and not (j["roll_running"] or j["roll_paused"] or j["roll_done"]):
+                add(jid, "due_soon", f"Due {'today' if days == 0 else 'tomorrow'} and not started")
+        if j["status"] == "On Hold":
+            span = _span(j["hold_since"])
+            add(jid, "on_hold", (f"{j['hold_reason']}: {j['hold_note']}" if j["hold_reason"] else "No reason recorded")
+                + (f" ({span})" if span else ""))
+        total, done = j["roll_total"] or 0, j["roll_done"] or 0
+        if total and done == total and open_:
+            add(jid, "rolls_done", f"All {total} rolls are done, but the job isn't marked complete")
+        if total and done < total and j["status"] == "Complete":
+            add(jid, "complete_open_rolls", f"Marked complete with {total - done} of {total} rolls not done")
+        f = folders["jobs"].get(jid) if folders["base_ok"] else None
+        if open_ and not j["folder_path"]:
+            add(jid, "folder_missing", "No job folder was created")
+        elif open_ and f and not f["exists"]:
+            add(jid, "folder_missing", f"Not found: {j['folder_path']}")
+        if j["status"] == "Pending" and j["job_type"] == "standard" and not j["template_path"] and f and f["exists"] and not f["btw"]:
+            add(jid, "no_template", "Queued with no BarTender template in its Print folder")
+
+    stale = {}
+    for r in conn.execute("""SELECT r.job_id, r.roll_number, r.printer, r.started_at, r.started_by, r.status
+            FROM job_rolls r JOIN jobs j ON j.id = r.job_id
+            WHERE j.archived_at IS NULL AND j.status != 'Cancelled' AND r.status IN ('running', 'paused')
+              AND r.started_at IS NOT NULL AND r.started_at <= ? ORDER BY r.job_id, r.roll_number""", (stale_before,)):
+        stale.setdefault(r["job_id"], []).append(r)
+    for jid, rolls in stale.items():
+        if jid in issues:
+            first = rolls[0]
+            where = f" on {first['printer']}" if first["printer"] else ""
+            by = f" by {first['started_by']}" if first["started_by"] else ""
+            more = f" (and {len(rolls) - 1} more)" if len(rolls) > 1 else ""
+            add(jid, "stale_rolls", f"Roll {first['roll_number']} started{where}{by} {_span(first['started_at'])} ago "
+                                    f"and still in progress{more}")
+
+    by_number = {j["job_number"]: jid for jid, j in jobs.items()}
+    for c in conn.execute('SELECT job_number, upc, start, "end" FROM serial_allocations WHERE registry_state=-1'):
+        detail = f"UPC {c['upc']}, serials {c['start']:,}–{c['end']:,} overlap another range. Check before encoding."
+        jid = by_number.get(c["job_number"])
+        if jid is not None:
+            add(jid, "serial_conflict", detail)
+        else:
+            glob.append({"kind": "serial_conflict", "level": "bad", "label": f"Serial conflict ({c['job_number']})", "detail": detail})
+
+    keep = ("id", "job_number", "job_ticket", "customer", "title", "status", "due_date", "upc")
+    items = []
+    for jid, found in issues.items():
+        if found:
+            found.sort(key=lambda i: ATTN_KINDS[i["kind"]][2])
+            items.append({"job": {k: jobs[jid][k] for k in keep}, "issues": found,
+                          "level": "bad" if any(i["level"] == "bad" for i in found) else "warn"})
+    items.sort(key=lambda it: (it["level"] != "bad", ATTN_KINDS[it["issues"][0]["kind"]][2],
+                               str(_due(it["job"]["due_date"]) or "9999"), str(it["job"]["job_ticket"] or it["job"]["job_number"])))
+    counts = {}
+    for it in items:
+        for i in it["issues"]:
+            counts[i["kind"]] = counts.get(i["kind"], 0) + 1
+    return {"items": items, "global": glob, "counts": counts,
+            "kinds": [{"kind": k, "level": v[0], "label": v[1]} for k, v in sorted(ATTN_KINDS.items(), key=lambda kv: kv[1][2])],
+            "bad": sum(1 for it in items if it["level"] == "bad") + sum(1 for g in glob if g["level"] == "bad"),
+            "total": len(items) + len(glob), "folders_checked_at": folders["at"],
+            "stale_roll_hours": ATTN_STALE_ROLL_HOURS, "now": now_str()}
+
+
+@app.route("/api/attention")
+def api_attention():
+    """?refresh=1 also starts a new folder check in the background (the answer doesn't wait for it)."""
+    if request.args.get("refresh") == "1" and not _folders["busy"]:
+        threading.Thread(target=check_job_folders, daemon=True, name="folder-check").start()
+    conn = get_db()
+    try:
+        return jsonify(attention(conn))
+    finally:
+        conn.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Tools: standalone checklist, roll tracker sheet, encoding database
 # ══════════════════════════════════════════════════════════════════════════════
 def _tool_job(a):
@@ -2692,6 +2940,7 @@ if __name__ == "__main__":
     start_template_sync()
     start_serial_keeper()
     start_auto_archive()
+    start_folder_watch()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")
     for ip in _lan_ips():

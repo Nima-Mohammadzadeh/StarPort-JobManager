@@ -47,8 +47,13 @@ def note(j, body, who, rn=None, imp=False):
     post(f"/api/jobs/{j}/notes", {"body": body, "author": who, "roll_number": rn, "important": imp})
 
 
-def status(j, s):
-    c.patch(f"/api/jobs/{j}", json={"status": s, "operator": "Dana"})
+def status(j, s, reason="", why=""):
+    body = {"status": s, "operator": "Dana"}
+    if s == "On Hold":                       # a job only goes on hold with a reason
+        body.update(hold_reason=reason or "Other", hold_note=why or "Waiting on the planner")
+    r = c.patch(f"/api/jobs/{j}", json=body)
+    if r.status_code >= 400:
+        print("FAILED status", j, s, r.get_json())
 
 
 # Job 1: in progress, mixed roll states.
@@ -79,7 +84,8 @@ printer(b, 9, "Printer 2", "Sam")
 printer(b, 10, "Printer 3", "Priya")
 
 # Job 3: on hold. Job 4: all rolls done (shows the Mark complete prompt). Job 5, 6: queued.
-status(ids[2], "In Progress"); roll(ids[2], 1, "complete", "Sam"); status(ids[2], "On Hold")
+status(ids[2], "In Progress"); roll(ids[2], 1, "complete", "Sam")
+status(ids[2], "On Hold", "Customer", "Waiting on new artwork approval")
 note(ids[2], "Waiting on new artwork approval.", "Dana", imp=True)
 status(ids[3], "In Progress")
 for n in (1, 2, 3):
@@ -108,10 +114,24 @@ for i in range(28):
         for n in range(1, random.randint(2, 4)):
             roll(jid, n, "complete", random.choice(["Sam", "Priya"]))
     elif k == 2 and jid:
-        status(jid, "On Hold")
+        status(jid, "On Hold", *random.choice([("Material", "Waiting on Monza R6 inlays"), ("Printer", "Printer 3 head replacement"),
+                                                ("Data / file", "UPC list from the customer doesn't match the ticket"),
+                                                ("Customer", "Customer asked to pause the order")]))
     elif k == 3 and jid:
         status(jid, "In Progress")
         for n in range(1, qty // lpr + 1):
             roll(jid, n, "complete", "Sam")
         status(jid, "Complete")
+
+# Needs-attention scenarios that need time to pass, set straight in the demo database:
+# Acme roll 4 was started yesterday afternoon and never finished; one bulk job was put on hold
+# before hold reasons existed, so it has none.
+yday = (datetime.datetime.now() - datetime.timedelta(hours=19)).strftime("%Y-%m-%d %H:%M:%S")
+conn = A.get_db()
+conn.execute("UPDATE job_rolls SET started_at=? WHERE job_id=? AND roll_number=4", (yday, ids[0]))
+legacy = conn.execute("SELECT id FROM jobs WHERE job_ticket='41007'").fetchone()
+if legacy:
+    conn.execute("UPDATE jobs SET status='On Hold', hold_reason=NULL, hold_note=NULL, hold_by=NULL, hold_since=? WHERE id=?",
+                 ((datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"), legacy["id"]))
+conn.commit(); conn.close()
 print("seeded", ids)
