@@ -33,8 +33,10 @@ from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, TH
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
-                        generate_db_files, generate_go2_files, is_go2_customer, GO2_SHEET, generate_qc_sheet, qc_html, _safe_name)
+                        generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
+                        sheet_customer, roll_plan_seq, generate_qc_sheet, qc_html, _safe_name)
 import serial_store as SS
+import sheet_serials as SHEETS_SEQ
 import backup
 from generators import decode_epc
 from checklist_generator import generate_checklist_html
@@ -145,6 +147,7 @@ def init_db():
                    WHERE status = 'Complete' AND completed_at IS NULL""")
     cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
     SS.init_schema(cur)
+    SHEETS_SEQ.init_schema(cur)
     add_col("job_rolls", "completed_by", "completed_by TEXT")
     add_col("job_rolls", "started_at", "started_at TEXT")
     add_col("job_rolls", "started_by", "started_by TEXT")
@@ -313,8 +316,9 @@ def create_job(data: dict) -> tuple[dict, int]:
       standard  UPC + serials: encoding database, serial-tracked rolls, QC sheet.
       special   no UPC / not our normal process: folder, checklist, template, notes and
                 (if quantity and labels per roll are given) rolls tracked by quantity.
-                No serials are given out. Optional data_sheet "go2_rand" (customer GO2 only)
-                writes GO2's random EPC data sheet into Data (see generators.py)."""
+                No UPC serials are given out. Optional data_sheet (see DATA_SHEETS in generators.py):
+                "go2_rand" (customer GO2 only) random EPC sheet; "cdo_seq" (customer CDO only)
+                sequential serial + 8-hex EPC sheet, numbers from sheet_serials.py."""
     g = lambda k: (str(data.get(k) or "")).strip() or None
     customer, title, ticket = g("customer"), g("title"), g("job_ticket")
     upc, label_size, inlay  = g("upc"), g("label_size"), g("inlay_type")
@@ -325,14 +329,17 @@ def create_job(data: dict) -> tuple[dict, int]:
         return {"error": "Job type must be standard or special"}, 400
 
     if not customer: return {"error": "Customer is required"}, 400
-    if is_go2_customer(customer):
-        customer = "GO2"                    # go2 / Go2 / gO2 are one customer (folders, grouping)
+    customer = sheet_customer(customer) or customer     # go2 / Go2 / cdo / Cdo are one customer each (folders, grouping)
     if not title:    return {"error": "Item / title is required"}, 400
     if job_type == "standard" and not upc:
         return {"error": "A standard job needs a UPC. Choose Special for jobs without one."}, 400
     data_sheet = g("data_sheet")
-    if data_sheet and (data_sheet != GO2_SHEET or job_type != "special" or not is_go2_customer(customer)):
-        return {"error": "The random EPC data sheet is only for special (no UPC) jobs for customer GO2."}, 400
+    if data_sheet:
+        cfg = DATA_SHEETS.get(data_sheet)
+        if not cfg:
+            return {"error": "Unknown data sheet."}, 400
+        if job_type != "special" or customer != cfg["customer"]:
+            return {"error": f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}."}, 400
     if job_type == "special":
         upc = None                          # special jobs never take serials
     try:
@@ -431,14 +438,27 @@ def create_job(data: dict) -> tuple[dict, int]:
         if not alloc["journaled"] and SS.journal_path():
             warnings.append("The serial journal (backup folder) couldn't be written. The range is still "
                             "saved in the registry and the app database.")
-    start_serial = alloc["start"] if alloc else None
+    seq_alloc = None
+    if data_sheet == CDO_SHEET:
+        try:
+            seq_alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, total_qty, who=created_by,
+                                           note=f"+{overage:g}%" if overage > 0 else "base")
+        except SHEETS_SEQ.SheetSerialError as e:
+            _discard_job(job_id, job_dir if created_new else None)
+            return {"error": f"{e} Nothing was created."}, 400
+        except Exception as e:
+            _discard_job(job_id, job_dir if created_new else None)
+            return {"error": f"CDO serial allocation failed, job not created: {e}"}, 500
+    start_serial = alloc["start"] if alloc else (seq_alloc["start"] if seq_alloc else None)
 
     job = {"job_number": job_number, "customer": customer, "title": title,
            "job_ticket": ticket, "po_number": po, "po_clean": clean_po(po),
            "part_number": part, "inlay_type": inlay, "label_size": label_size,
            "due_date": due, "upc": upc, "quantity": quantity, "lpr": lpr,
            "qty_db": qty_db, "start_serial": start_serial, "overage_pct": overage}
-    rolls = roll_plan(upc, start_serial, total_qty, lpr) if upc else roll_plan_plain(total_qty, lpr)
+    rolls = (roll_plan(upc, start_serial, total_qty, lpr) if upc
+             else roll_plan_seq(start_serial, total_qty, lpr) if seq_alloc
+             else roll_plan_plain(total_qty, lpr))
     generated = {}
 
     # 4 ── files ────────────────────────────────────────────────────────────────
@@ -449,13 +469,20 @@ def create_job(data: dict) -> tuple[dict, int]:
             except Exception as e:
                 warnings.append(f"Encoding database not written: {e}")
         if data_sheet:
+            label = DATA_SHEETS[data_sheet]["customer"]
             try:
-                generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
+                if seq_alloc:
+                    generated["cdo"] = generate_cdo_files(job_dir, ticket or job_number, seq_alloc["start"],
+                                                          total_qty, qty_db)
+                else:
+                    generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
             except Exception as e:
-                # Nothing is half-written (the generator removes its own files) and no serial
-                # was taken from the registry, so the job is simply not created.
+                # Nothing is half-written (the generator removes its own files). Any sequential
+                # numbers already taken stay used (marked VOID), so they can never repeat.
+                if seq_alloc:
+                    SHEETS_SEQ.void(seq_alloc, f"sheet not written for {job_number}")
                 _discard_job(job_id, job_dir if created_new else None)
-                return {"error": f"The GO2 data sheet could not be written, "
+                return {"error": f"The {label} data sheet could not be written, "
                                  f"so nothing was created: {e}"}, 500
         r = generate_checklist_html(job_dir, job)
         if not r.get("success"): warnings.append(f"Checklist not written: {r.get('error')}")
@@ -484,7 +511,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         log_activity(conn, "created", job_id,
                      f"Created {job_number} for {customer}"
                      + (f", ticket {ticket}" if ticket else "")
-                     + (" (special, GO2 random EPC data sheet)" if data_sheet
+                     + (f" (special, {DATA_SHEETS[data_sheet]['customer']} data sheet)" if data_sheet
                         else " (special, no serials)" if job_type == "special" else "")
                      + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else ""), created_by)
         conn.commit()
@@ -496,7 +523,7 @@ def create_job(data: dict) -> tuple[dict, int]:
     conn.close()
 
     return {"success": True, "job": saved, "job_number": job_number,
-            "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc,
+            "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc or seq_alloc,
             "db_split": db_file_split(total_qty, qty_db) if upc else [],
             "rolls": len(rolls), "warnings": warnings}, 201
 
@@ -599,6 +626,9 @@ def api_meta():
         "inlays": _dedupe(inlays), "statuses": STATUSES,
         "names": _recent_names(), "serials": {**SS.health(), "registry_gaps": _registry_gap_count["n"]},
         "settings": get_settings(), "backup": backup_health(),
+        "data_sheets": [{"key": k, "customer": c["customer"], "label": c["label"], "detail": c["detail"],
+                         "sequential": c["sequential"]} for k, c in DATA_SHEETS.items()],
+        "cdo_next": SHEETS_SEQ.next_start(CDO_SHEET),
     })
 
 

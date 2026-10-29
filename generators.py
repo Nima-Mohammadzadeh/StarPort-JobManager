@@ -249,6 +249,109 @@ def verify_go2_file(path: str, expected_rows: int) -> None:
         seen.add(epc)
 
 
+# ── CDO data sheet ────────────────────────────────────────────────────────────
+# CDO orders a sheet that counts up in one running series: Serial (decimal) and EPC = the
+# serial as 8 hex digits, the same as the Excel formula =DEC2HEX(serial, 8). The numbers come
+# from sheet_serials.py, which never hands the same one out twice. Written as plain values.
+CDO_SHEET = "cdo_seq"
+CDO_CUSTOMER = "cdo"
+CDO_EPC_LEN = 8
+
+
+def cdo_epc(serial: int) -> str:
+    return format(int(serial), f"0{CDO_EPC_LEN}X")
+
+
+def _write_cdo_xlsx(path, start, rows, sheet_title):
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_title)
+    ws.append(["Serial", "EPC"])
+    for n in range(start, start + rows):
+        ws.append([n, cdo_epc(n)])
+    wb.save(path)
+
+
+def generate_cdo_files(job_dir: str, label: str, start_serial: int, total_qty: int, qty_db: int | None) -> dict:
+    """Write the CDO data sheet(s) for serials start..start+total-1 into <job_dir>/Data and verify each."""
+    if not XLSX_AVAILABLE:
+        raise RuntimeError("openpyxl is needed to write the CDO data sheet")
+    total_qty, serial = int(total_qty), int(start_serial)
+    data_dir = os.path.join(job_dir, "Data")
+    os.makedirs(data_dir, exist_ok=True)
+    split = db_file_split(total_qty, qty_db)
+    files = []
+    try:
+        for idx, (rows, name) in enumerate(zip(split, go2_file_names(label, len(split))), start=1):
+            path = os.path.join(data_dir, name)
+            files.append(path)
+            _write_cdo_xlsx(path, serial, rows, f"DB{idx}" if len(split) > 1 else "Sheet1")
+            verify_cdo_file(path, serial, rows)
+            serial += rows
+    except Exception:
+        for p in files:
+            try: os.remove(p)
+            except OSError: pass
+        raise
+    return {"files": files, "file_count": len(files), "split": split,
+            "start_serial": int(start_serial), "end_serial": serial - 1}
+
+
+def verify_cdo_file(path: str, start_serial: int, expected_rows: int) -> None:
+    """Re-open a written CDO sheet and check every row. Raises ValueError on any problem."""
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True)
+    try:
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+    finally:
+        wb.close()
+    name = os.path.basename(path)
+    if len(rows) != expected_rows:
+        raise ValueError(f"{name}: expected {expected_rows:,} rows, found {len(rows):,}")
+    for i, r in enumerate(rows):
+        serial, epc = r[0], r[1]
+        want = int(start_serial) + i
+        if serial != want or epc != cdo_epc(want):
+            raise ValueError(f"{name}: row {i + 2} should be {want} / {cdo_epc(want)}, found {serial!r} / {epc!r}")
+
+
+# ── Customer data sheets (which sheet belongs to which customer) ─────────────
+# Typing the customer in New job picks the matching sheet; the server refuses a sheet for
+# any other customer. Add a sheet here (and generate/verify it above) to add a customer.
+DATA_SHEETS = {
+    GO2_SHEET: {"customer": "GO2", "label": "GO2: random EPC (E2004 + 19 random hex)",
+                "detail": "GO2 random EPC (E2004…)", "sequential": False},
+    CDO_SHEET: {"customer": "CDO", "label": "CDO: serial + 8-digit hex EPC, counts up, never repeats",
+                "detail": "CDO sequential serial + 8-digit hex EPC", "sequential": True},
+}
+
+
+def sheet_customer(name):
+    """Canonical customer name ("GO2", "CDO") for a name typed in any capitalization, else None."""
+    n = (name or "").strip().lower()
+    for cfg in DATA_SHEETS.values():
+        if n == cfg["customer"].lower():
+            return cfg["customer"]
+    return None
+
+
+def sheet_for_customer(name):
+    n = (name or "").strip().lower()
+    return next((k for k, c in DATA_SHEETS.items() if c["customer"].lower() == n), None)
+
+
+def roll_plan_seq(start_serial: int, total_qty: int, lpr: int) -> list:
+    """Rolls for a sequential data sheet: a serial range and 8-hex EPC range per roll."""
+    if not (start_serial and total_qty and lpr and lpr > 0):
+        return []
+    rolls, cur, n, left = [], int(start_serial), 1, int(total_qty)
+    while left > 0:
+        q = min(lpr, left)
+        rolls.append({"roll_number": n, "quantity": q, "serial_start": cur, "serial_end": cur + q - 1,
+                      "epc_start": cdo_epc(cur), "epc_end": cdo_epc(cur + q - 1)})
+        cur += q; left -= q; n += 1
+    return rolls
+
+
 # ── Quality Control sheet ─────────────────────────────────────────────────────
 # Same layout as the original QC sheet the floor already uses. The only addition:
 # a blank write-in area under each roll for the rewinders. If that space would push

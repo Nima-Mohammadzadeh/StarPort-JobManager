@@ -27,6 +27,14 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   unique, written into the job's Data folder (split by Qty per DB file if set). Values only, never
   formulas, and every file is re-read and checked before the job is created, so the prefix can't
   drift (the old sheet counted up to `E2005`, `E2006`... after row 100,000). Choose **None** to skip it.
+- **CDO data sheet** (customer CDO only): `Serial` + `EPC`, where EPC is the serial as 8 hex digits (the old
+  `=DEC2HEX(serial,8)` sheet, written as values). One running series for the customer: the first job starts
+  at 3,768,677,565 (the sample sheet ended at 3,768,677,564) and every job after continues where the last
+  ended, so a number is never used twice. The series is kept in the database, `serial_registry/data_sheets/cdo_seq.txt`
+  and `sheet_serial_journal.csv` in the backup folder; the next number is past the highest of the three. A job
+  that fails after taking numbers leaves a marked gap, never a repeat. It stops at `FFFFFFFF`.
+- **Picking a sheet**: the Customer data sheet box always shows on Special jobs. Typing a customer that has a sheet
+  (GO2, CDO, any capitalization) switches to Special and selects it; a sheet only works for its own customer.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel
   the old job first to redo it). The form warns as soon as the ticket is typed, and
   the server refuses even if two people enter it at the same instant.
