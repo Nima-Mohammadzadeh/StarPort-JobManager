@@ -485,6 +485,28 @@ details.more p.d{margin:6px 0 0}
 .fc .c{font-size:14px}.fc .p{font-size:13px}.runners,.pausers,.flag{font-size:13px}
 .w-body2{grid-template-columns:minmax(300px,340px) minmax(0,1fr)}
 .floor-list{background:#fff;border:1px solid var(--line);border-radius:10px;gap:0;overflow:hidden}
+/* archive: sortable headers, scrolling table, pager */
+.archive-wrap{max-height:calc(100vh - 210px)}
+.archive-wrap.loading tbody{opacity:.55;transition:opacity .12s}
+.ar-custom{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.ar-custom input{width:auto;padding:5px 8px}
+.jobs th .th-sort{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap}
+.jobs th .th-sort:hover{color:var(--ink)}
+.jobs th .th-sort.on{color:var(--ink)}
+.jobs th .arrow{font-size:10px;opacity:.45}.jobs th .th-sort.on .arrow{opacity:1;color:var(--accent)}
+.jobs th.num .th-sort{justify-content:flex-end}
+#archive-body tr[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#archive-body tr:not(.grp) td:first-child{box-shadow:inset 3px 0 0 var(--sc,transparent)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 4px;font-size:13.5px;color:var(--muted)}
+.pager b{color:var(--ink)}
+.pg-ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pg{min-width:34px;height:34px;padding:0 8px;border:1px solid var(--line-strong);background:#fff;border-radius:7px;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
+.pg:hover:not(:disabled):not(.on){background:var(--sunk)}
+.pg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pg:disabled{opacity:.4;cursor:default}
+.pager .gap{padding:0 2px}
+.pg-go{width:84px;padding:6px 8px}
+.pager select.i{width:auto;padding:5px 8px}
 .fl-head{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--line);background:var(--sunk);flex:none}
 .fl-head select{width:auto;flex:0 0 auto;font-weight:600}
 .fl-head .search{flex:1 1 auto;min-width:0}
@@ -711,14 +733,24 @@ details.more p.d{margin:6px 0 0}
       <h1>Archive</h1>
       <div class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input class="i" id="q-archive" placeholder="Search archived jobs" autocomplete="off">
+        <input class="i" id="q-archive" placeholder="Ticket, customer, item, UPC, PO…" autocomplete="off" aria-label="Search archived jobs">
       </div>
-      <span class="sub" id="archive-count" style="color:var(--muted);font-size:13px"></span>
+      <label class="inline-sel">Customer <select class="i" id="ar-customer" onchange="archiveFilter()"><option value="">All</option></select></label>
+      <label class="inline-sel">Status <select class="i" id="ar-status" onchange="archiveFilter()"><option value="">All</option></select></label>
+      <label class="inline-sel">Archived <select class="i" id="ar-when" onchange="archiveFilter()">
+        <option value="">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Custom range…</option></select></label>
+      <span id="ar-custom" class="ar-custom" hidden>
+        <input class="i" type="date" id="ar-from" aria-label="Archived from" onchange="archiveFilter()">
+        <span aria-hidden="true">to</span>
+        <input class="i" type="date" id="ar-to" aria-label="Archived to" onchange="archiveFilter()"></span>
+      <button class="btn sm quiet" id="ar-clear" onclick="archiveClear()" hidden>Clear filters</button>
     </div>
-    <div class="tablewrap"><table class="jobs">
-      <thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th class="hide-sm">Label size</th><th class="num">Qty</th><th class="hide-sm">UPC</th><th>Status</th><th>Archived</th></tr></thead>
+    <div class="tablewrap archive-wrap" id="archive-wrap"><table class="jobs" id="archive-table">
+      <thead><tr id="archive-head"></tr></thead>
       <tbody id="archive-body"></tbody>
     </table></div>
+    <div class="pager" id="archive-pager" role="navigation" aria-label="Archive pages"></div>
   </section>
 
   <!-- Templates -->
@@ -860,7 +892,8 @@ details.more p.d{margin:6px 0 0}
       <p class="d">Apply to everyone using the app.</p>
       <div class="stack">
         <label class="f">Master Templates folder<input class="i" id="s-btw" placeholder="Z:\3 Encoding and Printing Files\Master Templates"></label>
-        <div class="grid3"><label class="f">Default overage %<input class="i" id="s-ovg" type="number" min="0" max="100" step="0.5"></label></div>
+        <div class="grid3"><label class="f">Default overage %<input class="i" id="s-ovg" type="number" min="0" max="100" step="0.5"></label>
+          <label class="f">Archive completed jobs after (hours)<input class="i" id="s-autoarch" type="number" min="0" max="8760" step="1"><span class="hint">0 turns it off. Jobs marked Complete move to the Archive by themselves.</span></label></div>
         <div><button class="btn primary" onclick="saveShared(this)">Save shared settings</button></div>
       </div>
     </div>
@@ -1205,19 +1238,81 @@ function strip(done, total, running = 0, paused = 0) {
 $('#q-jobs').oninput = debounce(loadJobs, 250);
 
 /* ───────────────────────── archive ───────────────────────── */
-async function loadArchive() {
-  const d = await api('/api/jobs?view=archive&q=' + encodeURIComponent($('#q-archive').value));
-  $('#archive-count').textContent = d.jobs.length >= 500 ? 'Showing newest 500, search to narrow' : `${d.jobs.length} jobs`;
+/* Long-term list: the server pages, sorts and filters; this draws the page and the controls. */
+const AR_COLS = [['ticket', 'Ticket', 'c-tk'], ['customer', 'Customer', ''], ['item', 'Item', ''], ['size', 'Label size', 'hide-sm'],
+  ['qty', 'Qty', 'num'], ['upc', 'UPC', 'hide-sm'], ['status', 'Status', ''], ['archived', 'Archived', '']];
+let AR = {page: 1, size: +pref('ar_size', '50'), sort: pref('ar_sort', 'archived'), dir: pref('ar_dir', 'desc')}, AR_REQ = 0, AR_META = null;
+function archiveParams() {
+  const p = new URLSearchParams({page: AR.page, size: AR.size, sort: AR.sort, dir: AR.dir, q: $('#q-archive').value.trim()});
+  const c = $('#ar-customer').value, st = $('#ar-status').value, w = $('#ar-when').value;
+  if (c) p.set('customer', c); if (st) p.set('status', st);
+  if (w === 'custom') { if ($('#ar-from').value) p.set('from', $('#ar-from').value); if ($('#ar-to').value) p.set('to', $('#ar-to').value); }
+  else if (w) { const d = new Date(Date.now() - w * 864e5); p.set('from', d.toISOString().slice(0, 10)); }
+  return p;
+}
+function archiveFilter() { AR.page = 1; $('#ar-custom').hidden = $('#ar-when').value !== 'custom'; loadArchive(); }
+function archiveClear() {
+  $('#q-archive').value = ''; $('#ar-customer').value = ''; $('#ar-status').value = ''; $('#ar-when').value = '';
+  $('#ar-from').value = $('#ar-to').value = ''; archiveFilter();
+}
+function archiveSort(k) {
+  AR.dir = AR.sort === k ? (AR.dir === 'asc' ? 'desc' : 'asc') : (k === 'qty' || k === 'archived' ? 'desc' : 'asc'); AR.sort = k;
+  setPref('ar_sort', AR.sort); setPref('ar_dir', AR.dir); AR.page = 1; loadArchive();
+}
+function archiveGo(n) { AR.page = n; loadArchive(true); }
+function archiveSize(n) { AR.size = +n; setPref('ar_size', n); AR.page = 1; loadArchive(); }
+async function loadArchive(keepScroll) {
+  const req = ++AR_REQ, wrap = $('#archive-wrap');
+  wrap.setAttribute('aria-busy', 'true'); wrap.classList.add('loading');
+  let d; try { d = await api('/api/archive?' + archiveParams()); } catch (e) { if (req === AR_REQ) { wrap.classList.remove('loading'); toast(e.message, true); } return; }
+  if (req !== AR_REQ) return;                       // a newer request is already on its way
+  wrap.classList.remove('loading'); wrap.setAttribute('aria-busy', 'false');
+  AR.page = d.page;
+  fillSelect('#ar-customer', d.customers, 'All'); fillSelect('#ar-status', d.statuses, 'All');
+  $('#archive-head').innerHTML = AR_COLS.map(([k, l, c]) => {
+    const on = AR.sort === k;
+    return `<th class="${c}" aria-sort="${on ? (AR.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="th-sort ${on ? 'on' : ''}" onclick="archiveSort('${k}')">${l}<span class="arrow" aria-hidden="true">${on ? (AR.dir === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>`;
+  }).join('');
+  const filtered = !!(archiveParams().get('q') || $('#ar-customer').value || $('#ar-status').value || $('#ar-when').value);
+  $('#ar-clear').hidden = !filtered;
   $('#archive-body').innerHTML = d.jobs.length ? d.jobs.map(j => `
-    <tr onclick="openJob(${j.id})">
-      <td><div class="tk">${esc(j.job_ticket || '—')}</div><div class="sub data">${esc(j.job_number)}</div></td>
-      <td class="cust">${esc(j.customer)}</td><td><div class="item">${esc(j.title)}</div></td>
+    <tr tabindex="0" onclick="openJob(${j.id})" onkeydown="if(event.key==='Enter')openJob(${j.id})" style="--sc:${STATUS_COLOR[j.status] || 'var(--line-strong)'}">
+      <td class="c-tk"><div class="tk">${esc(j.job_ticket || '—')}</div><div class="sub data">${esc(j.job_number)}</div></td>
+      <td class="cust">${esc(j.customer)}</td><td><div class="item" title="${esc(j.title)}">${esc(j.title)}</div></td>
       <td class="hide-sm">${esc(j.label_size || '')}</td><td class="num data">${fmt(j.quantity)}</td>
       <td class="hide-sm data">${esc(j.upc || '')}</td>
-      <td><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td><td class="sub">${day(j.archived_at)}</td>
-    </tr>`).join('') : `<tr><td colspan="8"><div class="empty">Nothing in the archive matches.</div></td></tr>`;
+      <td><span class="pill ${stc(j.status)}">${esc(j.status)}</span></td><td class="nw">${day(j.archived_at)}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="8"><div class="empty">${filtered ? 'No archived jobs match these filters.<br><button class="btn" onclick="archiveClear()">Clear filters</button>' : 'Nothing has been archived yet. Completed jobs move here by themselves.'}</div></td></tr>`;
+  archivePager(d);
+  if (!keepScroll) wrap.scrollTop = 0; else { wrap.scrollTop = 0; }
 }
-$('#q-archive').oninput = debounce(loadArchive, 300);
+function fillSelect(sel, items, allLabel) {
+  const el = $(sel), cur = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` + items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  el.value = items.includes(cur) ? cur : '';
+}
+function archivePager(d) {
+  const from = d.total ? (d.page - 1) * d.size + 1 : 0, to = Math.min(d.total, d.page * d.size);
+  const nums = []; const add = n => { if (!nums.includes(n) && n >= 1 && n <= d.pages) nums.push(n); };
+  [1, d.page - 2, d.page - 1, d.page, d.page + 1, d.page + 2, d.pages].forEach(add); nums.sort((a, b) => a - b);
+  let btns = '', prev = 0;
+  nums.forEach(n => { if (n - prev > 1) btns += '<span class="gap" aria-hidden="true">…</span>';
+    btns += `<button class="pg ${n === d.page ? 'on' : ''}" ${n === d.page ? 'aria-current="page"' : ''} aria-label="Page ${n}" onclick="archiveGo(${n})">${n}</button>`; prev = n; });
+  $('#archive-pager').innerHTML = `
+    <span class="pg-count" role="status">${d.total ? `Showing <b>${fmt(from)}–${fmt(to)}</b> of <b>${fmt(d.total)}</b> archived job${d.total === 1 ? '' : 's'}` : '0 archived jobs'}</span>
+    <span class="pg-ctl">
+      <label class="inline-sel">Rows <select class="i" onchange="archiveSize(this.value)">${[25, 50, 100, 200].map(n => `<option ${n === d.size ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <button class="pg" onclick="archiveGo(1)" ${d.page <= 1 ? 'disabled' : ''} aria-label="First page">«</button>
+      <button class="pg" onclick="archiveGo(${d.page - 1})" ${d.page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+      ${btns}
+      <button class="pg" onclick="archiveGo(${d.page + 1})" ${d.page >= d.pages ? 'disabled' : ''} aria-label="Next page">›</button>
+      <button class="pg" onclick="archiveGo(${d.pages})" ${d.page >= d.pages ? 'disabled' : ''} aria-label="Last page">»</button>
+      <label class="inline-sel">Go to <input class="i pg-go" type="number" min="1" max="${d.pages}" placeholder="${d.page}/${d.pages}" aria-label="Go to page"
+        onkeydown="if(event.key==='Enter'&&this.value)archiveGo(Math.max(1,Math.min(${d.pages},+this.value)))"></label>
+    </span>`;
+}
+$('#q-archive').oninput = debounce(archiveFilter, 300);
 
 /* ───────────────────────── drawer ───────────────────────── */
 async function openJob(id, keepRoll) {
@@ -1724,7 +1819,7 @@ async function syncTemplates(btn) {
 /* ───────────────────────── settings ───────────────────────── */
 async function loadSettings() {
   await loadMeta(); const s = META.settings;
-  $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct;
+  $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct; $('#s-autoarch').value = s.auto_archive_hours;
   $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
   $('#s-printers').value = s.printers || '';
   loadDataPanel(); loadBackups(); showHelperState(); loadRewind();
@@ -1735,6 +1830,11 @@ function setSettingsSection(k) {
   setPref('setsec', k);
   document.querySelectorAll('#set-nav button').forEach(b => { const on = b.dataset.sec === k; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   document.querySelectorAll('#v-settings .panel[data-sec]').forEach(el => el.classList.toggle('show', el.dataset.sec === k));
+}
+async function saveShared(btn) {
+  btn.disabled = true;
+  try { await api('/api/settings', {method: 'POST', body: {btw_template_dir: $('#s-btw').value.trim(), default_overage_pct: $('#s-ovg').value || 0, auto_archive_hours: $('#s-autoarch').value === '' ? 32 : $('#s-autoarch').value}}); await loadMeta(); toast('Shared settings saved'); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
 }
 async function savePrinters() {
   try { await api('/api/settings', {method: 'POST', body: {printers: $('#s-printers').value}}); await loadMeta(); $('#s-printers').value = META.settings.printers; toast('Printers saved'); loadPrinters(); }

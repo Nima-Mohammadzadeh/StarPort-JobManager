@@ -87,6 +87,13 @@ reset to `desktop` afterwards):
 Also glance at the Jobs drawer (Rolls section) and `/rewind` if the change touched shared roll
 logic or helpers.
 
+## Archive page (long-term list)
+
+The Archive is paged, sorted and filtered by the server (`/api/archive`). To judge it with realistic volume,
+insert a few hundred archived rows straight into `mock_demo/site/demo.db` (jobs with `archived_at` set), then
+check: sort each column (aria-sort changes), page numbers with ellipsis, rows per page, Go to page, customer /
+status / archived-date filters, search, Clear filters, and the empty state.
+
 ## Gotchas found while testing
 
 - `templates/index.html` is rendered by Jinja, so JavaScript template literals must never contain

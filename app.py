@@ -24,7 +24,7 @@ import threading
 import subprocess
 import io
 from html import escape
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request, send_file, abort, Response
 
@@ -136,6 +136,12 @@ def init_db():
     add_col("jobs", "job_type", "job_type TEXT NOT NULL DEFAULT 'standard'")
     add_col("jobs", "priority_rank", "priority_rank INTEGER")
     add_col("jobs", "created_by", "created_by TEXT")
+    add_col("jobs", "completed_at", "completed_at TEXT")
+    # Jobs already marked Complete before this column existed: use when they were set to Complete.
+    cur.execute("""UPDATE jobs SET completed_at = COALESCE(
+                       (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
+                          AND a.message LIKE '%set to Complete'), updated_at)
+                   WHERE status = 'Complete' AND completed_at IS NULL""")
     cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
     SS.init_schema(cur)
     add_col("job_rolls", "completed_by", "completed_by TEXT")
@@ -200,6 +206,7 @@ def get_settings() -> dict:
         "backup_keep":           int(s.get("backup_keep", "60") or 60),
         "rewind_base_url":       s.get("rewind_base_url", ""),
         "printers":              s.get("printers", DEFAULT_PRINTERS),
+        "auto_archive_hours":    max(0, min(8760, int(s.get("auto_archive_hours", "32") or 0))),
     }
 
 
@@ -629,6 +636,61 @@ def api_jobs():
     return jsonify({"jobs": rows})
 
 
+ARCHIVE_SORTS = {
+    "ticket":   "CAST(j.job_ticket AS INTEGER) {d}, j.job_ticket {d}",
+    "customer": "j.customer COLLATE NOCASE {d}",
+    "item":     "j.title COLLATE NOCASE {d}",
+    "size":     "j.label_size {d}",
+    "qty":      "j.quantity {d}",
+    "upc":      "j.upc {d}",
+    "status":   "j.status {d}",
+    "archived": "j.archived_at {d}",
+    "created":  "j.created_at {d}",
+}
+
+
+@app.route("/api/archive")
+def api_archive_list():
+    """Archived jobs, one page at a time: search, filters, sorting and paging happen here so the
+    page stays fast however many jobs pile up."""
+    a = request.args
+    try:
+        size = max(10, min(200, int(a.get("size", 50))))
+        page = max(1, int(a.get("page", 1)))
+    except ValueError:
+        return err("Bad page or size")
+    where, params = ["j.archived_at IS NOT NULL"], []
+    for word in a.get("q", "").split():
+        where.append("(j.job_number LIKE ? OR j.customer LIKE ? OR j.title LIKE ? OR j.job_ticket LIKE ?"
+                     " OR j.po_number LIKE ? OR j.upc LIKE ? OR j.part_number LIKE ? OR j.inlay_type LIKE ?)")
+        params += [f"%{word}%"] * 8
+    if a.get("customer"):
+        where.append("j.customer = ? COLLATE NOCASE"); params.append(a["customer"])
+    if a.get("status"):
+        where.append("j.status = ?"); params.append(a["status"])
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", a.get("from", "")):
+        where.append("j.archived_at >= ?"); params.append(a["from"] + " 00:00:00")
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", a.get("to", "")):
+        where.append("j.archived_at <= ?"); params.append(a["to"] + " 23:59:59")
+    d = "ASC" if a.get("dir") == "asc" else "DESC"
+    order = ARCHIVE_SORTS.get(a.get("sort"), ARCHIVE_SORTS["archived"]).format(d=d) + ", j.id DESC"
+    w = " AND ".join(where)
+    conn = get_db()
+    total = conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE {w}", params).fetchone()[0]
+    pages = max(1, -(-total // size)); page = min(page, pages)
+    rows = [dict(r) for r in conn.execute(
+        f"SELECT j.*, {ROLL_SUMMARY} FROM jobs j WHERE {w} ORDER BY {order} LIMIT ? OFFSET ?",
+        params + [size, (page - 1) * size])]
+    customers = [r[0] for r in conn.execute(
+        "SELECT DISTINCT customer FROM jobs WHERE archived_at IS NOT NULL AND customer IS NOT NULL "
+        "ORDER BY customer COLLATE NOCASE")]
+    statuses = [r[0] for r in conn.execute(
+        "SELECT DISTINCT status FROM jobs WHERE archived_at IS NOT NULL ORDER BY status")]
+    conn.close()
+    return jsonify({"jobs": rows, "total": total, "page": page, "pages": pages, "size": size,
+                    "customers": customers, "statuses": statuses})
+
+
 @app.route("/api/jobs", methods=["POST"])
 def api_create_job():
     result, code = create_job(request.get_json(silent=True) or {})
@@ -737,6 +799,8 @@ def api_job_edit(job_id):
     if before:
         if "status" in data and data["status"] != before["status"]:
             log_activity(conn, "status", job_id, f"{job_label(before)} set to {data['status']}", who)
+            conn.execute("UPDATE jobs SET completed_at=? WHERE id=?",
+                         (now_str() if data["status"] == "Complete" else None, job_id))
         changed = [f.replace("_", " ") for f in EDITABLE if f != "status" and f in data
                    and (data[f] or None) != (before.get(f) or None)]
         if changed:
@@ -756,6 +820,8 @@ def api_archive(job_id):
     job = _load_job(conn, job_id)
     cur = conn.execute("UPDATE jobs SET archived_at=?, updated_at=? WHERE id=?",
                        (None if undo else ts, ts, job_id))
+    if undo:
+        conn.execute("UPDATE jobs SET completed_at=? WHERE id=? AND status='Complete'", (ts, job_id))
     if not undo and job and job["priority_rank"] is not None:
         conn.execute("UPDATE jobs SET priority_rank=NULL WHERE id=?", (job_id,))
         _renumber_priority(conn); _bump_priority(conn)
@@ -1935,7 +2001,8 @@ def api_thumb_put(tid):
 def api_settings_save():
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
-               "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers"}
+               "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
+               "auto_archive_hours"}
     conn = get_db()
     for k, v in data.items():
         if k in allowed:
@@ -1943,6 +2010,11 @@ def api_settings_save():
                 v = "1" if v in (True, "1", 1, "true") else "0"
             if k == "printers":
                 v = clean_printers(v)
+            if k == "auto_archive_hours":
+                try:
+                    v = max(0, min(8760, int(float(v))))
+                except (TypeError, ValueError):
+                    v = 32
             conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, str(v).strip()))
     conn.commit(); conn.close()
     SS.set_journal_dir(get_settings()["backup_dir"])
@@ -2306,6 +2378,42 @@ def _log_conflicts(conflicts):
     conn.commit(); conn.close()
 
 
+def auto_archive_completed():
+    """Archive jobs that have been Complete for longer than the 'auto_archive_hours' setting (0 = off).
+    Same effect as the Archive button: the record, folder and serials are untouched."""
+    hours = get_settings()["auto_archive_hours"]
+    if hours <= 0:
+        return 0
+    cutoff = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    jobs = [dict(r) for r in conn.execute(
+        """SELECT * FROM jobs WHERE status='Complete' AND archived_at IS NULL
+           AND completed_at IS NOT NULL AND completed_at <= ?""", (cutoff,))]
+    ts, ranked = now_str(), False
+    for job in jobs:
+        conn.execute("UPDATE jobs SET archived_at=?, updated_at=?, priority_rank=NULL WHERE id=?", (ts, ts, job["id"]))
+        ranked = ranked or job["priority_rank"] is not None
+        log_activity(conn, "archived", job["id"],
+                     f"{job_label(job)} archived automatically ({hours} h after it was completed)", "System")
+    if ranked:
+        _renumber_priority(conn); _bump_priority(conn)
+    conn.commit(); conn.close()
+    return len(jobs)
+
+
+def start_auto_archive():
+    def run():
+        while True:
+            try:
+                n = auto_archive_completed()
+                if n:
+                    print(f"  [ARCHIVE] {n} completed job(s) archived automatically")
+            except Exception as e:
+                print(f"  [ARCHIVE] auto-archive failed: {e}")
+            time.sleep(600)
+    threading.Thread(target=run, daemon=True, name="auto-archive").start()
+
+
 def start_serial_keeper():
     def run():
         while True:
@@ -2535,6 +2643,7 @@ if __name__ == "__main__":
     start_backup_scheduler()
     start_template_sync()
     start_serial_keeper()
+    start_auto_archive()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")
     for ip in _lan_ips():
