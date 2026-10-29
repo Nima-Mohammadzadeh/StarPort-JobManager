@@ -966,6 +966,18 @@ details.more p.d{margin:6px 0 0}
           <span class="hint" id="n-start-hint"></span></label>
       </div>
       </div>
+      <div id="n-go2" class="stack" hidden>
+        <label class="f">Customer data sheet
+          <select class="i" id="n-sheet">
+            <option value="">None</option>
+            <option value="go2_seq">GO2: sequential serials (EPC = serial as 8 hex)</option>
+            <option value="go2_rand">GO2: random EPC (E2004 + 19 random hex)</option>
+          </select><span class="hint" id="n-sheet-hint"></span></label>
+        <div id="n-go2-start-row" hidden>
+          <label class="f">Start serial<input class="i data" id="n-go2-start" inputmode="numeric" autocomplete="off" placeholder="e.g. 3,768,662,565">
+            <span class="hint" id="n-go2-start-hint"></span></label>
+        </div>
+      </div>
       <div class="grid2">
         <label class="f">Quantity<input class="i" id="n-qty" type="number" min="1"></label>
         <label class="f">Overage %<input class="i" id="n-ov" type="number" min="0" max="100" step="0.5"></label>
@@ -1351,9 +1363,11 @@ function renderDrawer(keepRoll) {
   let h = '';
   if (j.folder_path && !folder_exists) h += `<div class="warnbox">The job folder can't be reached from the server right now.</div>`;
 
-  h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">No UPC, no serials</span></h3><dl class="kv">
+  h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">${j.data_sheet ? 'No UPC, GO2 data sheet' : 'No UPC, no serials'}</span></h3><dl class="kv">
     ${kv('Quantity', fmt(j.quantity), 'data')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
     ${kv('Labels per roll', fmt(j.lpr), 'data')}${kv('Inlay', esc(j.inlay_type || ''))}${kv('Label size', esc(j.label_size || ''))}
+    ${j.data_sheet ? kv('Data sheet', j.data_sheet === 'go2_seq' ? 'GO2 sequential' : 'GO2 random EPC (E2004…)') : ''}
+    ${j.data_sheet === 'go2_seq' && j.start_serial ? kv('Serial range', `${fmt(j.start_serial)} – ${fmt(end_serial)}`, 'data') : ''}
     ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
     ${kv('UPC', esc(j.upc || ''), 'data')}
     ${kv('Serial range', j.start_serial ? `${fmt(j.start_serial)} – ${fmt(end_serial)}` : '', 'data')}
@@ -1510,15 +1524,43 @@ function setJobType(t) {
   N_TYPE = t;
   document.querySelectorAll('#n-type button').forEach(b => { const on = b.dataset.t === t; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const std = t === 'standard';
-  $('#n-std').hidden = !std; $('#n-qtydb-wrap').style.visibility = std ? '' : 'hidden'; $('#n-attach-row').hidden = std;
+  $('#n-std').hidden = !std; $('#n-attach-row').hidden = std; $('#n-go2').hidden = std;
+  if (std) N('sheet').value = '';
+  sheetChanged(false);
   $('#n-type-note').textContent = std ? 'Serials come from the registry; nothing is ever reused.'
     : 'For jobs without a UPC or outside the normal process: folder, checklist, template, notes and rolls by quantity. No serials, no encoding database.';
   if (!std) { N('upc').value = ''; N('start').value = ''; $('#n-start-row').hidden = true; checkNewUpc(); }
   updateSummary(); runMatch();
 }
+/* GO2 data sheets (special jobs): sequential serials or random E2004 EPCs, written to Data */
+const go2Start = () => +(N('go2-start').value.replace(/[^\d]/g, '')) || 0;
+async function sheetChanged(focus = true) {
+  const v = N('sheet').value, seq = v === 'go2_seq';
+  $('#n-go2-start-row').hidden = !seq;
+  $('#n-qtydb-wrap').style.visibility = (N_TYPE === 'standard' || v) ? '' : 'hidden';
+  $('#n-sheet-hint').textContent = !v ? (/go2/i.test(N('customer').value) ? 'This looks like a GO2 job. Pick the data sheet they ordered.' : 'Optional. Writes the data sheet into the job\'s Data folder.')
+    : seq ? 'Serials count up by one. Nothing is written until you create the job.'
+    : 'Every EPC starts with E2004 and is unique. The numbers are written as fixed values and never change.';
+  if (seq && !N('go2-start').value) {
+    try {
+      const d = await api('/api/go2/next-start');
+      if (d.next_start && !N('go2-start').value) N('go2-start').value = d.next_start.toLocaleString('en-US');
+      $('#n-go2-start-hint').textContent = d.next_start ? `Next free serial after the last GO2 sequential job: ${fmt(d.next_start)}.` : 'No earlier GO2 sequential job. Enter the first serial.';
+    } catch (_) {}
+  }
+  if (seq && focus) N('go2-start').focus();
+  updateSummary();
+}
+N('sheet').addEventListener('change', () => sheetChanged());
+N('customer').addEventListener('input', () => { if (N_TYPE === 'special' && !N('sheet').value) sheetChanged(false); });
+N('go2-start').addEventListener('input', () => {
+  const raw = N('go2-start').value.replace(/[^\d]/g, ''); N('go2-start').value = raw ? Number(raw).toLocaleString('en-US') : '';
+  updateSummary();
+});
 document.querySelectorAll('#n-type button').forEach(b => b.onclick = () => setJobType(b.dataset.t));
 function openNewJob() {
-  ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start'].forEach(k => N(k).value = '');
+  ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start', 'go2-start'].forEach(k => N(k).value = '');
+  N('sheet').value = ''; $('#n-go2-start-hint').textContent = '';
   N('ov').value = META.settings.default_overage_pct && +META.settings.default_overage_pct ? META.settings.default_overage_pct : '';
   N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; $('#n-start-row').hidden = true; $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
@@ -1537,7 +1579,11 @@ function updateSummary() {
   }
   if (qty && lpr) { const full = Math.floor(total / lpr), rest = total % lpr; rows.push(['Rolls', `${full + (rest ? 1 : 0)}` + (rest ? ` (last roll ${fmt(rest)})` : '')]); }
   let spill = '';
-  if (N_TYPE === 'special' && qty) rows.push(['Serials', 'None (special job)']);
+  const sheet = N('sheet').value;
+  if (N_TYPE === 'special' && qty && !sheet) rows.push(['Serials', 'None (special job)']);
+  if (sheet === 'go2_seq' && qty && go2Start()) rows.push(['Serials', `${fmt(go2Start())} – ${fmt(go2Start() + total - 1)}`]);
+  if (sheet === 'go2_rand' && qty) rows.push(['EPCs', `${fmt(total)} random, all E2004…`]);
+  if (sheet && qty) rows.push(['Data files', dbSplit(total, per).map(fmt).join(' + ')]);
   if (qty && N('upc').value) {
     const s = dbSplit(total, per); rows.push(['DB files', s.map(fmt).join(' + ')]);
     if (s.length > 1 && s[s.length - 1] < per * 0.1) spill = `The last DB file only holds ${fmt(s[s.length - 1])} rows because overage pushed past ${fmt(per)}. Leave Qty per DB file blank for a single file.`;
@@ -1667,6 +1713,7 @@ async function submitNewJob(allowDup = false, offline = null) {
     notes: N('notes').value, upc: N('upc').value.trim(), quantity: N('qty').value, overage_pct: N('ov').value,
     lpr: N('lpr').value, qty_db: N('qtydb').value, template_id: N_TEMPLATE,
     start_serial: startValue() || '',
+    data_sheet: N_TYPE === 'special' ? N('sheet').value : '', go2_start: go2Start() || '',
   };
   const msg = $('#n-msg'); msg.textContent = '';
   if (N_TICKET_DUP) return msg.textContent = `Ticket ${body.job_ticket.trim()} already has ${N_TICKET_DUP[0].job_number}. A ticket can only have one job.`, N('ticket').focus();
@@ -1677,6 +1724,8 @@ async function submitNewJob(allowDup = false, offline = null) {
   if (N_TYPE === 'standard' && !body.upc) return msg.textContent = 'A standard job needs a UPC. Choose Special for jobs without one.', N('upc').focus();
   if (body.upc && !body.quantity) return msg.textContent = 'Quantity is required when there is a UPC', N('qty').focus();
   if (startProblem()) return msg.textContent = 'Start serial: ' + startProblem(), N('start').focus();
+  if (body.data_sheet && !body.quantity) return msg.textContent = 'Quantity is required for a data sheet', N('qty').focus();
+  if (body.data_sheet === 'go2_seq' && !body.go2_start) return msg.textContent = 'Enter the start serial for the sequential sheet', N('go2-start').focus();
   const btn = $('#n-create'); btn.disabled = true; btn.textContent = 'Creating…';
   try {
     localStorage.setItem('jm_operator', body.created_by);

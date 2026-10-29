@@ -157,6 +157,126 @@ def _write_xlsx(path, records, sheet_title):
     wb.save(path)
 
 
+# ── GO2 data sheets ───────────────────────────────────────────────────────────
+# GO2 orders tag data without a UPC. Two kinds of sheet:
+#   go2_seq   Serial counts up by one; EPC = the serial as 8 hex digits (DEC2HEX(serial, 8)).
+#   go2_rand  EPC = "E2004" + 19 random hex digits (24 hex = 96 bits).
+# Everything is written as plain values, never formulas. The old Excel sheets used
+# RANDBETWEEN formulas (the numbers changed on every open) and a drag-filled Prefix column
+# that counted up (E2004, E2005, ...) past row 100,000. Both are impossible here: the prefix
+# is a constant, the random digits are drawn once, and every file is re-read and checked
+# after it is written. A file that fails the check is deleted and the job is not created.
+GO2_SHEETS = {"go2_seq": "GO2 sequential", "go2_rand": "GO2 random EPC"}
+GO2_PREFIX = "E2004"
+GO2_RAND_LEN = 19
+GO2_EPC_LEN = len(GO2_PREFIX) + GO2_RAND_LEN       # 24
+GO2_MAX_SERIAL = 0xFFFFFFFF                        # 8 hex digits
+
+
+def go2_seq_epc(serial: int) -> str:
+    return format(int(serial), "08X")
+
+
+def go2_random_epcs(count: int, exclude=()) -> list:
+    """`count` unique EPCs: fixed prefix + uniformly random hex (not RANDBETWEEN-style)."""
+    import secrets
+    seen, out = set(exclude), []
+    while len(out) < count:
+        epc = GO2_PREFIX + format(secrets.randbits(4 * GO2_RAND_LEN), f"0{GO2_RAND_LEN}X")
+        if epc not in seen:
+            seen.add(epc); out.append(epc)
+    return out
+
+
+def go2_file_names(label: str, parts: int) -> list:
+    base = _safe_name(label) or "GO2"
+    return [f"{base}_DB{i}_Serials.xlsx" if parts > 1 else f"{base}_Serials.xlsx"
+            for i in range(1, parts + 1)]
+
+
+def generate_go2_files(job_dir: str, kind: str, label: str, total_qty: int,
+                       qty_db: int | None, start_serial: int | None = None) -> dict:
+    """Write the GO2 data sheet(s) into <job_dir>/Data and verify each one."""
+    if kind not in GO2_SHEETS:
+        raise ValueError(f"Unknown GO2 data sheet type: {kind}")
+    if not XLSX_AVAILABLE:
+        raise RuntimeError("openpyxl is needed to write the GO2 data sheets")
+    total_qty = int(total_qty)
+    if kind == "go2_seq":
+        if start_serial is None or int(start_serial) < 1:
+            raise ValueError("A sequential GO2 sheet needs a start serial")
+        if int(start_serial) + total_qty - 1 > GO2_MAX_SERIAL:
+            raise ValueError("That range runs past the largest serial 8 hex digits can hold")
+    data_dir = os.path.join(job_dir, "Data")
+    os.makedirs(data_dir, exist_ok=True)
+    split = db_file_split(total_qty, qty_db)
+    names = go2_file_names(label, len(split))
+    all_random = go2_random_epcs(total_qty) if kind == "go2_rand" else None
+    files, written, serial, pos = [], [], int(start_serial or 0), 0
+    try:
+        for idx, (rows, name) in enumerate(zip(split, names), start=1):
+            path = os.path.join(data_dir, name)
+            if kind == "go2_seq":
+                recs = [(serial + i, go2_seq_epc(serial + i)) for i in range(rows)]
+                serial += rows
+            else:
+                recs = all_random[pos:pos + rows]; pos += rows
+            _write_go2_xlsx(path, kind, recs, f"DB{idx}" if len(split) > 1 else "Data")
+            written.append(path)
+            verify_go2_file(path, kind, rows, first_serial=recs[0][0] if kind == "go2_seq" else None)
+            files.append(path)
+    except Exception:
+        for p in written:
+            try: os.remove(p)
+            except OSError: pass
+        raise
+    return {"files": files, "file_count": len(files), "split": split,
+            "start_serial": int(start_serial) if kind == "go2_seq" else None,
+            "end_serial": serial - 1 if kind == "go2_seq" else None}
+
+
+def _write_go2_xlsx(path, kind, recs, sheet_title):
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_title)
+    if kind == "go2_seq":
+        ws.append(["Serial", "EPC"])
+        for serial, epc in recs:
+            ws.append([serial, epc])
+    else:
+        ws.append(["Prefix", "Random Gen", "EPC"])
+        for epc in recs:
+            ws.append([GO2_PREFIX, epc[len(GO2_PREFIX):], epc])
+    wb.save(path)
+
+
+def verify_go2_file(path: str, kind: str, expected_rows: int, first_serial: int | None = None) -> None:
+    """Re-open a written GO2 sheet and check every row. Raises ValueError on any problem."""
+    import re
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True)
+    try:
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+    finally:
+        wb.close()
+    if len(rows) != expected_rows:
+        raise ValueError(f"{os.path.basename(path)}: expected {expected_rows:,} rows, found {len(rows):,}")
+    hexre = re.compile(r"[0-9A-F]+")
+    seen = set()
+    for i, row in enumerate(rows, start=2):
+        if kind == "go2_seq":
+            serial, epc = row[0], row[1]
+            if serial != first_serial + (i - 2) or epc != go2_seq_epc(serial):
+                raise ValueError(f"{os.path.basename(path)}: row {i} is out of sequence or its EPC is wrong")
+        else:
+            prefix, rnd, epc = row[0], row[1], row[2]
+            if (prefix != GO2_PREFIX or not isinstance(rnd, str) or len(rnd) != GO2_RAND_LEN
+                    or epc != prefix + rnd or len(epc) != GO2_EPC_LEN or not hexre.fullmatch(epc)):
+                raise ValueError(f"{os.path.basename(path)}: row {i} has a bad prefix or EPC ({prefix!r}, {epc!r})")
+        if epc in seen:
+            raise ValueError(f"{os.path.basename(path)}: row {i} repeats an EPC")
+        seen.add(epc)
+
+
 # ── Quality Control sheet ─────────────────────────────────────────────────────
 # Same layout as the original QC sheet the floor already uses. The only addition:
 # a blank write-in area under each roll for the rewinders. If that space would push
