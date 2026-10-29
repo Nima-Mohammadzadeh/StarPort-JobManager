@@ -33,7 +33,7 @@ from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, TH
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
-                        generate_db_files, generate_qc_sheet, qc_html, _safe_name)
+                        generate_db_files, generate_go2_files, is_go2_customer, GO2_SHEET, generate_qc_sheet, qc_html, _safe_name)
 import serial_store as SS
 import backup
 from generators import decode_epc
@@ -137,6 +137,7 @@ def init_db():
     add_col("jobs", "priority_rank", "priority_rank INTEGER")
     add_col("jobs", "created_by", "created_by TEXT")
     add_col("jobs", "completed_at", "completed_at TEXT")
+    add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
     # Jobs already marked Complete before this column existed: use when they were set to Complete.
     cur.execute("""UPDATE jobs SET completed_at = COALESCE(
                        (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
@@ -312,7 +313,8 @@ def create_job(data: dict) -> tuple[dict, int]:
       standard  UPC + serials: encoding database, serial-tracked rolls, QC sheet.
       special   no UPC / not our normal process: folder, checklist, template, notes and
                 (if quantity and labels per roll are given) rolls tracked by quantity.
-                No serials are given out."""
+                No serials are given out. Optional data_sheet "go2_rand" (customer GO2 only)
+                writes GO2's random EPC data sheet into Data (see generators.py)."""
     g = lambda k: (str(data.get(k) or "")).strip() or None
     customer, title, ticket = g("customer"), g("title"), g("job_ticket")
     upc, label_size, inlay  = g("upc"), g("label_size"), g("inlay_type")
@@ -323,15 +325,20 @@ def create_job(data: dict) -> tuple[dict, int]:
         return {"error": "Job type must be standard or special"}, 400
 
     if not customer: return {"error": "Customer is required"}, 400
+    if is_go2_customer(customer):
+        customer = "GO2"                    # go2 / Go2 / gO2 are one customer (folders, grouping)
     if not title:    return {"error": "Item / title is required"}, 400
     if job_type == "standard" and not upc:
         return {"error": "A standard job needs a UPC. Choose Special for jobs without one."}, 400
+    data_sheet = g("data_sheet")
+    if data_sheet and (data_sheet != GO2_SHEET or job_type != "special" or not is_go2_customer(customer)):
+        return {"error": "The random EPC data sheet is only for special (no UPC) jobs for customer GO2."}, 400
     if job_type == "special":
         upc = None                          # special jobs never take serials
     try:
-        quantity = _int(data.get("quantity"), "Quantity", required=(job_type == "standard"))
+        quantity = _int(data.get("quantity"), "Quantity", required=(job_type == "standard" or bool(data_sheet)))
         lpr      = _int(data.get("lpr"), "Labels per roll")
-        qty_db   = _int(data.get("qty_db"), "Qty per DB file") if upc else None
+        qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
         start_override = _int(data.get("start_serial"), "Start serial") if upc else None
         offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
         overage  = float(data.get("overage_pct") or 0)
@@ -375,8 +382,9 @@ def create_job(data: dict) -> tuple[dict, int]:
         # The ticket, UPC and quantity go in with the reservation so a second request that
         # arrives while this one is still being built can see it and be refused.
         cur = conn.execute(
-            "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?)", (job_number, ticket, title, customer, upc, quantity, ts, ts))
+            "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
+            " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
+            (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
         job_id = cur.lastrowid
         conn.commit()
     except Exception as e:
@@ -440,6 +448,15 @@ def create_job(data: dict) -> tuple[dict, int]:
                 generated["db_files"] = generate_db_files(job_dir, upc, start_serial, total_qty, qty_db)
             except Exception as e:
                 warnings.append(f"Encoding database not written: {e}")
+        if data_sheet:
+            try:
+                generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
+            except Exception as e:
+                # Nothing is half-written (the generator removes its own files) and no serial
+                # was taken from the registry, so the job is simply not created.
+                _discard_job(job_id, job_dir if created_new else None)
+                return {"error": f"The GO2 data sheet could not be written, "
+                                 f"so nothing was created: {e}"}, 500
         r = generate_checklist_html(job_dir, job)
         if not r.get("success"): warnings.append(f"Checklist not written: {r.get('error')}")
         if rolls:
@@ -467,7 +484,8 @@ def create_job(data: dict) -> tuple[dict, int]:
         log_activity(conn, "created", job_id,
                      f"Created {job_number} for {customer}"
                      + (f", ticket {ticket}" if ticket else "")
-                     + (" (special, no serials)" if job_type == "special" else "")
+                     + (" (special, GO2 random EPC data sheet)" if data_sheet
+                        else " (special, no serials)" if job_type == "special" else "")
                      + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else ""), created_by)
         conn.commit()
         saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
