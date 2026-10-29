@@ -11,6 +11,40 @@ Everything the standalone app did is still there: Home / Proof / Queue / Setting
 the editable customer PDF, customer package, revision guard, approval lock, recovery snapshots,
 template profiles and the inlay library.
 
+The proofing page uses Job Manager's look: the same sidebar (Jobs, Roll tracking, Archive, Proofing,
+Templates, Tools, Settings), colours, buttons, tables and status chips. Its own pages are tabs at the
+top: **Jobs & proofs**, **Proof**, **Queue** and **Settings**.
+
+## Jobs & proofs
+
+The first tab lists Job Manager's jobs with each one's proof state. **Needs a proof** (the default)
+shows jobs with no proof, a proof that isn't approved yet, or an approved proof the job has since
+changed; **All jobs** shows everything. Search by customer, ticket, part #, PO or UPC.
+**Start proof** creates the proof from the job; **Open proof** opens the existing one.
+
+## Sync with the job
+
+A linked proof and its job stay in step on these fields: customer, ticket (Job #), part #, quantity,
+UPC (GTIN and barcode 1), label size, serial and its EPC, inlay, template, and PO (PO / data reference).
+
+- **Job → proof.** When a job is edited (or its template changes), its proofs are updated at once;
+  a background check every 30 seconds catches anything else. A proof is also checked whenever it is
+  opened or saved. A field is only replaced if nobody changed it on the proof: each proof remembers
+  the job's values from the last sync, and a value typed on the proof is kept.
+- **Kept values are reported.** The proof page shows a yellow bar, *Differs from JOB-…*, listing each
+  field with the proof's value and the job's, and **Use job value** / **Use all job values** buttons.
+  The Jobs list and drawer show *Proof differs from job*.
+- **Approved and archived proofs are never changed.** If the job changes after approval, the proof is
+  flagged *Proof out of date* in the Jobs list, drawer, Queue and Jobs & proofs tab, and the proof page
+  offers **Start next revision**.
+- **Proof → job.** Saving a proof fills the job's part #, PO # and inlay **only where the job has none**.
+  It never overwrites job data. The change is logged in the job's activity.
+- **An open proof updates itself.** If its job changes while the page is open and nothing has been typed,
+  the page reloads the proof and says what changed ("Updated from JOB-… at 14:05: Part #, PO … Regenerate
+  the preview and the PDF before sending"). If something has been typed, nothing is replaced; it says the
+  proof changed on the server and offers **Reload**.
+  Every sync is in the job's activity as *Job sync*.
+
 ## What Job Manager adds
 
 | | |
@@ -80,18 +114,18 @@ These are in the Beta 21.4 / 21.5 files that were provided, not in Job Manager:
 
 | Path | What |
 |---|---|
-| `proofing/core/` | The proofing app's `app/` package. Changed: `settings.py` (data folder from config.ini), `models.py` (`jm_job_id`, `jm_job_number`), `package_export.py` (link fields kept out of customer packages), `proof_pdf.py` (fix 1) |
-| `proofing/routes.py` | Its server (`support/runtime/web_server.py`) as a Flask blueprint at `/proofing`, plus the Job Manager link |
-| `proofing/jm_link.py` | `job_proofs` table: which proof belongs to which job (rebuilt from the proof files at startup) |
+| `proofing/core/` | The proofing app's `app/` package. Changed: `settings.py` (data folder from config.ini), `models.py` (`jm_job_id`, `jm_job_number`, `jm_sync`), `package_export.py` (link and sync fields kept out of customer packages), `proof_pdf.py` (fix 1) |
+| `proofing/routes.py` | Its server (`support/runtime/web_server.py`) as a Flask blueprint at `/proofing`, plus the Job Manager link, the jobs list and the sync (`sync_proof`, `reconcile`, `job_changed`) |
+| `proofing/jm_link.py` | `job_proofs` table: which proof belongs to which job and its sync state (rebuilt from the proof files at startup) |
 | `proofing/__init__.py` | Registration, fallback page when Pillow/reportlab are missing, Data panel row, backup sources |
-| `proofing/static/` | The proofing page (`index.html`, `app.js`, `styles.css`), adapted for `/proofing` (changes marked `JM:`) |
+| `proofing/static/` | The proofing page (`index.html`, `app.js`, `styles.css`), adapted for `/proofing` and restyled as Job Manager (changes marked `JM:`). Element IDs are unchanged |
 | `proofing/assets/branding/` | Logos printed on the proof |
 | `import_proofing.py`, `.bat` | Import from the standalone app |
 | `tests/test_proofing.py` | Proofing tests |
 
 Changed Job Manager files: `app.py` (import, `init_schema`, proof state on `/api/jobs`, backups, Data panel,
-registration), `config.py` / `config.ini.example` (`[proofing] data_dir`), `backup.py` / `restore_backup.py`
-(proof records), `templates/index.html` (Proofing nav, Jobs list chip, drawer Proof section, `/?job=<id>`),
+registration, `proofing.job_changed` after a job edit), `config.py` / `config.ini.example` (`[proofing] data_dir`), `backup.py` / `restore_backup.py`
+(proof records), `templates/index.html` (Proofing nav, Jobs list chip incl. sync state, drawer Proof section, `/?job=<id>`, `/?view=<page>`),
 `requirements.txt`, `run.bat`, `run.sh`, `mock_demo/run_mock.py`, `tests/conftest.py`.
 
 ## Tests
@@ -99,7 +133,10 @@ registration), `config.py` / `config.ini.example` (`[proofing] data_dir`), `back
 `python -m pytest -q` runs the existing tests plus `tests/test_proofing.py`, covering: start from a job
 (EPC equals Job Manager's), save conflicts, path safety, the PDF in the job's Proof folder, approval,
 the EPC warning, backup and restore of proof records, relinking, deleting a job with a proof, the import,
-the fallback page, and concurrent Start proof.
+the fallback page, concurrent Start proof, and the sync (job edits reach untouched proof fields, typed
+values are kept and reported, blank job fields are filled from the proof, approved proofs are only
+flagged, edits apply without waiting for the background check, the jobs list, and the open page
+noticing a change).
 
 `tests/test_snapshot.py::test_allocations_during_backups_never_cause_false_failures` fails on the
 uploaded `main` as well, before any of this: concurrent `registry_ok(force=True)` calls in one process

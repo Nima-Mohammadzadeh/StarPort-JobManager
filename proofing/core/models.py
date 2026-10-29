@@ -136,6 +136,10 @@ class ProofJob:
     # table in the Job Manager database is the index; these fields let it be rebuilt.
     jm_job_id: int = 0
     jm_job_number: str = ""
+    # Sync baseline: each job-owned field's value as last taken from (or agreed with) the job.
+    # A field is updated from the job only while the proof still holds that value, so a value
+    # someone typed on the proof is never overwritten. "_at"/"_changes" describe the last update.
+    jm_sync: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, object]:
         return asdict(self)
@@ -158,6 +162,8 @@ class ProofJob:
             clean["activity_log"] = []
         if not isinstance(clean.get("rework_history", []), list):
             clean["rework_history"] = []
+        if not isinstance(clean.get("jm_sync", {}), dict):
+            clean["jm_sync"] = {}
         try:
             clean["jm_job_id"] = int(clean.get("jm_job_id", 0) or 0)
         except (TypeError, ValueError):

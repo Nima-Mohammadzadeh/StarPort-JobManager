@@ -1421,6 +1421,8 @@ function renderDrawer(keepRoll) {
 const PROOF_CLASS = {'Approved': 'ok', 'Customer Review': 'warn', 'Internal Review': 'warn', 'Changes Requested': 'bad'};
 function proofChip(j) {
   if (!j.proof_status) return '';
+  if (j.proof_sync === 'approved_changed') return '<span class="chip-proof bad" title="The job changed after its proof was approved">Proof out of date</span>';
+  if (j.proof_sync === 'differs') return '<span class="chip-proof warn" title="Values typed on the proof differ from the job">Proof differs from job</span>';
   const label = j.proof_status === 'Draft' && j.proof_lifecycle === 'generated' ? 'Proof generated' : 'Proof ' + j.proof_status.toLowerCase();
   return `<span class="chip-proof ${PROOF_CLASS[j.proof_status] || ''}" title="RFID proof: ${esc(j.proof_status)}">${esc(label)}</span>`;
 }
@@ -1443,6 +1445,8 @@ async function loadDrawerProof(id) {
       <b>P${esc(p.proof_revision || '1')}</b><span class="pid">${esc(p.proof_id || '')}</span>
       ${p.location === 'archive' ? '<span class="sub">archived</span>' : ''}${p.exists ? '' : '<span class="sub" style="color:var(--red)">file missing</span>'}
       ${p.last_generated_at ? `<span class="sub">generated ${esc(p.last_generated_at.replace('T', ' ').slice(0, 16))}</span>` : '<span class="sub">not generated yet</span>'}
+      ${p.sync_state === 'approved_changed' ? `<span class="chip-proof bad" title="Start the next proof revision">Job changed after approval: ${esc(p.sync_note || '')}</span>`
+        : p.sync_state === 'differs' ? `<span class="chip-proof warn" title="Typed on the proof; open it to use the job's values">Differs from job: ${esc(p.sync_note || '')}</span>` : ''}
       <span style="margin-left:auto;display:flex;gap:6px">${p.output_url ? `<a href="${esc(p.output_url)}" target="_blank">${esc(p.output_name || 'Proof PDF')}</a>` : ''}
       ${p.exists ? `<a class="btn sm quiet" href="${esc(p.open_url)}">Open</a>` : ''}</span></div>`).join('')
     + (open.length ? `<div style="margin-top:4px"><a class="btn sm quiet" href="/proofing/?job=${id}&new=1">Start another proof for this job</a></div>` : '');
@@ -2697,8 +2701,9 @@ async function poll() {
 
 (async function start() {
   try { await loadMeta(); await loadJobs(); loadFeed(); loadPriority(); } catch (e) { toast('Could not reach the server: ' + e.message, true); }
-  const deep = new URLSearchParams(location.search).get('job');               // /?job=<id> opens that job
-  if (deep && /^\d+$/.test(deep)) { history.replaceState(null, '', '/'); openJob(+deep); }
+  const qs = new URLSearchParams(location.search), deep = qs.get('job'), view = qs.get('view');
+  if (view && VIEW_TITLES[view]) { history.replaceState(null, '', '/'); showView(view); }      // /?view=rolls etc. (links from Proofing)
+  if (deep && /^\d+$/.test(deep)) { history.replaceState(null, '', '/'); openJob(+deep); }    // /?job=<id> opens that job
   setInterval(poll, 15000); poll();
 })();
 </script>

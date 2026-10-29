@@ -229,3 +229,113 @@ def test_two_people_starting_the_same_proof_get_one(pf):
     ts = [threading.Thread(target=go) for _ in range(6)]
     [t.start() for t in ts]; [t.join() for t in ts]
     assert not errs and len(set(paths)) == 1
+
+
+# ── job ⇄ proof sync ─────────────────────────────────────────────────────────
+def edit_job(pf, job_id, **fields):
+    """Edit a job the way the drawer does, then run the proof sync it triggers (synchronously)."""
+    r = pf.client.patch(f"/api/jobs/{job_id}", json=fields, headers={"X-Operator": "Sam Rivera"})
+    assert r.status_code == 200, r.get_json()
+    import sys
+    sys.modules["proofing.routes"].reconcile(job_id)
+
+
+def load(pf, path):
+    r, d = post(pf.client, "/proofing/api/job/load", {"path": path})
+    assert r.status_code == 200, d
+    return d
+
+
+def test_job_edits_reach_untouched_proof_fields(pf):
+    j, d = start_proof(pf, 20)
+    edit_job(pf, j["id"], part_number="106-STK052E", po_number="PO-778", label_size="1.85 x 0.91",
+             job_ticket="T20-B")
+    p = load(pf, d["path"])
+    assert p["job"]["part_number"] == "106-STK052E" and p["job"]["job_number"] == "T20-B"
+    assert (p["job"]["label_width"], p["job"]["label_height"]) == (1.85, 0.91)
+    assert '"po_data_reference": "PO-778"' in p["job"]["internal_comments"]
+    assert p["sync"]["state"] == "ok"
+    acts = pf.client.get(f"/api/activity?job_id={j['id']}").get_json()["items"]
+    assert any("updated from the job" in a["message"] and "Part #" in a["message"] for a in acts)
+
+
+def test_a_value_typed_on_the_proof_is_kept_and_reported(pf):
+    j, d = start_proof(pf, 21)
+    edit_job(pf, j["id"], part_number="JOB-1")
+    p = load(pf, d["path"])
+    assert p["job"]["part_number"] == "JOB-1"
+    _, s = post(pf.client, "/proofing/api/job/save",
+                {"job": dict(p["job"], part_number="CUSTOMER-SAYS"), "path": p["path"], "rev": p["rev"]})
+    assert s["sync"]["state"] == "differs"                       # typed over the job's value
+    assert pf.client.get(f"/api/jobs/{j['id']}").get_json()["job"]["part_number"] == "JOB-1"   # job untouched
+    edit_job(pf, j["id"], part_number="JOB-SAYS")
+    p = load(pf, s["path"])
+    assert p["job"]["part_number"] == "CUSTOMER-SAYS"
+    assert p["sync"]["state"] == "differs" and p["sync"]["differs"][0]["job"] == "JOB-SAYS"
+    row = next(x for x in pf.client.get("/api/jobs").get_json()["jobs"] if x["id"] == j["id"])
+    assert row["proof_sync"] == "differs"
+    _, u = post(pf.client, "/proofing/api/jm/use-job-values", {"path": p["path"], "rev": p["rev"], "fields": ["part_number"]})
+    assert u["job"]["part_number"] == "JOB-SAYS" and u["sync"]["state"] == "ok"
+    edit_job(pf, j["id"], part_number="JOB-SAYS-2")             # untouched again, so it follows the job
+    assert load(pf, s["path"])["job"]["part_number"] == "JOB-SAYS-2"
+
+
+def test_blank_job_fields_are_filled_from_the_proof(pf):
+    j, d = start_proof(pf, 27)
+    spec = d["job"]["internal_comments"].replace('"po_data_reference": ""', '"po_data_reference": "PO-FROM-PROOF"')
+    _, s = post(pf.client, "/proofing/api/job/save", {"job": dict(d["job"], part_number="P-FROM-PROOF",
+                internal_comments=spec), "path": d["path"], "rev": d["rev"]})
+    assert {f["field"] for f in s["filled_job"]} == {"part_number", "po_number"}
+    jj = pf.client.get(f"/api/jobs/{j['id']}").get_json()["job"]
+    assert jj["part_number"] == "P-FROM-PROOF" and jj["po_number"] == "PO-FROM-PROOF"
+    acts = pf.client.get(f"/api/activity?job_id={j['id']}").get_json()["items"]
+    assert any("filled in from" in a["message"] for a in acts)
+
+
+def test_an_approved_proof_is_never_changed_only_flagged(pf):
+    j, d = start_proof(pf, 22)
+    proof = ready(pf, d["job"])
+    _, s = post(pf.client, "/proofing/api/job/save", {"job": proof, "path": d["path"], "rev": d["rev"]})
+    _, g = post(pf.client, "/proofing/api/proof/pdf", {"job": s["job"]})
+    _, s2 = post(pf.client, "/proofing/api/job/save", {"job": g["job"], "path": s["path"], "rev": s["rev"]})
+    _, a = post(pf.client, "/proofing/api/approval/update",
+                {"job": s2["job"], "path": s2["path"], "rev": s2["rev"], "status": "Approved", "operator": "SR"})
+    assert a["locked"]
+    before = open(a["path"], "rb").read()
+    edit_job(pf, j["id"], part_number="CHANGED-AFTER-APPROVAL")
+    assert open(a["path"], "rb").read() == before
+    proofs = pf.client.get(f"/proofing/api/jm/jobs/{j['id']}/proofs").get_json()["proofs"]
+    assert proofs[0]["sync_state"] == "approved_changed" and "Part #" in proofs[0]["sync_note"]
+    acts = pf.client.get(f"/api/activity?job_id={j['id']}").get_json()["items"]
+    assert any("start a new proof revision" in x["message"] for x in acts)
+    needs = post(pf.client, "/proofing/api/jm/jobs", {"show": "needs"})[1]["jobs"]
+    assert any(x["id"] == j["id"] for x in needs)                 # back on the to-do list
+
+
+def test_editing_a_job_updates_its_proofs_without_waiting(pf):
+    import time
+    j, d = start_proof(pf, 23)
+    pf.client.patch(f"/api/jobs/{j['id']}", json={"part_number": "FAST-1"})
+    for _ in range(40):
+        if json.load(open(d["path"]))["job"]["part_number"] == "FAST-1":
+            break
+        time.sleep(0.1)
+    assert json.load(open(d["path"]))["job"]["part_number"] == "FAST-1"
+
+
+def test_proofing_home_lists_jobs_that_need_a_proof(pf):
+    a = pf.job(24)["job"]
+    b, _ = start_proof(pf, 25)
+    d = post(pf.client, "/proofing/api/jm/jobs", {"show": "needs"})[1]
+    ids = [x["id"] for x in d["jobs"]]
+    assert a["id"] in ids and b["id"] in ids and d["without_proof"] >= 1
+    assert next(x for x in d["jobs"] if x["id"] == b["id"])["proof_status"] == "Draft"
+    assert [x["id"] for x in post(pf.client, "/proofing/api/jm/jobs", {"q": "T24"})[1]["jobs"]] == [a["id"]]
+
+
+def test_page_can_tell_when_its_proof_changed_on_the_server(pf):
+    j, d = start_proof(pf, 26)
+    r1 = post(pf.client, "/proofing/api/job/rev", {"path": d["path"]})[1]
+    edit_job(pf, j["id"], part_number="P-26")
+    r2 = post(pf.client, "/proofing/api/job/rev", {"path": d["path"]})[1]
+    assert r1["rev"] != r2["rev"] and "Part #" in r2["last_sync"]["_changes"]

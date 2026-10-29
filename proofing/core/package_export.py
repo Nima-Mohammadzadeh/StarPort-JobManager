@@ -23,6 +23,7 @@ def public_job_dict(job: ProofJob) -> Dict[str, Any]:
     # Job Manager link fields are internal.
     data.pop("jm_job_id", None)
     data.pop("jm_job_number", None)
+    data.pop("jm_sync", None)
     data.pop("last_generated_snapshot", None)
     data.pop("last_generated_proof_revision", None)
     data.pop("last_generated_master_company", None)

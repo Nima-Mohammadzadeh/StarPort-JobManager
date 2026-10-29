@@ -55,6 +55,14 @@ def start(app=None):
               + ("  (next to the app: set [proofing] data_dir for a shared folder)" if PROOFING_IS_DEFAULT else ""))
 
 
+def job_changed(job_id):
+    """app.py calls this after a job is edited: its proofs take the new values right away
+    (a background check catches every other kind of change within half a minute)."""
+    if STATE["available"]:
+        from . import routes
+        routes.job_changed(job_id)
+
+
 def _register_fallback(app):
     from flask import Blueprint, jsonify
     from html import escape

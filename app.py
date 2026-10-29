@@ -859,6 +859,7 @@ def api_job_edit(job_id):
     job = _load_job(conn, job_id); conn.close()
     if not cur.rowcount:
         return err("Job not found", 404)
+    proofing.job_changed(job_id)                     # its proofs take the new values
     return jsonify({"success": True, "job": job})
 
 
@@ -1446,6 +1447,7 @@ def api_job_template(job_id):
                  (res["dest_path"], now_str(), job_id))
     log_activity(conn, "template", job_id, f"{job_label(job)}: template {os.path.basename(res['dest_path'])} copied into Print")
     conn.commit(); conn.close()
+    proofing.job_changed(job_id)
     return jsonify({"success": True, "dest_path": res["dest_path"]})
 
 

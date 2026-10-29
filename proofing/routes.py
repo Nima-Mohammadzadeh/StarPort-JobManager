@@ -24,6 +24,7 @@ person's PC:
 from __future__ import annotations
 
 import contextlib
+import copy
 import csv
 import hashlib
 import json
@@ -678,7 +679,7 @@ def _jm_row(job: ProofJob, conn=None) -> Optional[dict]:
 def _log(conn, row, message: str) -> None:
     if row and "log_activity" in HOOKS:
         label = HOOKS["job_label"](row) if "job_label" in HOOKS else row.get("job_number", "")
-        HOOKS["log_activity"](conn, "proof", row["id"], f"{label}: {message}", _who())
+        HOOKS["log_activity"](conn, "proof", row["id"], f"{label}: {message}", _who() or "Job sync")
 
 
 def _index(job: ProofJob, path, log_message: Optional[str] = None) -> Optional[dict]:
@@ -879,7 +880,248 @@ def proof_from_jm_job(row: dict) -> tuple:
     job.internal_comments = (f"Started from Job Manager {row['job_number']}.\n"
                              f"{VARIABLE_SPEC_START}{json.dumps(spec)}{VARIABLE_SPEC_END}")
     job.jm_job_id, job.jm_job_number = int(row["id"]), row["job_number"]
+    # Sync baseline: nothing on a new proof was typed by anyone yet, so every job-owned field
+    # (filled from the job, or still a default) may follow later changes to the job.
+    pv = proof_values(job)
+    job.jm_sync = {f: pv.get(f) for f, _ in SYNC_FIELDS}
     return job, notes
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Job ⇄ proof sync
+# ══════════════════════════════════════════════════════════════════════════════
+# Job → proof: the fields below belong to the job. Each proof remembers the value it last took
+# from the job (job.jm_sync). When the job changes, a field is updated only while the proof
+# still holds that remembered value (or is blank), so anything typed on the proof is kept and
+# reported as "differs". Approved / archived proofs are never changed, only reported.
+# Proof → job: blank job fields in BACKFILL are filled in from the proof when it is saved.
+SYNC_FIELDS = (("customer", "Customer"), ("job_number", "Job #"), ("part_number", "Part #"),
+               ("quantity", "Quantity"), ("gtin", "GTIN / UPC"), ("barcode_data_1", "Barcode 1 data"),
+               ("label_size", "Label size"), ("serial", "Serial"), ("epc_hex", "EPC"), ("inlay", "RFID inlay"),
+               ("template_path", "BarTender template"), ("po_data_reference", "PO / data reference"))
+SYNC_LABELS = dict(SYNC_FIELDS)
+BACKFILL = (("part_number", "part_number", "Part #"), ("po_data_reference", "po_number", "PO #"),
+            ("inlay", "inlay_type", "Inlay"))
+SYNC_INTERVAL = 30          # seconds between background checks for changed jobs
+
+
+def _spec_of(job: ProofJob) -> dict:
+    raw = str(job.internal_comments or "")
+    a = raw.find(VARIABLE_SPEC_START)
+    b = raw.find(VARIABLE_SPEC_END, a + 1) if a >= 0 else -1
+    if a < 0 or b < 0:
+        return {}
+    try:
+        spec = json.loads(raw[a + len(VARIABLE_SPEC_START):b])
+        return spec if isinstance(spec, dict) else {}
+    except ValueError:
+        return {}
+
+
+def _set_spec(job: ProofJob, key: str, value) -> None:
+    raw = str(job.internal_comments or "")
+    spec = _spec_of(job) or {"version": 1}
+    spec[key] = value
+    a = raw.find(VARIABLE_SPEC_START)
+    b = raw.find(VARIABLE_SPEC_END, a + 1) if a >= 0 else -1
+    rest = (raw[:a] + raw[b + len(VARIABLE_SPEC_END):]).strip() if a >= 0 and b >= 0 else raw.strip()
+    job.internal_comments = "\n".join(x for x in (rest, f"{VARIABLE_SPEC_START}{json.dumps(spec)}{VARIABLE_SPEC_END}") if x)
+
+
+def job_values(row: dict) -> dict:
+    """The job's values in proof terms. A field the job doesn't specify is left out."""
+    v = {"customer": row.get("customer"), "job_number": row.get("job_ticket") or row.get("job_number"),
+         "part_number": row.get("part_number"), "quantity": str(row["quantity"]) if row.get("quantity") else None,
+         "po_data_reference": row.get("po_number")}
+    upc, start = (row.get("upc") or "").strip(), row.get("start_serial")
+    if upc:
+        v["gtin"] = v["barcode_data_1"] = upc
+        if start:
+            v["serial"], v["epc_hex"] = int(start), generate_epc(upc, int(start))
+    elif row.get("data_sheet") == CDO_SHEET and start:
+        v["serial"], v["epc_hex"] = str(start), cdo_epc(start)
+    w, h = _label_size(row.get("label_size") or "")
+    if w and h:
+        v["label_size"] = f"{w:g} x {h:g}"
+    inlay = _match_inlay(row.get("inlay_type") or "")
+    if inlay:
+        v["inlay"] = inlay.get("name")
+    tpl = row.get("template_path") or ""
+    if tpl and os.path.isfile(tpl):
+        v["template_path"] = tpl
+    return {k: x for k, x in v.items() if x not in (None, "")}
+
+
+def proof_values(job: ProofJob) -> dict:
+    return {"customer": job.customer, "job_number": job.job_number, "part_number": job.part_number,
+            "quantity": job.quantity, "gtin": job.gtin, "barcode_data_1": job.barcode_data_1,
+            "label_size": f"{float(job.label_width or 0):g} x {float(job.label_height or 0):g}",
+            "serial": job.serial, "epc_hex": job.epc_hex, "inlay": job.inlay, "template_path": job.template_path,
+            "po_data_reference": _spec_of(job).get("po_data_reference", "")}
+
+
+def _key(field: str, value) -> str:
+    """Comparison form: case and spacing that don't matter are ignored."""
+    s = "" if value is None else str(value).strip()
+    if field == "template_path":
+        return os.path.normcase(s)
+    if field == "epc_hex":
+        return re.sub(r"\s", "", s).upper()
+    if field == "serial":
+        try:
+            return str(int(float(s))) if s else ""
+        except ValueError:
+            return s
+    if field == "label_size" and s in ("0 x 0",):
+        return ""
+    return s.casefold()
+
+
+def _show(field: str, value) -> str:
+    s = "" if value is None else str(value)
+    return re.split(r"[\\/]", s)[-1] if field == "template_path" else s
+
+
+def _apply(job: ProofJob, field: str, value) -> None:
+    if field == "label_size":
+        job.label_width, job.label_height = _label_size(value)
+    elif field == "serial":
+        job.serial = int(value) if str(job.encoding_type) == "SGTIN-96" else str(value)
+    elif field == "inlay":
+        item = _match_inlay(value) or {"name": value}
+        job.inlay = item.get("name") or value
+        job.chip = item.get("chip") or item.get("ic") or job.chip
+        job.inlay_width_mm = float(item.get("width_mm") or item.get("inlay_width_mm") or job.inlay_width_mm or 0)
+        job.inlay_height_mm = float(item.get("height_mm") or item.get("inlay_height_mm") or job.inlay_height_mm or 0)
+        job.inlay_image_path = item.get("image_path") or item.get("preview_image") or job.inlay_image_path
+    elif field == "po_data_reference":
+        _set_spec(job, "po_data_reference", value)
+    else:
+        setattr(job, field, value)
+
+
+def _fix_encoding(job: ProofJob, changed: set) -> None:
+    """After the job's UPC / serial / EPC were applied, keep the SGTIN fields consistent with
+    Job Manager's encoding (filter 1, 7-digit company prefix)."""
+    if str(job.encoding_type) != "SGTIN-96" or not changed & {"gtin", "serial", "epc_hex"}:
+        return
+    if "epc_hex" in changed:
+        job.filter_value, job.company_prefix_digits = 1, 7
+    try:
+        r = encode_sgtin96(job.gtin, job.company_prefix_digits, int(job.serial), job.filter_value)
+        if r.epc_hex == re.sub(r"\s", "", str(job.epc_hex or "")).upper():
+            job.company_prefix, job.item_reference = r.company_prefix, r.item_reference
+    except Exception:
+        pass
+
+
+def sync_proof(job: ProofJob, row: dict, now: str = "") -> dict:
+    """Bring one proof up to date with its job (in memory). Returns what changed / differs."""
+    jv, pv = job_values(row), proof_values(job)
+    stored = dict(job.jm_sync or {})
+    base = {k: v for k, v in stored.items() if not k.startswith("_")}
+    meta = {k: v for k, v in stored.items() if k.startswith("_")}
+    locked = is_job_locked(job)
+    updated, differs = [], []
+    for f, label in SYNC_FIELDS:
+        if f not in jv:
+            continue
+        J, P = jv[f], pv.get(f)
+        if _key(f, P) == _key(f, J):
+            base[f] = J
+            continue
+        untouched = f in base and _key(f, P) == _key(f, base[f])
+        if not locked and (_key(f, P) == "" or untouched):
+            _apply(job, f, J)
+            updated.append({"field": f, "label": label, "from": _show(f, P), "to": _show(f, J)})
+            base[f] = J
+        else:
+            differs.append({"field": f, "label": label, "proof": _show(f, P), "job": _show(f, J)})
+    if updated:
+        _fix_encoding(job, {u["field"] for u in updated})
+        meta = {"_at": now or _now(), "_changes": [u["label"] for u in updated], "_job": row.get("job_number")}
+    job.jm_sync = {**base, **meta}
+    return {"updated": updated, "differs": differs, "locked": locked,
+            "state": ("approved_changed" if locked else "differs") if differs else "ok",
+            "note": ", ".join(d["label"] for d in differs), "job_number": row.get("job_number"),
+            "baseline_changed": {k: v for k, v in base.items()} != {k: v for k, v in stored.items() if not k.startswith("_")}}
+
+
+def _sync_log_text(job: ProofJob, report: dict) -> str:
+    parts = [f"{u['label']} {u['from'] or '(blank)'} → {u['to']}" for u in report["updated"]]
+    text = f"{_proof_label(job)} updated from the job: " + "; ".join(parts)
+    return text if len(text) <= 400 else text[:397] + "…"
+
+
+def _sync_path(path, *, log: bool = True) -> tuple:
+    """Sync one saved proof with its job and write it if anything changed. (job, report|None)"""
+    path = Path(path)
+    with SAVE_LOCK:
+        job = load_job(str(path))
+        row = _jm_row(job)
+        if not row:
+            return job, None
+        report = sync_proof(job, row)
+        idle = time.time() - path.stat().st_mtime > 600       # not being edited right now, most likely
+        if report["updated"] or (report["baseline_changed"] and idle and not report["locked"]):
+            save_job(job, str(path))
+    key = jm_link.proof_key(job.proof_id)
+    with _db() as c:
+        prev = c.execute("SELECT sync_state FROM job_proofs WHERE proof_key=?", (key,)).fetchone()
+        if report["updated"]:
+            jm_link.upsert(c, _now(), job, path, row)
+        jm_link.set_sync(c, key, report["state"], report["note"], row.get("updated_at"))
+        if log and report["updated"]:
+            _log(c, row, _sync_log_text(job, report))
+        if log and report["state"] == "approved_changed" and (not prev or prev["sync_state"] != "approved_changed"):
+            _log(c, row, f"{_proof_label(job)} is {job.approval_status.lower()} but the job changed since "
+                         f"({report['note']}): start a new proof revision to update it")
+    return job, report
+
+
+def backfill_job(job: ProofJob, row: dict) -> list:
+    """Proof → job: fill blank job fields (part #, PO #, inlay) from the proof."""
+    pv, filled = proof_values(job), []
+    with _db() as c:
+        for pf, col, label in BACKFILL:
+            val = str(pv.get(pf) or "").strip()
+            if not val or str(row.get(col) or "").strip():
+                continue
+            cur = c.execute(f"UPDATE jobs SET {col}=?, updated_at=? WHERE id=? AND COALESCE(TRIM({col}),'')=''",
+                            (val, _now(), row["id"]))
+            if cur.rowcount:
+                filled.append({"field": col, "label": label, "value": val})
+                job.jm_sync = {**(job.jm_sync or {}), pf: val}
+        if filled:
+            _log(c, row, f"filled in from {_proof_label(job)}: " + "; ".join(f"{f['label']} {f['value']}" for f in filled))
+    return filled
+
+
+def reconcile(job_id: Optional[int] = None) -> int:
+    """Sync every linked proof whose job changed since it was last compared (or all of one job's)."""
+    with _db() as c:
+        if job_id is None:
+            rows = jm_link.stale_for_sync(c)
+        else:
+            rows = [dict(r) for r in c.execute(
+                """SELECT p.proof_key, p.path FROM job_proofs p WHERE p.job_id=? AND p.location!='archive'""", (job_id,))]
+    n = 0
+    for r in rows:
+        if not os.path.isfile(r["path"]):
+            continue
+        try:
+            _, rep = _sync_path(r["path"])
+            n += bool(rep and rep["updated"])
+        except Exception as e:
+            print(f"  [PRF] sync of {os.path.basename(r['path'])} failed: {e}")
+            with _db() as c:
+                jm_link.set_sync(c, r["proof_key"], "error", str(e)[:200], r.get("job_updated_at"))
+    return n
+
+
+def job_changed(job_id: int) -> None:
+    """Called by Job Manager after a job is edited: update its proofs now, off the request."""
+    threading.Thread(target=lambda: reconcile(int(job_id)), daemon=True, name="proof-sync-job").start()
 
 
 def rebuild_index(match_tickets: bool = False) -> Dict[str, int]:
@@ -915,6 +1157,7 @@ def rebuild_index(match_tickets: bool = False) -> Dict[str, int]:
                     job.jm_job_id, job.jm_job_number = int(row["id"]), row["job_number"]
                     if not job.proof_id:
                         ensure_job_identity(job)
+                    sync_proof(job, row)                 # fill blanks from the job, remember the baseline
                     save_job(job, str(path))
                 counts["linked"] += 1
             if not job.proof_id:
@@ -941,7 +1184,15 @@ def start_background() -> None:
             print(f"  [PRF] {r['scanned']} saved proofs, {r['indexed']} indexed")
         except Exception as e:
             print(f"  [PRF] proof index not rebuilt: {e}")
-    threading.Thread(target=run, daemon=True, name="proof-index").start()
+        while True:                                   # keep proofs in step with their jobs
+            try:
+                n = reconcile()
+                if n:
+                    print(f"  [PRF] {n} proof(s) updated from their jobs")
+            except Exception as e:
+                print(f"  [PRF] proof sync failed: {e}")
+            time.sleep(SYNC_INTERVAL)
+    threading.Thread(target=run, daemon=True, name="proof-sync").start()
 
 
 def _output_dir(job: ProofJob, settings: Dict[str, Any]) -> tuple:
@@ -967,14 +1218,26 @@ def _job_file_url(row, path) -> Optional[str]:
 
 
 def _load_payload(path, job: Optional[ProofJob] = None, **extra) -> Dict[str, Any]:
+    """A saved proof for the page. A linked proof is synced with its job first (unless the
+    caller already has the job), so the page always opens on current job data."""
     path = Path(path)
-    job = job or load_job(str(path))
+    report = None
+    if job is None:
+        job, report = _sync_path(path) if _norm(path.parent) != _norm(ARCHIVE_DIR) else (load_job(str(path)), None)
     row = _jm_row(job)
+    if report is None and row:
+        report = sync_proof(copy.deepcopy(job), row)
     out = {"ok": True, "path": str(path), "rev": _rev(path), "job": job.as_dict(), "jm_job": _jm_public(row),
-           **media_for_job(job), **extra}
+           "sync": _public_sync(report), **media_for_job(job), **extra}
     if job.last_generated_output_path and Path(job.last_generated_output_path).is_file():
         out["latest_output_url"] = register_media(job.last_generated_output_path)
     return out
+
+
+def _public_sync(report) -> Optional[dict]:
+    if not report:
+        return None
+    return {k: report[k] for k in ("updated", "differs", "locked", "state", "note", "job_number")}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1079,7 +1342,8 @@ def api_work_queue():
             link = links.get(r.get("path"))
             if link and link.get("job_number"):
                 r.update(jm_job_id=link["job_id"], jm_job_number=link["job_number"], jm_ticket=link.get("job_ticket"),
-                         jm_job_status=link.get("job_status"))
+                         jm_job_status=link.get("job_status"), jm_sync_state=link.get("sync_state"),
+                         jm_sync_note=link.get("sync_note"))
     return ok(**resp)
 
 
@@ -1275,6 +1539,10 @@ def api_job_save():
             target = _unique_new_path(JOBS_DIR, name)
             created = True
         _adopt_preview(job)
+        row, report, filled = _jm_row(job), None, []
+        if row:
+            report = sync_proof(job, row)               # job values the page didn't have yet
+            filled = backfill_job(job, row)             # blank job fields from the proof
         saved = route_job_by_approval(save_job(job, str(target)), job.approval_status)
         rev = _rev(saved)
     recent, details = _remember_recent(saved, drop=raw)
@@ -1282,8 +1550,12 @@ def api_job_save():
         with _db() as c:
             jm_link.move(c, _now(), raw, saved)
     row = _index(job, saved, f"{_proof_label(job)} started" if created else None)
+    if report:
+        with _db() as c:
+            jm_link.set_sync(c, jm_link.proof_key(job.proof_id), report["state"], report["note"],
+                             (_jm_row(job, c) or {}).get("updated_at"))
     return ok(path=saved, rev=rev, job=job.as_dict(), recent_jobs=recent, recent_job_details=details,
-              jm_job=_jm_public(row), **media_for_job(job))
+              jm_job=_jm_public(row), sync=_public_sync(report), filled_job=filled, **media_for_job(job))
 
 
 @bp.post("/api/job/load")
@@ -1589,7 +1861,7 @@ def _proof_rows_for(job_row) -> list:
         exists = os.path.isfile(r["path"])
         out.append({**{k: r[k] for k in ("proof_key", "proof_id", "proof_revision", "approval_status",
                                          "lifecycle_status", "last_generated_at", "location", "updated_at",
-                                         "output_path", "path")},
+                                         "output_path", "path", "sync_state", "sync_note")},
                     "exists": exists, "open_url": f"/proofing/?proof={r['proof_key']}",
                     "output_url": _job_file_url(job_row, r["output_path"]),
                     "output_name": os.path.basename(r["output_path"] or "") or None})
@@ -1667,6 +1939,10 @@ def api_jm_link():
         if job_id and not row:
             abort(404, "Job not found")
         job.jm_job_id, job.jm_job_number = (int(row["id"]), row["job_number"]) if row else (0, "")
+        if row:
+            sync_proof(job, row)
+        else:
+            job.jm_sync = {}
         ensure_job_identity(job)
         saved = save_job(job, str(target))
     with _db() as c:
@@ -1681,3 +1957,85 @@ def api_jm_link():
 @bp.post("/api/jm/relink")
 def api_jm_relink():
     return ok(**rebuild_index(match_tickets=True))
+
+
+@bp.post("/api/jm/jobs")
+def api_jm_jobs():
+    """Job Manager jobs for the Proofing home page: open jobs with their proof state.
+    show=needs (default): no proof yet, not approved yet, or approved before the job changed."""
+    p = _payload()
+    q, show = str(p.get("q", "") or "").strip(), p.get("show", "needs")
+    where, params = ["j.archived_at IS NULL", "j.status != 'Cancelled'"], []
+    for w in q.split():
+        where.append("(j.job_ticket LIKE ? OR j.job_number LIKE ? OR j.customer LIKE ? OR j.title LIKE ? OR j.upc LIKE ?)")
+        params += [f"%{w}%"] * 5
+    sql = f"""SELECT * FROM (SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.upc, j.label_size,
+                  j.quantity, j.due_date, j.created_at, j.job_type,
+                  (SELECT p.approval_status FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
+                     ORDER BY p.updated_at DESC LIMIT 1) AS proof_status,
+                  (SELECT p.sync_state FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
+                     ORDER BY p.updated_at DESC LIMIT 1) AS proof_sync,
+                  (SELECT p.sync_note FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
+                     ORDER BY p.updated_at DESC LIMIT 1) AS proof_sync_note,
+                  (SELECT p.proof_key FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
+                     ORDER BY p.updated_at DESC LIMIT 1) AS proof_key
+              FROM jobs j WHERE {' AND '.join(where)}) x"""
+    if show == "needs":
+        sql += " WHERE proof_status IS NULL OR proof_status != 'Approved' OR proof_sync = 'approved_changed'"
+    sql += " ORDER BY (proof_status IS NOT NULL), created_at DESC LIMIT 200"
+    with _db() as c:
+        rows = [dict(r) for r in c.execute(sql, params)]
+        counts = c.execute("""SELECT COUNT(*) FROM jobs j WHERE j.archived_at IS NULL AND j.status != 'Cancelled'
+                              AND NOT EXISTS (SELECT 1 FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive')""").fetchone()[0]
+    return ok(jobs=rows, without_proof=counts)
+
+
+@bp.post("/api/job/rev")
+def api_job_rev():
+    """Cheap check the page polls: has this saved proof changed on the server (a job sync, or
+    someone else's save)?"""
+    raw = str(_payload().get("path", "") or "").strip()
+    try:
+        target = _job_file(raw, allow_archive=True)
+    except FileNotFoundError:
+        return ok(rev="", exists=False)
+    meta, sync = {}, None
+    try:
+        job = load_job(str(target))
+        meta = {k: v for k, v in (job.jm_sync or {}).items() if k.startswith("_")}
+        row = _jm_row(job)
+        if row:                      # what differs from the job right now (read only; nothing is applied)
+            sync = _public_sync({**sync_proof(copy.deepcopy(job), row), "updated": []})
+    except Exception:
+        pass
+    return ok(rev=_rev(target), exists=True, last_sync=meta, sync=sync)
+
+
+@bp.post("/api/jm/use-job-values")
+def api_jm_use_job_values():
+    """Replace the listed fields (or every differing field) with the job's values."""
+    p = _payload()
+    with SAVE_LOCK:
+        target = _job_file(p.get("path"))
+        _check_rev(target, p)
+        job = load_job(str(target))
+        if is_job_locked(job):
+            raise ValueError("This proof is approved. Reopen it (or start the next proof revision) to take the job's values.")
+        row = _jm_row(job)
+        if not row:
+            raise ValueError("This proof isn't linked to a Job Manager job.")
+        jv, wanted = job_values(row), set(p.get("fields") or SYNC_LABELS)
+        taken = []
+        for f in [f for f, _ in SYNC_FIELDS if f in wanted and f in jv]:
+            if _key(f, proof_values(job).get(f)) != _key(f, jv[f]):
+                _apply(job, f, jv[f])
+                taken.append(f)
+            job.jm_sync = {**(job.jm_sync or {}), f: jv[f]}
+        _fix_encoding(job, set(taken))
+        taken = [SYNC_LABELS[f] for f in taken]
+        saved = save_job(job, str(target))
+    if taken:
+        with _db() as c:
+            _log(c, row, f"{_proof_label(job)}: took the job's {', '.join(taken)}")
+    return jsonify(_load_payload(saved))
+

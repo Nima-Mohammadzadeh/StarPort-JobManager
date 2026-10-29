@@ -26,17 +26,24 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS job_proofs (
     proof_id TEXT, proof_revision TEXT, approval_status TEXT, lifecycle_status TEXT,
     last_generated_at TEXT, output_path TEXT, customer TEXT, ticket TEXT,
     location TEXT NOT NULL DEFAULT 'active',
+    sync_state TEXT, sync_note TEXT, synced_job_at TEXT,
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"""
 
 # Shown on the Jobs list: the state of the newest non-archived proof of each job.
 PROOF_SUMMARY_SQL = """(SELECT p.approval_status FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
                         ORDER BY p.updated_at DESC LIMIT 1) AS proof_status,
                        (SELECT p.lifecycle_status FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
-                        ORDER BY p.updated_at DESC LIMIT 1) AS proof_lifecycle"""
+                        ORDER BY p.updated_at DESC LIMIT 1) AS proof_lifecycle,
+                       (SELECT p.sync_state FROM job_proofs p WHERE p.job_id=j.id AND p.location!='archive'
+                        ORDER BY p.updated_at DESC LIMIT 1) AS proof_sync"""
 
 
 def init_schema(cur):
     cur.execute(SCHEMA)
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(job_proofs)")]
+    for col in ("sync_state", "sync_note", "synced_job_at"):     # added with job sync
+        if col not in cols:
+            cur.execute(f"ALTER TABLE job_proofs ADD COLUMN {col} TEXT")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_job_proofs_job ON job_proofs(job_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_job_proofs_number ON job_proofs(job_number)")
 
@@ -77,6 +84,20 @@ def upsert(conn, now, job, path, job_row=None):
     return key
 
 
+def set_sync(conn, key, state, note, job_updated_at):
+    conn.execute("UPDATE job_proofs SET sync_state=?, sync_note=?, synced_job_at=? WHERE proof_key=?",
+                 (state, note, job_updated_at, key))
+
+
+def stale_for_sync(conn, limit=200):
+    """Linked, not archived proofs whose job changed since they were last compared with it."""
+    return [dict(r) for r in conn.execute(
+        """SELECT p.proof_key, p.path, p.job_id, p.sync_state, j.updated_at AS job_updated_at
+           FROM job_proofs p JOIN jobs j ON j.id = p.job_id
+           WHERE p.location != 'archive' AND (p.synced_job_at IS NULL OR p.synced_job_at < j.updated_at)
+           ORDER BY j.updated_at DESC LIMIT ?""", (limit,))]
+
+
 def move(conn, now, old_path, new_path):
     conn.execute("UPDATE job_proofs SET path=?, location=?, updated_at=? WHERE path=?",
                  (str(new_path), location_of(new_path), now, str(old_path)))
@@ -94,7 +115,8 @@ def for_job(conn, job_id):
 def by_path(conn):
     """{path: row} for annotating the proof queue with the Job Manager job."""
     return {r["path"]: dict(r) for r in conn.execute(
-        """SELECT p.path, p.job_id, p.job_number, j.job_ticket, j.customer AS job_customer, j.status AS job_status
+        """SELECT p.path, p.job_id, p.job_number, p.sync_state, p.sync_note, j.job_ticket, j.customer AS job_customer,
+                  j.status AS job_status
            FROM job_proofs p LEFT JOIN jobs j ON j.id = p.job_id""")}
 
 

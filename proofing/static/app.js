@@ -118,7 +118,7 @@
     const [title, subtitle] = pageMeta[name] || pageMeta.home;
     $("#pageTitle").textContent = title;
     $("#pageSubtitle").textContent = subtitle;
-    if (name === "home") refreshHome();
+    if (name === "home") { refreshHome(); loadJmJobs(); }
     if (name === "queue") refreshQueue();
     if (name === "settings") renderSettings();
   }
@@ -173,13 +173,13 @@
     const bar = $("#jmLinkBar"); if (!bar) return;
     const j = state.jmJob;
     if (j) {
-      bar.innerHTML = `<span class="jm-chip">Job Manager</span> <a href="${escapeHtml(j.open_url)}" target="_blank" rel="noopener">${escapeHtml(j.job_number)} · ticket ${escapeHtml(j.job_ticket || "—")}</a> <span class="muted">${escapeHtml(j.status || "")}${j.archived_at ? ", archived" : ""}</span> <button class="button text small" type="button" data-jm-link>Change</button>`;
+      bar.innerHTML = `<span class="jm-chip">Job Manager</span> <a href="${escapeHtml(j.open_url)}" target="_blank" rel="noopener">${escapeHtml(j.job_number)} · ticket ${escapeHtml(j.job_ticket || "—")}</a> <span class="jm-note">${escapeHtml(j.title || "")} · ${escapeHtml(j.status || "")}${j.archived_at ? ", archived" : ""}</span> <button class="btn sm quiet" type="button" data-jm-link>Change</button>`;
     } else if (state.job && (state.job.jm_job_number || state.job.jm_job_id)) {
-      bar.innerHTML = `<span class="jm-chip warn">Job Manager</span> <span class="muted">Linked to ${escapeHtml(state.job.jm_job_number || "#" + state.job.jm_job_id)}, which isn't in Job Manager.</span> <button class="button text small" type="button" data-jm-link>Change</button>`;
+      bar.innerHTML = `<span class="jm-chip warn">Job Manager</span> <span class="jm-note">Linked to ${escapeHtml(state.job.jm_job_number || "#" + state.job.jm_job_id)}, which isn't in Job Manager.</span> <button class="btn sm quiet" type="button" data-jm-link>Change</button>`;
     } else {
       bar.innerHTML = state.jobPath
-        ? `<span class="muted">Not linked to a Job Manager job.</span> <button class="button text small" type="button" data-jm-link>Link to job</button>`
-        : `<span class="muted">Not linked to a Job Manager job. Start proofs from a job's drawer to link them, or save and link.</span>`;
+        ? `<span class="jm-note">Not linked to a Job Manager job.</span> <button class="btn sm quiet" type="button" data-jm-link>Link to job</button>`
+        : `<span class="jm-note">Not linked to a job. Start proofs from <b>Jobs &amp; proofs</b> (or a job's drawer) to link them, or save and link.</span>`;
     }
   }
 
@@ -304,6 +304,7 @@
     state.job.operator_initials = initials;
     if (state.settings.default_inlay) applyInlay(state.settings.default_inlay);
     state.jobPath = ""; state.jobRev = ""; state.jmJob = null; state.previewUrl = ""; state.latestOutputPath = ""; state.latestOutputUrl = "";
+    renderSync(null, null);
     $("#openLatestBtn").disabled = true; $("#latestOutputText").textContent = "No output generated in this session.";
     syncFormFromJob(); setDirty(false); showPage("proof");
   }
@@ -407,15 +408,8 @@
     const status = $("#variableDataDefinitionStatus");
     if (!status) return;
     const issues = variableDataDefinitionIssues(state.job);
-    if (!issues.length) {
-      status.textContent = "Complete — customer variable data is fully defined.";
-      status.style.color = "#177245";
-      status.style.fontWeight = "700";
-    } else {
-      status.textContent = `Needs definition: ${issues.join(", ")}`;
-      status.style.color = "#9a3412";
-      status.style.fontWeight = "600";
-    }
+    status.className = issues.length ? "need" : "ok";                     // JM: colours from the stylesheet
+    status.textContent = issues.length ? `Needs: ${issues.join(", ")}` : "Complete";
 
     const barcode2Block = $("#variableBarcode2Block");
     if (barcode2Block) {
@@ -425,116 +419,37 @@
 
   function installVariableDataDefinitionUi() {
     if ($("#variableDataDefinitionCard")) return;
-
     const proofPage = $("#page-proof");
     if (!proofPage) return;
-
     const card = document.createElement("section");
     card.id = "variableDataDefinitionCard";
-    card.className = "card variable-data-definition-card";
-    card.style.cssText = "margin-top:16px;padding:18px;border:1px solid rgba(127,127,127,.28);border-radius:12px;";
-
-    const rowStyle = "display:grid;grid-template-columns:minmax(150px,.7fr) minmax(120px,.6fr) minmax(190px,1fr) minmax(240px,1.35fr);gap:10px;align-items:end;margin-top:10px;";
-    const inputStyle = "width:100%;box-sizing:border-box;";
-
+    card.className = "panel section variable-data-definition-card";        // JM: same panel as the other steps
+    const row = (key, title, sub, first) => `
+      <div class="vd-grid"${key === "barcode_2" ? ' id="variableBarcode2Block"' : ""}>
+        <div class="el"><strong>${title}</strong><small>${sub}</small></div>
+        <label>Classification<select data-job="${key}_classification">${first === "Variable" ? "<option>Variable</option><option>Static</option>" : "<option>Static</option><option>Variable</option>"}</select></label>
+        <label>Source<input data-job="${key}_source"></label>
+        <label>Rule / Format<input data-job="${key}_rule"></label>
+      </div>`;
     card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;">Customer-controlled production data</div>
-          <h3 style="margin:3px 0 5px;">Encoding & Variable Data Definition</h3>
-          <p style="margin:0;max-width:820px;opacity:.78;">
-            Define what stays fixed, what changes by label/order, where the production data comes from,
-            and the exact rule operators must follow. These definitions are printed on the customer proof.
-          </p>
-        </div>
-        <span id="variableDataDefinitionStatus" style="font-size:12px;max-width:420px;"></span>
+      <div class="panel-head"><div><span class="step">◆</span><div><h2>Encoding &amp; variable data</h2><p>Printed on the customer proof: what stays fixed, what changes per label, where the data comes from.</p></div></div><span id="variableDataDefinitionStatus"></span></div>
+      <div class="vd-two">
+        <label>PO / Data Reference *<input data-job="po_data_reference" placeholder="PO number, PO line, data-file name, EDI reference"></label>
+        <label>Overall Encoding / Variable Data Source *<input data-job="variable_data_source" placeholder="Customer PO / approved data file"></label>
       </div>
-
-      <div style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,1.5fr);gap:12px;margin-top:16px;">
-        <label>PO / Data Reference *
-          <input data-job="po_data_reference" placeholder="PO number, PO line, data-file name, EDI reference, etc." style="${inputStyle}">
-        </label>
-        <label>Overall Encoding / Variable Data Source *
-          <input data-job="variable_data_source" placeholder="Customer PO / approved data file" style="${inputStyle}">
-        </label>
-      </div>
-
-      <div style="${rowStyle};margin-top:16px;font-size:11px;font-weight:700;opacity:.65;text-transform:uppercase;">
-        <div>Data Element</div><div>Static / Variable</div><div>Source</div><div>Production Rule</div>
-      </div>
-
-      <div style="${rowStyle}">
-        <div><strong>Barcode 1</strong><div style="font-size:11px;opacity:.66;">Primary printed barcode</div></div>
-        <label>Classification
-          <select data-job="barcode_1_classification" style="${inputStyle}"><option>Static</option><option>Variable</option></select>
-        </label>
-        <label>Source
-          <input data-job="barcode_1_source" style="${inputStyle}">
-        </label>
-        <label>Rule / Format
-          <input data-job="barcode_1_rule" style="${inputStyle}">
-        </label>
-      </div>
-
-      <div id="variableBarcode2Block" style="${rowStyle}">
-        <div><strong>Barcode 2</strong><div style="font-size:11px;opacity:.66;">Secondary printed barcode</div></div>
-        <label>Classification
-          <select data-job="barcode_2_classification" style="${inputStyle}"><option>Static</option><option>Variable</option></select>
-        </label>
-        <label>Source
-          <input data-job="barcode_2_source" style="${inputStyle}">
-        </label>
-        <label>Rule / Format
-          <input data-job="barcode_2_rule" style="${inputStyle}">
-        </label>
-      </div>
-
-      <div style="${rowStyle}">
-        <div><strong>Serial / Reference</strong><div style="font-size:11px;opacity:.66;">RFID serial or customer reference</div></div>
-        <label>Classification
-          <select data-job="serial_classification" style="${inputStyle}"><option>Variable</option><option>Static</option></select>
-        </label>
-        <label>Source
-          <input data-job="serial_source" style="${inputStyle}">
-        </label>
-        <label>Rule / Format
-          <input data-job="serial_rule" style="${inputStyle}">
-        </label>
-      </div>
-
-      <div style="${rowStyle}">
-        <div><strong>EPC / Encoded Data</strong><div style="font-size:11px;opacity:.66;">RFID value written to the tag</div></div>
-        <label>Classification
-          <select data-job="epc_classification" style="${inputStyle}"><option>Variable</option><option>Static</option></select>
-        </label>
-        <label>Source
-          <input data-job="epc_source" style="${inputStyle}">
-        </label>
-        <label>Rule / Format
-          <input data-job="epc_rule" style="${inputStyle}">
-        </label>
-      </div>
-
-      <label style="display:block;margin-top:14px;">Additional Variable Data / PO Instructions
-        <textarea data-job="variable_data_notes" rows="3"
-          placeholder="Example: Serial values supplied by customer file column SERIAL_NO; barcode text must match PO line item; leading zeroes must be retained."
-          style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+      <div class="vd-grid head"><div>Data element</div><div>Static / Variable</div><div>Source</div><div>Production rule</div></div>
+      ${row("barcode_1", "Barcode 1", "Primary printed barcode", "Static")}
+      ${row("barcode_2", "Barcode 2", "Secondary printed barcode", "Static")}
+      ${row("serial", "Serial / Reference", "RFID serial or customer reference", "Variable")}
+      ${row("epc", "EPC / Encoded Data", "Value written to the tag", "Variable")}
+      <label class="vd-notes">Additional Variable Data / PO Instructions
+        <textarea data-job="variable_data_notes" rows="3" placeholder="Example: serial values from the customer file column SERIAL_NO; barcode text must match the PO line; keep leading zeroes."></textarea>
       </label>
-
-      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(127,127,127,.08);font-size:12px;line-height:1.45;">
-        <strong>Proof protection:</strong> Final PDF/package generation and Approved status are blocked until
-        the required source and production-rule definitions above are complete.
-      </div>
-    `;
-
+      <div class="vd-guard"><b>Proof protection:</b> the final PDF / package and Approved status are blocked until the sources and production rules above are filled in.</div>`;
     const approval = $("#approvalStatus");
     const anchor = approval?.closest("section, article, .card, .panel");
-    if (anchor && anchor.id !== "page-proof" && anchor.parentElement) {
-      anchor.insertAdjacentElement("beforebegin", card);
-    } else {
-      proofPage.appendChild(card);
-    }
-
+    if (anchor && anchor.id !== "page-proof" && anchor.parentElement) anchor.insertAdjacentElement("beforebegin", card);
+    else proofPage.appendChild(card);
     updateVariableDataDefinitionStatus();
   }
 
@@ -571,6 +486,8 @@
       if (r.preview_url) state.previewUrl = r.preview_url;
       state.recentJobs = r.recent_jobs || state.recentJobs; state.recentJobDetails = r.recent_job_details || state.recentJobDetails;
       syncFormFromJob(); setDirty(false); toast("Proof saved.", "success");
+      if ("sync" in r) renderSync(r.sync);
+      if (r.filled_job?.length) toast(`Filled in on ${state.jmJob?.job_number || "the job"}: ${r.filled_job.map(f => `${f.label} ${f.value}`).join(", ")}`, "info");
       return true;
     } catch (error) {
       const handled = await resolveConflict(error, saveJob);
@@ -588,6 +505,8 @@
     state.latestOutputPath = state.job.last_generated_output_path || "";
     state.latestOutputUrl = r.latest_output_url || "";
     (r.notes || []).forEach((n, i) => setTimeout(() => toast(n, "info"), 400 + i * 900));
+    if (r.path !== state.syncNotePath) state.syncNote = null;
+    renderSync(r.sync || null);
     $("#openLatestBtn").disabled = !state.latestOutputPath;
     $("#latestOutputText").textContent = state.latestOutputPath || "No generated output saved on this proof.";
     syncFormFromJob(); setDirty(false); showPage("proof");
@@ -790,7 +709,7 @@
     if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="empty-cell">No active proofs match this view.</td></tr>'; return; }
     rows.forEach(row => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td><strong>${escapeHtml(row.customer || "—")}</strong><small>${escapeHtml(row.job_number || "No job #")}${row.jm_job_number ? ` · <span class="jm-chip">${escapeHtml(row.jm_job_number)}</span>` : ""}</small></td><td>${escapeHtml(row.part_number || "—")}</td><td>${escapeHtml(row.proof_id || `P${row.proof_revision || "1"}`)}</td><td>${escapeHtml(row.approval_status || "Draft")}</td><td><span class="queue-status ${escapeHtml(row.status || "")}">${escapeHtml(queueStatusLabel(row))}</span></td><td>${escapeHtml(safe(row.updated_at).replace("T"," ").slice(0,16))}</td><td><div class="queue-actions"><button class="button secondary small" data-open-path="${escapeHtml(row.path)}">Open</button><button class="button text small" data-archive-path="${escapeHtml(row.path)}">Archive</button><button class="button text small danger-text" data-delete-path="${escapeHtml(row.path)}">Delete</button></div></td>`;
+      tr.innerHTML = `<td><strong>${escapeHtml(row.customer || "—")}</strong><small>${escapeHtml(row.job_number || "No job #")}${row.jm_job_number ? ` · <span class="jm-chip">${escapeHtml(row.jm_job_number)}</span>` : ""}${syncChip(row.jm_sync_state)}</small></td><td>${escapeHtml(row.part_number || "—")}</td><td>${escapeHtml(row.proof_id || `P${row.proof_revision || "1"}`)}</td><td>${escapeHtml(row.approval_status || "Draft")}</td><td><span class="queue-status ${escapeHtml(row.status || "")}">${escapeHtml(queueStatusLabel(row))}</span></td><td>${escapeHtml(safe(row.updated_at).replace("T"," ").slice(0,16))}</td><td><div class="queue-actions"><button class="button secondary small" data-open-path="${escapeHtml(row.path)}">Open</button><button class="button text small" data-archive-path="${escapeHtml(row.path)}">Archive</button><button class="button text small danger-text" data-delete-path="${escapeHtml(row.path)}">Delete</button></div></td>`;
       body.appendChild(tr);
     });
   }
@@ -831,7 +750,7 @@
         group.rows.forEach(row => {
           const tr = document.createElement("tr");
           const approvedAt = safe(row.approval_updated_at || row.updated_at).replace("T", " ").slice(0,16);
-          tr.innerHTML = `<td><strong>${escapeHtml(row.preparing_company || "MCC Label")}</strong></td><td><strong>${escapeHtml(row.job_number || "No job #")}</strong>${row.jm_job_number ? `<small><span class="jm-chip">${escapeHtml(row.jm_job_number)}</span></small>` : ""}</td><td>${escapeHtml(row.part_number || "—")}</td><td>${escapeHtml(row.proof_id || `P${row.proof_revision || "1"}`)}</td><td>${escapeHtml(row.approval_by || "—")}</td><td>${escapeHtml(approvedAt)}</td><td><div class="queue-actions"><button class="button secondary small" data-open-path="${escapeHtml(row.path)}">Open</button><button class="button text small" data-archive-path="${escapeHtml(row.path)}">Archive</button><button class="button text small danger-text" data-delete-path="${escapeHtml(row.path)}">Delete</button></div></td>`;
+          tr.innerHTML = `<td><strong>${escapeHtml(row.preparing_company || "MCC Label")}</strong></td><td><strong>${escapeHtml(row.job_number || "No job #")}</strong>${row.jm_job_number ? `<small><span class="jm-chip">${escapeHtml(row.jm_job_number)}</span>${syncChip(row.jm_sync_state)}</small>` : ""}</td><td>${escapeHtml(row.part_number || "—")}</td><td>${escapeHtml(row.proof_id || `P${row.proof_revision || "1"}`)}</td><td>${escapeHtml(row.approval_by || "—")}</td><td>${escapeHtml(approvedAt)}</td><td><div class="queue-actions"><button class="button secondary small" data-open-path="${escapeHtml(row.path)}">Open</button><button class="button text small" data-archive-path="${escapeHtml(row.path)}">Archive</button><button class="button text small danger-text" data-delete-path="${escapeHtml(row.path)}">Delete</button></div></td>`;
           body.appendChild(tr);
         });
 
@@ -995,16 +914,151 @@
     return w.length === 1 ? w[0].slice(0, 3) : w.map(x => x[0]).join("").slice(0, 8);
   }
 
+  /* ============================================================
+     JM: Jobs & proofs list, job sync bar, live updates
+     ============================================================ */
+  const PROOF_PILL = { "Approved": "ok", "Customer Review": "warn", "Internal Review": "warn", "Changes Requested": "bad", "Draft": "info" };
+  function syncChip(stateName) {
+    if (stateName === "differs") return ' <span class="pill warn">Differs from job</span>';
+    if (stateName === "approved_changed") return ' <span class="pill bad">Job changed after approval</span>';
+    return "";
+  }
+  const jmList = { show: "needs", req: 0 };
+  async function loadJmJobs() {
+    const req = ++jmList.req;
+    try {
+      const r = await api("/api/jm/jobs", { q: safe($("#jmJobSearch")?.value).trim(), show: jmList.show });
+      if (req === jmList.req) renderJmJobs(r);
+    } catch (error) {
+      $("#jmJobsBody").innerHTML = `<tr><td colspan="7"><div class="empty">${escapeHtml(error.message)}</div></td></tr>`;
+    }
+  }
+  function renderJmJobs(r) {
+    const rows = r.jobs || [];
+    $("#jmJobsBody").innerHTML = rows.length ? rows.map(j => {
+      const proof = j.proof_status
+        ? `<span class="pill ${PROOF_PILL[j.proof_status] || "info"}">${escapeHtml(j.proof_status)}</span>${syncChip(j.proof_sync)}`
+        : '<span class="pill none">No proof</span>';
+      const act = j.proof_status
+        ? `<button class="btn sm" type="button" data-jm-open="${j.id}">Open proof</button>`
+        : `<button class="btn sm primary" type="button" data-jm-start="${j.id}">Start proof</button>`;
+      return `<tr>
+        <td><div class="tk">${escapeHtml(j.job_ticket || "—")}</div><div class="sub data">${escapeHtml(j.job_number)}</div></td>
+        <td class="cust">${escapeHtml(j.customer || "")}</td>
+        <td><div class="item" title="${escapeHtml(j.title || "")}">${escapeHtml(j.title || "")}</div>${j.upc ? `<div class="sub data">${escapeHtml(j.upc)}</div>` : '<span class="chip-special">Special</span>'}</td>
+        <td class="hide-md">${escapeHtml(j.label_size || "")}</td>
+        <td class="num data">${j.quantity ? Number(j.quantity).toLocaleString() : "—"}</td>
+        <td>${proof}${j.proof_sync_note ? `<div class="sub">${escapeHtml(j.proof_sync_note)}</div>` : ""}</td>
+        <td class="act">${act}</td></tr>`;
+    }).join("") : `<tr><td colspan="7"><div class="empty">${jmList.show === "needs" ? "Every open job has an approved, current proof." : "No open jobs match."}</div></td></tr>`;
+    $("#jmJobsNote").textContent = jmList.show === "needs"
+      ? `Open jobs with no proof yet, a proof not approved yet, or a proof approved before the job changed. ${r.without_proof || 0} job(s) have no proof.`
+      : "All open jobs in Job Manager.";
+  }
+  async function openFromJm(id, isNew = false) {
+    if (state.dirty && !confirm("Discard unsaved changes and open this job's proof?")) return;
+    try {
+      const r = await api(`/api/jm/jobs/${encodeURIComponent(id)}/open`, { new: isNew });
+      loadJobResponse(r);
+      if (r.created) toast(`New proof started from ${r.jm_job?.job_number || "the job"}. Check every field before generating.`, "success");
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  /* Sync bar: a note of what was taken from the job (kept until dismissed), and what differs. */
+  function renderSync(sync, note) {
+    const bar = $("#syncBar"); if (!bar) return;
+    state.sync = sync || null;
+    const job = escapeHtml(sync?.job_number || state.jmJob?.job_number || "the job");
+    if (note !== undefined) { state.syncNote = note; state.syncNotePath = state.jobPath; }
+    if (sync?.updated?.length) {
+      state.syncNote = `<b>Updated from ${job}:</b> ${sync.updated.map(u => `${escapeHtml(u.label)} ${escapeHtml(u.from || "(blank)")} → ${escapeHtml(u.to)}`).join("; ")}`;
+      state.syncNotePath = state.jobPath;
+    }
+    const msgs = [];
+    if (state.syncNote) msgs.push(`<div class="sync-msg info"><span>${state.syncNote}</span><div class="acts"><button class="btn sm quiet" type="button" data-sync-dismiss>OK</button></div></div>`);
+    if (sync?.differs?.length) {
+      const list = sync.differs.map(d => `<span><b>${escapeHtml(d.label)}</b>: proof ${escapeHtml(d.proof || "(blank)")} · job ${escapeHtml(d.job)}${sync.locked ? "" : ` <button class="btn sm quiet" type="button" data-sync-use="${escapeHtml(d.field)}">Use job value</button>`}</span>`).join("");
+      msgs.push(sync.locked
+        ? `<div class="sync-msg bad"><span><b>${job} changed after this proof was ${escapeHtml(safe(state.job?.approval_status || "approved").toLowerCase())}.</b> Start the next proof revision to bring it up to date.</span><div class="acts"><button class="btn sm" type="button" data-sync-nextrev>Start next revision</button></div><div class="sync-diff">${list}</div></div>`
+        : `<div class="sync-msg warn"><span><b>Differs from ${job}.</b> These were typed on the proof, so they weren't replaced.</span><div class="acts"><button class="btn sm" type="button" data-sync-use="all">Use all job values</button></div><div class="sync-diff">${list}</div></div>`);
+    }
+    bar.innerHTML = msgs.join("");
+    bar.hidden = !msgs.length;
+  }
+  async function useJobValues(field) {
+    if (!state.jobPath) return;
+    if (state.dirty && !(await saveJob())) return;
+    try {
+      const r = await api("/api/jm/use-job-values", { path: state.jobPath, rev: state.jobRev, fields: field === "all" ? null : [field] });
+      loadJobResponse(r); toast("Took the job's values.", "success");
+    } catch (error) {
+      const handled = await resolveConflict(error, () => useJobValues(field));
+      if (handled === null) toast(error.message, "error");
+    }
+  }
+  async function startNextRevisionFromSync() {
+    await nextRevision();
+    await saveJob();
+  }
+  /* The server keeps proofs in step with their jobs. Check every 15 s whether the open proof
+     changed there; reload it when nothing is being typed, otherwise say so. */
+  async function pollOpenProof() {
+    if (document.hidden || !state.jobPath || !$("#page-proof").classList.contains("active")) return;
+    try {
+      const r = await api("/api/job/rev", { path: state.jobPath });
+      if (!r.exists) { renderServerChange("This proof was moved, archived or deleted. Open it again from the Queue."); return; }
+      if (!r.rev || r.rev === state.jobRev) {
+        if (JSON.stringify(r.sync?.differs || []) !== JSON.stringify(state.sync?.differs || [])) renderSync(r.sync);
+        return;
+      }
+      const what = (r.last_sync?._changes || []).join(", ");
+      if (!state.dirty) {
+        await openQueueJob(state.jobPath);
+        const when = safe(r.last_sync?._at).slice(11, 16);
+        renderSync(state.sync, what ? `<b>Updated from ${escapeHtml(r.last_sync._job || "the job")}${when ? " at " + escapeHtml(when) : ""}:</b> ${escapeHtml(what)}. Regenerate the preview and the PDF before sending.`
+                                    : "<b>Reloaded:</b> someone else saved this proof.");
+      } else {
+        renderServerChange(what ? `${r.last_sync._job || "The job"} changed this proof (${what}) while you were editing.` : "Someone else saved this proof while you were editing.");
+      }
+    } catch (_) {}
+  }
+  function renderServerChange(text) {
+    const bar = $("#syncBar");
+    if (bar.querySelector("[data-server-change]")) return;
+    bar.insertAdjacentHTML("afterbegin", `<div class="sync-msg warn" data-server-change><span>${escapeHtml(text)}</span><div class="acts"><button class="btn sm" type="button" data-sync-reload>Reload (drops your changes)</button></div></div>`);
+    bar.hidden = false;
+  }
+
   function bindEvents() {
     installVariableDataDefinitionUi();
     $$(".nav-item").forEach(btn => btn.addEventListener("click", () => showPage(btn.dataset.page)));
-    $("#homeNewBtn").onclick = resetJob; $("#homeOpenBtn").onclick = openJob; $("#homeQueueBtn").onclick = () => showPage("queue"); $("#homeRefreshBtn").onclick = refreshHome;
+    $("#homeNewBtn").onclick = resetJob; $("#homeOpenBtn").onclick = openJob; $("#homeQueueBtn").onclick = () => showPage("queue"); $("#homeRefreshBtn").onclick = () => { refreshHome(); loadJmJobs(); };
     $("#homeQueueCard").onclick=()=>showPage("queue"); $("#homeReadyCard").onclick=()=>{showPage("queue"); $("#queueFilter").value="ready"; renderQueue();}; $("#homeAttentionCard").onclick=()=>{showPage("queue"); $("#queueFilter").value="needs_attention"; renderQueue();};
     $("#newBtn").onclick = () => { if(!state.dirty || confirm("Discard unsaved changes and start a new proof?")) resetJob(); };
     $("#openBtn").onclick = openJob; $("#saveBtn").onclick = () => saveJob(); $("#browseTemplateBtn").onclick = browseTemplate; $("#previewBtn").onclick = bartenderPreview; $("#manualPreviewBtn").onclick = manualPreview;
     $("#generateBtn").onclick = () => generate("pdf"); $("#sideGenerateBtn").onclick = () => generate("pdf"); $("#packageBtn").onclick = () => generate("package"); $("#sidePackageBtn").onclick = () => generate("package");
     $("#nextRevisionBtn").onclick = nextRevision; $("#openOutputBtn").onclick = openOutputFolder; $("#openLatestBtn").onclick = openLatestOutput;
     $("#previewFileInput").onchange = e => uploadPreview(e.target.files[0]);
+    $("#headerNewBtn").onclick = () => { if (!state.dirty || confirm("Discard unsaved changes and start a new proof?")) resetJob(); };
+    $("#jmJobSearch").oninput = (() => { let t; return () => { clearTimeout(t); t = setTimeout(loadJmJobs, 220); }; })();
+    $("#jmJobSeg").onclick = e => {
+      const b = e.target.closest("button[data-show]"); if (!b) return;
+      jmList.show = b.dataset.show;
+      $$("#jmJobSeg button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
+      loadJmJobs();
+    };
+    $("#jmJobsBody").onclick = e => {
+      const s = e.target.closest("[data-jm-start]"); if (s) return openFromJm(s.dataset.jmStart);
+      const o = e.target.closest("[data-jm-open]"); if (o) return openFromJm(o.dataset.jmOpen);
+    };
+    $("#syncBar").onclick = e => {
+      const u = e.target.closest("[data-sync-use]"); if (u) return useJobValues(u.dataset.syncUse);
+      if (e.target.closest("[data-sync-nextrev]")) return startNextRevisionFromSync();
+      if (e.target.closest("[data-sync-reload]")) { setDirty(false); return openQueueJob(state.jobPath); }
+      if (e.target.closest("[data-sync-dismiss]")) { state.syncNote = null; renderSync(state.sync); }
+    };
+    setInterval(pollOpenProof, 15000);
+    setInterval(() => { if (!document.hidden && $("#page-home").classList.contains("active")) loadJmJobs(); }, 30000);
     $("#templateSearch").oninput = searchTemplatesSoon; $("#linkSearch").oninput = searchLinkJobsSoon;
     $("#unlinkBtn").onclick = () => { if (confirm("Unlink this proof from its Job Manager job?")) linkToJob(0); };
     document.addEventListener("click", e => {
@@ -1058,7 +1112,7 @@
       if(state.settings.default_inlay) applyInlay(state.settings.default_inlay);
       $("#versionText").textContent=r.version||"V 1.0.0"; $("#releaseText").textContent=(safe(r.release).match(/Beta\s*[0-9.]+/i)||["BETA"])[0].toUpperCase();
       const detected=Boolean(r.bartender?.detected); $("#homeBarTender").textContent=detected?"Ready":"Not detected"; $("#homeBarTenderDetail").textContent=detected?(r.bartender.executable||"Preview engine available"):"Configure in Settings";
-      renderInlays(); syncFormFromJob(); renderSettings(); await refreshHome();
+      renderInlays(); syncFormFromJob(); renderSettings(); await refreshHome(); loadJmJobs();
       await openFromAddress();
     } catch(error) { state.connected=false; renderConnection(); toast(`Startup failed: ${error.message}`,"error"); }
   }
