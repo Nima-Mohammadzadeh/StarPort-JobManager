@@ -35,6 +35,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
@@ -384,9 +385,12 @@ def create_job(data: dict) -> tuple[dict, int]:
                          "Nothing was created. Check that the drive or share is connected."}, 503
     if upc:
         nxt = SS.next_start(upc)
-        if start_override and start_override < nxt:
-            return {"error": f"Start serial {start_override:,} would reuse serials already used for this "
-                             f"UPC. The next free serial is {nxt:,}.", "next_start": nxt}, 400
+        if start_override:
+            # A start the person typed may sit anywhere, as long as none of its range was used before.
+            rc = SS.range_conflicts(upc, start_override, total_qty)
+            if not rc["ok"]:
+                return {"error": str(R.SerialOverlap(rc["start"], rc["end"], rc["conflicts"])),
+                        "conflicts": rc["conflicts"], "next_start": nxt}, 400
         if (start_override or offline_start or nxt) + total_qty - 1 > SS.MAX_SERIAL:
             return {"error": "That range runs past the largest serial an EPC can hold."}, 400
 
@@ -439,7 +443,8 @@ def create_job(data: dict) -> tuple[dict, int]:
         if manual_start:
             note += f"; start serial specified by {created_by or 'operator'}"
         try:
-            alloc = SS.reserve(upc, job_number, total_qty, note, min_start=start_override,
+            alloc = SS.reserve(upc, job_number, total_qty, note, min_start=None if manual_start else start_override,
+                               exact_start=start_override if manual_start else None,
                                who=created_by, offline_start=offline_start)
         except SS.SerialsOffline as e:
             _discard_job(job_id, job_dir if created_new else None)
@@ -1645,6 +1650,19 @@ def api_open_folder(job_id):
     cmd = {"Windows": ["explorer", folder], "Darwin": ["open", folder]}.get(SYSTEM, ["xdg-open", folder])
     subprocess.Popen(cmd)
     return jsonify({"success": True})
+
+
+@app.route("/api/upc/<upc>/range")
+def api_upc_range(upc):
+    """Can this UPC use `qty` serials from `start`? Lists the earlier ranges it would overlap."""
+    v = validate_upc(upc)
+    if not v["valid"]:
+        return jsonify(v), 400
+    try:
+        start, qty = _int(request.args.get("start"), "Start serial", required=True),                      _int(request.args.get("qty"), "Quantity", required=True)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(SS.range_conflicts(upc, start, qty))
 
 
 @app.route("/api/upc/<upc>")

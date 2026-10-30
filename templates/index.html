@@ -1660,26 +1660,39 @@ function smodeHint() {
   h.style.color = '';
   h.textContent = !N_SMODE ? 'Choose how this job gets its serials.'
     : N_SMODE === 'auto' ? (d && d.valid ? `The next free serial for this UPC, ${fmt(d.next_start)}, is used.` : 'The next free serial for this UPC is used.')
-    : 'You type the first serial. It is checked against every record for this UPC and can only move forward.';
+    : 'You type the first serial. It is checked against every record for this UPC: the whole range must be unused.';
 }
 document.querySelectorAll('#n-smode button').forEach(b => b.onclick = () => setSerialMode(b.dataset.m));
 function startProblem() {
   if (N_SMODE === 'manual' && !N('start').value.trim()) return 'Enter the start serial, or choose Automatic';
   const v = startValue(); if (!N('start').value.trim()) return null;
   if (!N_UPC_INFO || !N_UPC_INFO.valid) return 'Enter a valid UPC first';
-  if (v < N_UPC_INFO.next_start) return `Must be at least ${fmt(N_UPC_INFO.next_start)}, the next free serial for this UPC`;
   if (v + prodQty(N('qty').value, N('ov').value) > 2 ** 38) return 'Too large for an EPC serial';
+  if (N_RANGE.key === rangeKey() && N_RANGE.msg) return N_RANGE.msg;     // the server said part of this range was used before
   return null;
 }
+/* A typed start may be anywhere. The only rule: none of its serials were used before for this UPC. */
+let N_RANGE = {key: '', msg: ''};
+const rangeKey = () => `${N('upc').value.trim()}|${startValue()}|${prodQty(N('qty').value, N('ov').value)}`;
+const checkRange = debounce(async () => {
+  const key = rangeKey(), qty = prodQty(N('qty').value, N('ov').value);
+  if (N_SMODE !== 'manual' || !startValue() || !qty || !N_UPC_INFO || !N_UPC_INFO.valid) { N_RANGE = {key: '', msg: ''}; return startHint(); }
+  try {
+    const r = await api(`/api/upc/${N('upc').value.trim()}/range?start=${startValue()}&qty=${qty}`);
+    if (key !== rangeKey()) return;                                      // typed on since
+    N_RANGE = {key, msg: r.ok ? '' : `Already used for this UPC: ${r.conflicts.slice(0, 3).map(c => `${c.job_number} (${fmt(c.start)} – ${fmt(c.end)})`).join(', ')}`};
+  } catch (_) { N_RANGE = {key: '', msg: ''}; }
+  startHint(); updateSummary();
+}, 300);
 function toggleStart() { setSerialMode('manual'); }
 function startHint() {
   const h = $('#n-start-hint'), p = startProblem(), d = N_UPC_INFO;
   h.style.color = p ? 'var(--red)' : '';
-  h.textContent = p || (d ? `Use the serial after the last one you ran for this UPC. It can only move forward from ${fmt(d.next_start)}.` : '');
+  h.textContent = p || (d ? `Any start works if none of its serials were used before for this UPC. The next unused serial after the last run is ${fmt(d.next_start)}.` : '');
 }
 N('start').addEventListener('input', () => {
   const raw = N('start').value.replace(/[^\d]/g, ''); N('start').value = raw ? Number(raw).toLocaleString('en-US') : '';
-  startHint(); updateSummary();
+  startHint(); updateSummary(); checkRange();
 });
 let N_TYPE = 'standard';
 function setJobType(t) {
@@ -1755,6 +1768,7 @@ function updateSummary() {
     const custom = startValue() && !startProblem(), from = custom ? startValue() : N_UPC_INFO.next_start;
     rows.push([custom ? 'Serials (your start)' : 'Serials (estimated)', `${fmt(from)} – ${fmt(from + total - 1)}`]);
     if (custom && from > N_UPC_INFO.next_start) rows.push(['Skipped', fmt(from - N_UPC_INFO.next_start)]);
+    if (custom && from < N_UPC_INFO.next_start) rows.push(['Fills', 'an unused gap before the last serial']);
   }
   if (qty && lpr) { const full = Math.floor(total / lpr), rest = total % lpr; rows.push(['Rolls', `${full + (rest ? 1 : 0)}` + (rest ? ` (last roll ${fmt(rest)})` : '')]); }
   let spill = '';
@@ -1777,7 +1791,7 @@ function updateSummary() {
   $('#n-summary').innerHTML = rows.length ? rows.map(([a, b]) => `<div class="row"><span>${a}</span><span>${b}</span></div>`).join('') + (spill ? `<div class="spill">${spill}</div>` : '')
     : '<span style="color:var(--muted)">Fill in quantity and UPC to see serials, rolls and files.</span>';
 }
-['qty', 'ov', 'lpr', 'qtydb', 'customer', 'size', 'po', 'ticket'].forEach(k => N(k).addEventListener('input', () => { updateSummary(); if (!$('#n-start-row').hidden) startHint(); }));
+['qty', 'ov', 'lpr', 'qtydb', 'customer', 'size', 'po', 'ticket'].forEach(k => N(k).addEventListener('input', () => { updateSummary(); if (!$('#n-start-row').hidden) { startHint(); checkRange(); } }));
 N('upc').addEventListener('input', debounce(checkNewUpc, 250));
 async function checkNewUpc() {
   const u = N('upc').value.trim(), msg = $('#n-upc-msg'); N_UPC_INFO = null; N('upc').classList.remove('bad');
@@ -1804,7 +1818,8 @@ async function checkNewUpc() {
 }
 function confirmOffline() {
   const v = +($('#off-start').value.replace(/[^\d]/g, '')) || 0;
-  if (v < N_OFFLINE.next) return $('#off-msg').textContent = `Must be at least ${fmt(N_OFFLINE.next)}`;
+  if (!v) return $('#off-msg').textContent = 'Enter a start serial';
+  if (N_SMODE !== 'manual' && v < N_OFFLINE.next) return $('#off-msg').textContent = `Must be at least ${fmt(N_OFFLINE.next)}`;
   if (!$('#off-ok').checked) return $('#off-msg').textContent = 'Tick the box to confirm';
   submitNewJob(false, v);
 }
@@ -1929,8 +1944,8 @@ async function submitNewJob(allowDup = false, offline = null) {
     } else if (e.status === 423 && e.data.serial_offline) {
       N_OFFLINE = {next: e.data.next_known};
       $('#off-why').textContent = `${e.message} The highest serial the app database and journal know for UPC ${body.upc} ends just before ${fmt(e.data.next_known)}.`;
-      $('#off-start').value = Number(e.data.next_known).toLocaleString('en-US'); $('#off-ok').checked = false;
-      $('#off-hint').textContent = `At least ${fmt(e.data.next_known)}.`; $('#off-msg').textContent = '';
+      $('#off-start').value = Number(body.start_serial || e.data.next_known).toLocaleString('en-US'); $('#off-ok').checked = false;
+      $('#off-hint').textContent = N_SMODE === 'manual' ? 'Checked against the ranges the app database and journal know.' : `At least ${fmt(e.data.next_known)}.`; $('#off-msg').textContent = '';
       openOv('ov-offline'); msg.textContent = 'Serial registry offline. Confirm to continue.';
     } else { msg.textContent = e.message; if (offline) $('#off-msg').textContent = e.message; }
   } finally { btn.disabled = false; btn.textContent = 'Create job'; }

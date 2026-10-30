@@ -232,6 +232,56 @@ def allocate_serials(upc: str, job_number: str, adjusted_qty: int,
             _release_file_lock(lock_path)
 
 
+class SerialOverlap(ValueError):
+    """The requested range includes serials already used for this UPC."""
+    def __init__(self, start, end, conflicts):
+        self.conflicts = conflicts
+        shown = "; ".join(f"{c['job_number']} ({c['start']:,}–{c['end']:,})" for c in conflicts[:3])
+        more = f" and {len(conflicts) - 3} more" if len(conflicts) > 3 else ""
+        super().__init__(f"Serials {start:,}–{end:,} were already used for this UPC by {shown}{more}. "
+                         "Choose a start whose whole range is unused.")
+
+
+def overlapping(records, start: int, end: int) -> list[dict]:
+    """The records (dicts with start, end, job_number) that share any serial with [start, end]."""
+    return [r for r in records if r["start"] <= end and start <= r["end"]]
+
+
+def allocate_range(upc: str, job_number: str, start: int, adjusted_qty: int,
+                   overage_note: str = "base") -> dict:
+    """
+    Record exactly [start, start + qty - 1] for `upc`, wherever it sits, as long as none of it
+    was used before. Unlike allocate_serials it may fill an unused gap below the highest serial.
+    Raises SerialOverlap if any serial in the range is already in this UPC's registry file.
+    """
+    upc = upc.strip()
+    if not upc or not upc.isdigit() or len(upc) != 12:
+        raise ValueError(f"UPC must be exactly 12 digits, got: {upc!r}")
+    if adjusted_qty <= 0:
+        raise ValueError(f"Quantity must be positive, got: {adjusted_qty}")
+    if start < 1:
+        raise ValueError("Start serial must be 1 or more")
+    end = start + adjusted_qty - 1
+    if end >= 1 << 38:
+        raise ValueError("That range runs past the largest serial an EPC can hold.")
+    with _thread_lock_for(upc):
+        lock_path = _acquire_file_lock(upc)
+        try:
+            clash = overlapping(read_records(upc), start, end)
+            if clash:
+                raise SerialOverlap(start, end, clash)
+            last_end = _read_last_end(upc)
+            natural = SERIAL_START_DEFAULT if last_end is None else last_end + 1
+            try:
+                _append_allocation(upc, job_number, start, end, adjusted_qty, overage_note)
+            except Exception as e:
+                raise RuntimeError(f"Failed to write serial registry for UPC {upc}: {e}") from e
+            return {"start": start, "end": end, "qty": adjusted_qty, "upc": upc, "job_number": job_number,
+                    "is_new_upc": last_end is None, "skipped": max(0, start - natural)}
+        finally:
+            _release_file_lock(lock_path)
+
+
 def seed_last_used(upc: str, last_used: int, note: str = "ran before this app") -> dict:
     """Record that serials up to `last_used` were already used before the registry
     existed. Forward-only: does nothing unless it moves the next serial forward."""

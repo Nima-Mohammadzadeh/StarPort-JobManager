@@ -145,6 +145,64 @@ def _jobs_last_end(conn, upc):
     return best
 
 
+def _journal_ranges(upc):
+    jp = journal_path()
+    if not jp or not os.path.isfile(jp):
+        return []
+    out = []
+    try:
+        with open(jp, "r", encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh):
+                try:
+                    if row["upc"] == upc:
+                        out.append({"job_number": row["job_number"], "start": int(row["start"]), "end": int(row["end"])})
+                except (KeyError, ValueError, TypeError):
+                    pass
+    except OSError:
+        pass
+    return out
+
+
+def _jobs_ranges(conn, upc):
+    from generators import production_qty
+    out = []
+    for r in conn.execute("SELECT job_number, start_serial, quantity, overage_pct FROM jobs "
+                          "WHERE upc=? AND start_serial IS NOT NULL", (upc,)):
+        if r[1] and r[2]:
+            out.append({"job_number": r[0], "start": int(r[1]),
+                        "end": int(r[1]) + production_qty(int(r[2]), float(r[3] or 0)) - 1})
+    return out
+
+
+def used_ranges(upc, conn=None, include_registry=True):
+    """Every range any record says was used for this UPC: the registry file, the app database
+    mirror, the journal and the jobs themselves. Duplicates across records are harmless."""
+    own = conn is None
+    conn = conn or _db()
+    try:
+        rows = [{"job_number": r["job_number"], "start": r["start"], "end": r["end"]}
+                for r in conn.execute('SELECT job_number, start, "end" FROM serial_allocations WHERE upc=?', (upc,))]
+        rows += _journal_ranges(upc) + _jobs_ranges(conn, upc)
+        if include_registry and registry_ok()[0]:
+            rows += [{"job_number": r["job_number"], "start": r["start"], "end": r["end"]} for r in R.read_records(upc)]
+        return rows
+    finally:
+        if own:
+            conn.close()
+
+
+def range_conflicts(upc, start, qty):
+    """{ok, conflicts, end} for using exactly `qty` serials from `start` on this UPC."""
+    end = start + qty - 1
+    seen, out = set(), []
+    for r in sorted(R.overlapping(used_ranges(upc), start, end), key=lambda r: r["start"]):
+        k = (r["job_number"], r["start"], r["end"])
+        if k not in seen:
+            seen.add(k)
+            out.append(r)
+    return {"ok": not out, "conflicts": out, "start": start, "end": end}
+
+
 def known_last_end(upc, conn=None):
     """Highest end in any record that can be read right now (None if none)."""
     own = conn is None
@@ -198,13 +256,17 @@ def _repair_registry(conn, upc):
     return len(missing)
 
 
-def reserve(upc, job_number, qty, note="base", min_start=None, who=None, offline_start=None):
+def reserve(upc, job_number, qty, note="base", min_start=None, who=None, offline_start=None, exact_start=None):
     """Give out `qty` serials for `upc`. Returns {start, end, qty, skipped, offline}.
+    exact_start: use exactly this range, even below the highest serial, provided none of it was
+    used before (SerialOverlap, a ValueError, if any was). Otherwise min_start can only move forward.
     Raises ValueError (bad request), SerialsOffline (registry unreachable and no
     confirmed start), RuntimeError (I/O)."""
     upc = upc.strip()
     if qty <= 0:
         raise ValueError("Quantity must be positive")
+    if exact_start is not None and exact_start < 1:
+        raise ValueError("Start serial must be 1 or more")
     with _lock:
         ok, msg = registry_ok(force=True)
         conn = _db()
@@ -212,7 +274,22 @@ def reserve(upc, job_number, qty, note="base", min_start=None, who=None, offline
             known = [e for e in (_mirror_last_end(conn, upc), _journal_last_end(upc), _jobs_last_end(conn, upc))
                      if e is not None]
             known_end = max(known) if known else None
-            if ok:
+            if exact_start is not None and not ok and offline_start is not None:
+                # registry unreachable: the person confirmed this start; check it against what the app knows
+                clash = R.overlapping(used_ranges(upc, conn, include_registry=False), offline_start, offline_start + qty - 1)
+                if clash:
+                    raise R.SerialOverlap(offline_start, offline_start + qty - 1, clash)
+                start, end, state = offline_start, offline_start + qty - 1, 0
+                note_out = f"{note}; created while the serial registry was offline"
+                skipped = max(0, start - ((known_end + 1) if known_end is not None else DEFAULT_START))
+            elif exact_start is not None and ok:
+                _repair_registry(conn, upc)
+                clash = R.overlapping(used_ranges(upc, conn), exact_start, exact_start + qty - 1)
+                if clash:
+                    raise R.SerialOverlap(exact_start, exact_start + qty - 1, clash)
+                a = R.allocate_range(upc, job_number, exact_start, qty, note)
+                start, end, state, note_out, skipped = a["start"], a["end"], 1, note, a["skipped"]
+            elif ok:
                 _repair_registry(conn, upc)
                 natural = R.peek_next_start(upc)
                 floor = max(natural, (known_end + 1) if known_end is not None else 0)

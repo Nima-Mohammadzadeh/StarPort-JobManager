@@ -102,3 +102,73 @@ def test_activity_log_says_how_serials_were_chosen(jm):
     finally:
         c.close()
     assert "specified by user" in text
+
+
+# ── specified start: refused only when the range was already used for this UPC ──────────────
+def gap_setup(jm, n):
+    """UPC with job A at s..s+99 and job B far ahead at s+10000..s+10099, leaving an unused gap between."""
+    upc = jm.upc(n)
+    a, code = make(jm, n, serial_mode="auto", job_ticket=f"G{n}a")
+    assert code == 201, a
+    s = a["job"]["start_serial"]
+    b, code = make(jm, n, serial_mode="manual", start_serial=s + 10_000, job_ticket=f"G{n}b")
+    assert code == 201, b
+    return upc, s, a, b
+
+
+def test_start_inside_an_unused_gap_below_the_last_serial_is_allowed(jm):
+    upc, s, a, b = gap_setup(jm, 20)
+    res, code = make(jm, 20, serial_mode="manual", start_serial=s + 500, job_ticket="G20c")
+    assert code == 201, res
+    assert res["job"]["start_serial"] == s + 500
+    spans = sorted((r["start"], r["end"]) for r in jm.R.read_records(upc))
+    assert (s + 500, s + 599) in spans
+    mir = [r for r in mirror(jm, upc) if r["job_number"] == res["job_number"]]
+    assert [(r["start"], r["end"], r["registry_state"]) for r in mir] == [(s + 500, s + 599, 1)]
+
+
+def test_automatic_after_a_gap_fill_still_continues_from_the_highest_serial(jm):
+    upc, s, a, b = gap_setup(jm, 21)
+    make(jm, 21, serial_mode="manual", start_serial=s + 500, job_ticket="G21c")
+    nxt, code = make(jm, 21, serial_mode="auto", job_ticket="G21d")
+    assert code == 201, nxt
+    assert nxt["job"]["start_serial"] == s + 10_100
+
+
+def test_start_inside_a_used_range_is_refused_and_names_the_job(jm):
+    upc, s, a, b = gap_setup(jm, 22)
+    before = len(mirror(jm, upc))
+    res, code = make(jm, 22, serial_mode="manual", start_serial=s + 50, job_ticket="G22c")
+    assert code == 400
+    assert a["job_number"] in res["error"]
+    assert len(mirror(jm, upc)) == before
+    assert len(jm.R.read_records(upc)) == before
+
+
+def test_range_that_runs_into_a_later_used_range_is_refused(jm):
+    upc, s, a, b = gap_setup(jm, 23)
+    res, code = make(jm, 23, serial_mode="manual", start_serial=s + 10_000 - 50, job_ticket="G23c")
+    assert code == 400
+    assert b["job_number"] in res["error"]
+
+
+def test_range_ending_just_before_a_used_range_is_allowed(jm):
+    upc, s, a, b = gap_setup(jm, 24)
+    res, code = make(jm, 24, serial_mode="manual", start_serial=s + 10_000 - 100, job_ticket="G24c")
+    assert code == 201, res
+
+
+def test_overlap_is_still_caught_when_the_registry_file_is_lost(jm):
+    upc, s, a, b = gap_setup(jm, 25)
+    os.remove(os.path.join(jm.config.SERIAL_REGISTRY_DIR, f"{upc}.txt"))
+    res, code = make(jm, 25, serial_mode="manual", start_serial=s + 10, job_ticket="G25c")
+    assert code == 400, res
+
+
+def test_range_check_endpoint_reports_conflicts_and_free_ranges(jm):
+    upc, s, a, b = gap_setup(jm, 26)
+    c = jm.app.app.test_client()
+    bad = c.get(f"/api/upc/{upc}/range?start={s + 50}&qty=100").get_json()
+    assert bad["ok"] is False and [x["job_number"] for x in bad["conflicts"]] == [a["job_number"]]
+    good = c.get(f"/api/upc/{upc}/range?start={s + 500}&qty=100").get_json()
+    assert good["ok"] is True and good["conflicts"] == []
