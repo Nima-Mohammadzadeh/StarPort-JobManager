@@ -115,18 +115,40 @@ table.jobs{width:100%;border-collapse:collapse}
 .st-complete{background:var(--green-soft);color:var(--green)}
 .st-cancelled{background:var(--red-soft);color:var(--red)}
 
-/* ── Drawer ── */
-.drawer{position:fixed;top:56px;right:0;bottom:0;width:min(640px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(27,42,46,.12);transform:translateX(100%);transition:transform .18s ease;z-index:15;display:flex;flex-direction:column}
-.drawer.on{transform:none}
-.d-head{padding:16px 20px 12px;border-bottom:1px solid var(--line)}
-.d-title{display:flex;align-items:flex-start;gap:10px}
-.d-title h2{margin:0;font-size:19px;font-weight:650;line-height:1.25}
-.d-title .sub{color:var(--muted);font-size:13px}
-.d-title .x{margin-left:auto}
-.d-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
-.d-body{overflow:auto;padding:4px 20px 30px;flex:1}
+/* ── Job dialog (centered; replaces the old side drawer) ── */
+#ov-job{padding:28px 16px}
+.job-modal{width:min(1120px,100%);border-radius:12px}
+.d-head{padding:18px 24px 14px;border-bottom:1px solid var(--line)}
+.d-title{display:flex;align-items:flex-start;gap:12px}
+.d-title h2{margin:0;font-size:21px;font-weight:650;line-height:1.25}
+.d-title h2 .tk{font-size:21px;margin-right:6px}
+.d-title .sub{color:var(--muted);font-size:13.5px;margin-top:2px}
+.d-title .pill{margin-left:auto;font-size:13.5px;padding:3px 12px;flex:none}
+.jm-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 0}
+.tile{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.tile dt{font-size:12px;color:var(--muted)}
+.tile dd{margin:2px 0 0;font-size:17px;font-weight:650;word-break:break-word}
+.tile dd small{display:block;font-size:12px;font-weight:500;color:var(--muted)}
+.tile .progress{margin:6px 0 0;height:5px}
+.d-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.jm-more{position:relative;margin-left:auto}
+.jm-more summary{list-style:none;cursor:pointer}
+.jm-more summary::-webkit-details-marker{display:none}
+.jm-more .menu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;min-width:230px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 10px 28px rgba(27,42,46,.2);padding:6px;display:flex;flex-direction:column;gap:2px}
+.jm-more .menu .btn{border:0;justify-content:flex-start;text-align:left;background:none}
+.jm-more .menu .btn:hover{background:var(--sunk)}
+.jm-more .menu .sep{border-top:1px solid var(--line);margin:4px 0}
+.jm-more .menu label{font-size:12px;color:var(--muted);padding:4px 10px 0}
+.jm-more .menu select{margin:2px 4px 4px;width:calc(100% - 8px)}
+.jm-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:0 28px;padding:4px 24px 24px;align-items:start}
+.jm-col{min-width:0}
+.jm-col .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+.jm-body .warnbox,.jm-body .ticketnote{margin:14px 0 0}
+.jm-body .full{grid-column:1/-1}
+#d-notes{max-height:340px;overflow-y:auto;overflow-x:hidden}
+@media (max-width:900px){.jm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.jm-body{grid-template-columns:1fr;padding:4px 16px 20px}.d-head{padding:16px}.jm-more{margin-left:0}}
 .d-sec{padding:16px 0;border-bottom:1px solid #E7ECEC}
-.d-sec:last-child{border-bottom:0}
+.jm-col .d-sec:last-child{border-bottom:0}
 .d-sec h3{font-size:14px;margin:0 0 10px;font-weight:650;display:flex;align-items:center;gap:8px}
 .d-sec h3 .r{margin-left:auto;display:flex;gap:6px}
 .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px}
@@ -207,13 +229,74 @@ table.jobs{width:100%;border-collapse:collapse}
 .bgrid tr.done input{background:var(--green-soft);border-color:transparent}
 
 /* Templates page */
-.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.tcard{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
-.tcard .img{height:120px;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
-.tcard .img img{max-width:100%;max-height:100%;object-fit:contain}
-.tcard .b{padding:10px 12px;font-size:13px}
-.tcard .b small{display:block;color:var(--muted);font-family:var(--data);font-size:11px;word-break:break-all;margin-top:3px}
-.tcard .f{padding:0 12px 10px;margin-top:auto}
+.tl{display:grid;grid-template-columns:220px minmax(0,1fr) 370px;gap:14px;align-items:start}
+.tl-sort{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.tl-sort select{width:auto;padding:5px 8px}
+.tl-acts{margin-left:auto;display:flex;gap:8px;align-items:center}
+.tl-folders,.tl-detail{background:var(--surface);border:1px solid var(--line);border-radius:8px;position:sticky;top:72px}
+.tl-folders{padding:8px;max-height:calc(100vh - 96px);overflow:auto}
+.tl-fsel{display:none;font-size:13px;color:var(--muted);margin-bottom:6px}
+.tl-f{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:none;border-radius:var(--r);padding:6px 8px 6px calc(8px + var(--d,0) * 14px);cursor:pointer;font-size:13.5px;color:var(--ink)}
+.tl-f:hover{background:var(--sunk)}
+.tl-f.on{background:var(--accent-soft);color:var(--accent-dark);font-weight:650}
+.tl-f .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-f .c{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tl-f svg{width:15px;height:15px;flex:none;color:var(--muted)}
+.tl-f.on svg{color:var(--accent-dark)}
+.tl-folders>.btn{margin-top:6px}
+.tl-main{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.tl-path{padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tl-path b{color:var(--ink);font-weight:650}
+.tl-main .pager{padding:8px 12px;border-top:1px solid var(--line)}
+table.tl-table{width:100%;border-collapse:collapse}
+.tl-table th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
+.tl-table td{padding:7px 10px;border-bottom:1px solid #E7ECEC;vertical-align:middle}
+.tl-table tbody tr{cursor:pointer}
+.tl-table tbody tr:hover{background:#E9F3F2}
+.tl-table tbody tr.sel{background:var(--accent-soft)}
+.tl-table tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tl-table td.num,.tl-table th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tl-table .th{width:64px;padding-right:0}
+.thumb{width:56px;height:28px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:10px}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.tl-nm{font-weight:600;overflow-wrap:anywhere}
+.tl-nm small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.tl-flag{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:600;color:var(--red);background:var(--red-soft);border-radius:4px;padding:0 6px}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:12px}
+.tcard{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;text-align:left;padding:0;cursor:pointer}
+.tcard:hover{border-color:var(--accent)}
+.tcard.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.tcard .img{aspect-ratio:2/1;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;width:100%}
+.tcard .img img{width:100%;height:100%;object-fit:cover}
+.tcard .b{padding:8px 10px;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.tcard .b small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+.tl-detail{padding:14px;max-height:calc(100vh - 96px);overflow:auto}
+.tl-detail .none{color:var(--muted);text-align:center;padding:36px 10px;font-size:13.5px}
+.td-img{aspect-ratio:2/1;border:1px solid var(--line);border-radius:8px;background:var(--sunk);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:13px;width:100%}
+.td-img img{width:100%;height:100%;object-fit:contain;background:#fff}
+.tl-detail h2{font-size:17px;margin:12px 0 2px;font-weight:650;overflow-wrap:anywhere}
+.td-path{display:flex;gap:6px;align-items:flex-start;margin:6px 0 10px;font-family:var(--data);font-size:11.5px;color:var(--muted);word-break:break-all}
+.td-meta{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0 0 12px;font-size:13px}
+.td-meta dt{color:var(--muted)}.td-meta dd{margin:0}
+.td-acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.td-acts .btn{display:block;text-align:center;text-decoration:none}
+.td-acts a.btn:not(.primary){color:inherit}
+.tl-table .sub,.td-sec .sub{color:var(--muted);font-size:12.5px}
+.tl-table .th-sort{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap}
+.tl-table .th-sort.on,.tl-table .th-sort:hover{color:var(--ink)}
+.tl-table .arrow{font-size:10px;opacity:.5}.tl-table .th-sort.on .arrow{opacity:1;color:var(--accent)}
+.tl-table th.num .th-sort{justify-content:flex-end}.td-acts .full{grid-column:1/-1}
+.td-sec{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.td-sec h3{font-size:12.5px;margin:0 0 6px;color:var(--muted);font-weight:650;text-transform:uppercase;letter-spacing:.03em}
+.td-sec ul{list-style:none;margin:0;padding:0;font-size:13px}
+.td-sec li{display:flex;gap:8px;justify-content:space-between;padding:3px 0}
+.td-sec li a{color:var(--accent);cursor:pointer;text-decoration:underline}
+.td-note{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.td-warn{background:var(--red-soft);color:var(--red);border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:10px}
+@container app (max-width:1400px){.tl{grid-template-columns:190px minmax(0,1fr) 330px}.tl-md{display:none}}
+@container app (max-width:1050px){.tl{grid-template-columns:190px minmax(0,1fr)}.tl-detail{grid-column:2;position:static;max-height:none}.tl-md{display:table-cell}}
+@container app (max-width:900px){.tl{grid-template-columns:minmax(0,1fr)}.tl-folders,.tl-detail{position:static;grid-column:1;max-height:none}
+  .tl-fsel{display:flex;flex-direction:column}#tl-tree{display:none}.tl-hide-sm{display:none}}
 
 /* Settings */
 .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;max-width:860px}
@@ -758,13 +841,39 @@ details.more p.d{margin:6px 0 0}
     <div class="bar">
       <h1>BarTender templates</h1>
       <div class="search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input class="i" id="q-templates" placeholder="Customer, UPC or size" autocomplete="off">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="i" id="q-templates" type="search" placeholder="Customer, UPC or size" aria-label="Search templates" autocomplete="off">
       </div>
-      <span id="tmpl-count" style="color:var(--muted);font-size:13px"></span>
-      <button class="btn" style="margin-left:auto" onclick="syncTemplates(this)">Rescan Master Templates</button>
+      <label class="tl-sort">Sort
+        <select class="i" id="tl-sort" aria-label="Sort templates">
+          <option value="name:asc">Name A to Z</option><option value="name:desc">Name Z to A</option>
+          <option value="modified:desc">Newest first</option><option value="modified:asc">Oldest first</option>
+          <option value="used:desc">Most used</option><option value="size:desc">Largest</option>
+        </select></label>
+      <div class="seg" role="group" aria-label="Layout">
+        <button type="button" id="tl-v-list" aria-pressed="true" onclick="tlSetLayout('list')">List</button>
+        <button type="button" id="tl-v-grid" aria-pressed="false" onclick="tlSetLayout('grid')">Previews</button>
+      </div>
+      <div class="tl-acts">
+        <label class="btn primary" id="tl-upload-lbl">Add template
+          <input type="file" id="tl-upload" accept=".btw" hidden></label>
+        <button class="btn" onclick="syncTemplates(this)" title="Look for templates added or removed on disk">Rescan folder</button>
+      </div>
     </div>
-    <div class="tgrid" id="tmpl-grid"></div>
+    <div class="tl">
+      <nav class="tl-folders" aria-label="Template folders">
+        <label class="tl-fsel">Folder
+          <select class="i" id="tl-folder-sel" aria-label="Folder" onchange="tlPickFolder(this.value)"></select></label>
+        <div id="tl-tree"></div>
+        <button class="btn sm quiet" type="button" onclick="tlNewFolder()">+ New folder</button>
+      </nav>
+      <div class="tl-main">
+        <div class="tl-path" id="tl-path"></div>
+        <div id="tl-list" aria-live="polite"></div>
+        <div class="pager" id="tl-pager" role="navigation" aria-label="Template pages"></div>
+      </div>
+      <aside class="tl-detail" id="tl-detail" aria-label="Template details"></aside>
+    </div>
   </section>
 
   <!-- Tools -->
@@ -923,10 +1032,10 @@ details.more p.d{margin:6px 0 0}
 </div>
 
 <!-- Drawer -->
-<aside class="drawer" id="drawer" aria-label="Job details">
+<div class="ov" id="ov-job"><div class="modal job-modal" role="dialog" aria-modal="true" aria-labelledby="jm-title" tabindex="-1">
   <div class="d-head" id="d-head"></div>
-  <div class="d-body" id="d-body"></div>
-</aside>
+  <div class="jm-body" id="d-body"></div>
+</div></div>
 
 <!-- New job -->
 <div class="ov" id="ov-new"><div class="modal">
@@ -1044,6 +1153,15 @@ details.more p.d{margin:6px 0 0}
   <div class="m-body stack"><p id="nm-sub" style="margin:0;color:var(--muted);font-size:13.5px"></p>
     <label class="f">Name<input class="i" id="nm-input" list="dl-names" maxlength="40" autocomplete="off"></label></div>
   <div class="m-foot"><span class="msg" id="nm-msg"></span><button class="btn" id="nm-cancel">Cancel</button><button class="btn primary" id="nm-ok">OK</button></div>
+</div></div>
+
+<!-- Template library: one small dialog for rename, move, duplicate and new folder -->
+<div class="ov" id="ov-tpl"><div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="tp2-title">
+  <div class="m-head"><h2 id="tp2-title"></h2></div>
+  <div class="m-body stack"><p id="tp2-sub" style="margin:0;color:var(--muted);font-size:13.5px"></p>
+    <label class="f"><span id="tp2-label"></span><input class="i" id="tp2-input" list="tp2-list" maxlength="150" autocomplete="off"></label>
+    <datalist id="tp2-list"></datalist></div>
+  <div class="m-foot"><span class="msg" id="tp2-msg" role="alert"></span><button class="btn" id="tp2-cancel">Cancel</button><button class="btn primary" id="tp2-ok">OK</button></div>
 </div></div>
 
 <!-- Serial registry offline: confirm before creating -->
@@ -1326,36 +1444,64 @@ async function openJob(id, keepRoll) {
   try { d = await api('/api/jobs/' + id); } catch (e) { return toast(e.message, true); }
   CURRENT = d;
   document.querySelectorAll('.jobs tbody tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.id === id));
+  const wasOpen = $('#ov-job').classList.contains('on');
+  if (!wasOpen) JOB_OPENER = document.activeElement;
   renderDrawer(keepRoll);
-  $('#drawer').classList.add('on');
+  $('#ov-job').classList.add('on');
+  if (!wasOpen) { $('#ov-job .job-modal').scrollIntoView({block: 'start'}); $('#ov-job').scrollTop = 0; $('#ov-job .job-modal').focus(); }
 }
-function closeDrawer() { $('#drawer').classList.remove('on'); CURRENT = null; document.querySelectorAll('.jobs tr.sel').forEach(t => t.classList.remove('sel')); }
+let JOB_OPENER = null;
+function jobOpen() { return $('#ov-job').classList.contains('on'); }
+function closeDrawer() {
+  $('#ov-job').classList.remove('on'); CURRENT = null;
+  document.querySelectorAll('.jobs tr.sel').forEach(t => t.classList.remove('sel'));
+  if (JOB_OPENER && document.contains(JOB_OPENER)) JOB_OPENER.focus(); JOB_OPENER = null;
+}
+$('#ov-job').addEventListener('mousedown', e => { if (e.target.id === 'ov-job') closeDrawer(); });
+document.addEventListener('click', e => { const m = $('#jm-more'); if (m && m.open && !m.contains(e.target)) m.open = false; });
 function renderDrawer(keepRoll) {
   const {job: j, rolls, files, total_qty, end_serial, folder_exists} = CURRENT;
   const done = rolls.filter(r => r.status === 'complete' || r.status === 'verified').length;
   const archived = !!j.archived_at;
+  const next = {'Pending': ['Start job', 'In Progress'], 'In Progress': ['Mark complete', 'Complete'],
+                'On Hold': ['Resume job', 'In Progress'], 'Complete': ['Reopen job', 'In Progress'], 'Cancelled': ['Reopen job', 'Pending']}[j.status];
+  const tile = (k, v, extra = '') => `<div class="tile"><dt>${k}</dt><dd>${v}${extra}</dd></div>`;
   $('#d-head').innerHTML = `
     <div class="d-title">
-      <div><h2>${esc(j.customer)}, ticket ${esc(j.job_ticket || '—')}</h2>
-      <div class="sub">${esc(j.title)}<br>${esc(j.job_number)}${archived ? ', archived ' + day(j.archived_at) : ''}</div></div>
-      <button class="btn quiet x" onclick="closeDrawer()" aria-label="Close">✕</button>
+      <div><h2 id="jm-title"><span class="tk data">${esc(j.job_ticket || '—')}</span> ${esc(j.customer)}</h2>
+      <div class="sub">${esc(j.title)} · ${esc(j.job_number)}${archived ? ', archived ' + day(j.archived_at) : ''}</div></div>
+      <span class="pill ${stc(j.status)}">${esc(j.status)}</span>
+      <button class="btn quiet x" onclick="closeDrawer()" aria-label="Close job details">✕</button>
     </div>
+    <dl class="jm-tiles">
+      ${tile('Due', j.due_date ? dueHtml(j, new Date().toISOString().slice(0, 10)) : '<span class="sub">Not set</span>')}
+      ${tile(j.job_type === 'special' ? 'Quantity' : 'To encode', fmt(total_qty || j.quantity), j.overage_pct ? `<small>incl. +${j.overage_pct}% overage</small>` : '')}
+      ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>` : '')}
+      ${tile('Serial range', j.start_serial ? `<span class="data" style="font-size:14px">${fmt(j.start_serial)} –<br>${fmt(j.start_serial + total_qty - 1)}</span>` : '<span class="sub">None</span>')}
+    </dl>
     <div class="d-actions">
-      <select class="i" style="width:auto" onchange="setStatus(this.value)" aria-label="Status">
-        ${META.statuses.map(s => `<option ${s === j.status ? 'selected' : ''}>${s}</option>`).join('')}
-      </select>
-      <button class="btn sm" onclick="openFolder()" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
-      <button class="btn sm" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
-      <button class="btn sm" onclick="openEdit()">Edit</button>
-      ${archived ? '' : j.priority_rank ? `<button class="btn sm" onclick="priorityChange('remove', ${j.id})">Remove from priority (#${j.priority_rank})</button>`
-                                         : `<button class="btn sm" onclick="priorityChange('add', ${j.id})">Add to priority</button>`}
-      ${archived ? `<button class="btn sm" onclick="archiveJob(true)">Move back to jobs</button>`
-                 : `<button class="btn sm" onclick="archiveJob(false)">Archive</button>`}
+      ${archived || !next ? '' : `<button class="btn primary" onclick="setStatus('${next[1]}')">${next[0]}</button>`}
+      ${j.status === 'In Progress' && !archived ? `<button class="btn" onclick="setStatus('On Hold')">Put on hold</button>` : ''}
+      <button class="btn" onclick="openFolder()" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
+      <button class="btn" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
+      <button class="btn" onclick="openEdit()">Edit</button>
+      <details class="jm-more" id="jm-more"><summary class="btn" aria-label="More actions">More ▾</summary><div class="menu">
+        ${archived ? '' : j.priority_rank ? `<button class="btn sm" onclick="priorityChange('remove', ${j.id})">Remove from priority (#${j.priority_rank})</button>`
+                                           : `<button class="btn sm" onclick="priorityChange('add', ${j.id})">Add to priority</button>`}
+        ${archived ? `<button class="btn sm" onclick="archiveJob(true)">Move back to jobs</button>`
+                   : `<button class="btn sm" onclick="archiveJob(false)">Archive</button>`}
+        <label for="jm-status">Set status</label>
+        <select class="i" id="jm-status" onchange="setStatus(this.value)">${META.statuses.map(x => `<option ${x === j.status ? 'selected' : ''}>${x}</option>`).join('')}</select>
+        <div class="sep"></div>
+        <button class="btn sm danger" onclick="deleteJob()">Delete job record…</button>
+      </div></details>
     </div>`;
 
   const kv = (k, v, cls = '') => `<div><dt>${k}</dt><dd class="${cls}">${v === '' || v == null ? '—' : v}</dd></div>`;
-  let h = '';
-  if (j.folder_path && !folder_exists) h += `<div class="warnbox">The job folder can't be reached from the server right now.</div>`;
+  let h = '', right = '';
+  if (j.folder_path && !folder_exists) h += `<div class="warnbox full">The job folder can't be reached from the server right now.</div>`;
+  if (j.notes) h += `<div class="ticketnote full"><b>Notes from the ticket</b>${esc(j.notes)}</div>`;
+  h += '<div class="jm-col">';
 
   h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">${j.data_sheet ? 'No UPC, ' + esc((sheetDef(j.data_sheet) || {customer: ''}).customer) + ' data sheet' : 'No UPC, no serials'}</span></h3><dl class="kv">
     ${kv('Quantity', fmt(j.quantity), 'data')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
@@ -1364,8 +1510,6 @@ function renderDrawer(keepRoll) {
     ${j.data_sheet && j.start_serial ? kv('Serial range', `${fmt(j.start_serial)} – ${fmt(j.start_serial + total_qty - 1)}`, 'data') : ''}
     ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
     ${kv('UPC', esc(j.upc || ''), 'data')}
-    ${kv('Serial range', j.start_serial ? `${fmt(j.start_serial)} – ${fmt(end_serial)}` : '', 'data')}
-    ${kv('Total to encode', total_qty ? fmt(total_qty) : '', 'data')}
     ${kv('Base quantity', fmt(j.quantity), 'data')}
     ${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
     ${kv('Labels per roll', fmt(j.lpr), 'data')}
@@ -1381,9 +1525,9 @@ function renderDrawer(keepRoll) {
       <div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div></div>`;
   }
 
-  h += `<div class="d-sec"><h3>Notes</h3>${composerHtml('d', rolls)}<div id="d-notes">${notesHtml(CURRENT.notes)}</div></div>`;
+  right += `<div class="d-sec"><h3>Notes</h3>${composerHtml('d', rolls)}<div id="d-notes">${notesHtml(CURRENT.notes)}</div></div>`;
 
-  h += `<div class="d-sec"><h3>Files<span class="r">
+  right += `<div class="d-sec"><h3>Files<span class="r">
       <button class="btn sm quiet" onclick="regenerate(this)" ${folder_exists ? '' : 'disabled'}>Rewrite checklist and QC sheet</button>
       <button class="btn sm quiet" onclick="openTemplatePick()" ${folder_exists ? '' : 'disabled'}>Add template</button></span></h3>
     ${j.folder_path ? `<div class="path" title="Click to copy" style="cursor:pointer" onclick="copyPath()">${esc(j.folder_path)}</div>` : '<div class="sub">No folder was created for this job.</div>'}
@@ -1395,8 +1539,8 @@ function renderDrawer(keepRoll) {
   h += `<div class="d-sec"><h3>Details</h3><dl class="kv">
     ${kv('PO #', esc(j.po_number || ''))}${kv('Part #', esc(j.part_number || ''))}${kv('Due date', esc(j.due_date || ''))}
     ${kv('Created', esc(j.created_at))}${kv('Updated', esc(j.updated_at))}${kv('Template', j.template_path ? esc(j.template_path.split(/[\\/]/).pop()) : '')}
-  </dl>${j.notes ? `<div class="ticketnote" style="margin-top:12px"><b>Notes from the ticket</b>${esc(j.notes)}</div>` : ''}
-  <div style="margin-top:16px"><button class="btn sm danger" onclick="deleteJob()">Delete job record</button></div></div>`;
+  </dl></div>`;
+  h += `</div><div class="jm-col">${right}</div>`;
 
   const draft = $('#d-note-body') ? $('#d-note-body').value : '';
   $('#d-body').innerHTML = h;
@@ -1484,7 +1628,8 @@ function closeOv(id) { $('#' + id).classList.remove('on'); }
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const open = [...document.querySelectorAll('.ov.on')].pop();
-  if (open) open.classList.remove('on'); else if ($('#drawer').classList.contains('on')) closeDrawer();
+  if (open && open.id === 'ov-job') closeDrawer();
+  else if (open) open.classList.remove('on');
 });
 
 /* ───────────────────────── new job ───────────────────────── */
@@ -1854,27 +1999,209 @@ async function applyTemplate(btn) {
 }
 
 /* ───────────────────────── templates page ───────────────────────── */
+const TL = {folder: null, sort: 'name', dir: 'asc', page: 1, per: 25, layout: 'list', sel: null, cur: null, data: null, tree: null, v: Date.now()};
+try { TL.layout = localStorage.getItem('jm_tpl_layout') === 'grid' ? 'grid' : 'list'; } catch (_) {}
+const kb = n => n == null ? '—' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+const ICON_FOLDER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const thumbUrl = id => `/api/templates/${id}/thumbnail?v=${TL.v}`;
+
 async function loadTemplates() {
-  const q = $('#q-templates').value;
-  const d = await api('/api/templates?q=' + encodeURIComponent(q));
-  $('#tmpl-count').textContent = `${fmt(d.total)} templates` + (q ? `, showing first ${d.templates.length} matches` : ', search to find one');
-  $('#tmpl-grid').innerHTML = d.templates.map(t => `<div class="tcard">
-      <div class="img">${t.has_thumb ? `<img src="/api/templates/${t.id}/thumbnail?${Date.now()}" alt="">` : 'No preview'}</div>
-      <div class="b">${esc(t.name)}<small>${esc(t.file_path)}</small></div>
-      <div class="f"><label class="btn sm quiet" style="display:inline-block">${t.has_thumb ? 'Replace preview' : 'Add preview'}
-        <input type="file" accept="image/*" hidden onchange="uploadThumb(${t.id}, this)"></label></div>
-    </div>`).join('') || `<div class="empty" style="grid-column:1/-1">${q ? 'No templates match.' : 'No templates yet. Set the Master Templates folder in Settings, then rescan.'}</div>`;
+  try { await tlLoadFolders(); await tlLoadList(); } catch (e) { toast(e.message, true); }
+  tlSyncControls();
+  if (!TL.sel) $('#tl-detail').innerHTML = '<div class="none">Pick a template to see its preview, details and actions.</div>';
 }
-$('#q-templates').oninput = debounce(loadTemplates, 250);
-async function uploadThumb(id, input) {
-  const fd = new FormData(); fd.append('file', input.files[0]);
-  try { await api(`/api/templates/${id}/thumbnail`, {method: 'POST', body: fd}); toast('Preview saved'); loadTemplates(); }
+function tlSyncControls() {
+  $('#tl-v-list').setAttribute('aria-pressed', TL.layout === 'list'); $('#tl-v-grid').setAttribute('aria-pressed', TL.layout === 'grid');
+  $('#tl-v-list').classList.toggle('on', TL.layout === 'list'); $('#tl-v-grid').classList.toggle('on', TL.layout === 'grid');
+  $('#tl-sort').value = `${TL.sort}:${TL.dir}`;
+}
+function tlSetLayout(l) { TL.layout = l; try { localStorage.setItem('jm_tpl_layout', l); } catch (_) {} tlSyncControls(); if (TL.data) tlRenderList(); }
+
+/* folders */
+async function tlLoadFolders() {
+  const d = await api('/api/templates/folders'); TL.tree = d;
+  const items = [['', 'All templates', 0, d.total]];
+  if (d.top) items.push(['.', 'Top level', 0, d.top]);
+  d.folders.forEach(f => items.push([f.path, f.name, f.depth, f.count]));
+  const cur = TL.folder === null ? '' : TL.folder;
+  $('#tl-tree').innerHTML = items.map(([p, n, dep, c]) => `<button type="button" class="tl-f${p === cur ? ' on' : ''}" style="--d:${dep}" data-f="${esc(p)}" ${p === cur ? 'aria-current="true"' : ''}>${ICON_FOLDER}<span class="n">${esc(n)}</span><span class="c">${fmt(c)}</span></button>`).join('');
+  $('#tl-folder-sel').innerHTML = items.map(([p, n, dep, c]) => `<option value="${esc(p)}"${p === cur ? ' selected' : ''}>${'  '.repeat(dep)}${esc(n)} (${fmt(c)})</option>`).join('');
+}
+$('#tl-tree').addEventListener('click', e => { const b = e.target.closest('.tl-f'); if (b) tlPickFolder(b.dataset.f); });
+function tlPickFolder(f) { TL.folder = f === '' ? null : f; TL.page = 1; tlLoadFolders().then(tlLoadList).catch(e => toast(e.message, true)); }
+
+/* list */
+async function tlLoadList() {
+  const p = new URLSearchParams({per: TL.per, page: TL.page, sort: TL.sort, dir: TL.dir, q: $('#q-templates').value.trim()});
+  if (TL.folder !== null) p.set('folder', TL.folder);
+  const d = await api('/api/templates?' + p); TL.data = d; TL.page = d.page;
+  tlRenderPath(); tlRenderList(); tlRenderPager(d);
+}
+function tlRenderPath() {
+  const q = $('#q-templates').value.trim(), f = TL.folder;
+  const parts = f && f !== '.' ? f.split('/') : [];
+  let h = parts.length || f === '.' ? '<button type="button" class="btn sm quiet" onclick="tlPickFolder(\'\')">All templates</button>' : '<b>All templates</b>';
+  if (f === '.') h += ' / <b>Top level</b>';
+  parts.forEach((p, i) => { const path = parts.slice(0, i + 1).join('/');
+    h += i === parts.length - 1 ? ` / <b>${esc(p)}</b>` : ` / <button type="button" class="btn sm quiet" data-f="${esc(path)}" onclick="tlPickFolder(this.dataset.f)">${esc(p)}</button>`; });
+  if (q) h += ` <span>matching “${esc(q)}”</span> <button type="button" class="btn sm quiet" onclick="$('#q-templates').value='';TL.page=1;tlLoadList()">Clear search</button>`;
+  $('#tl-path').innerHTML = h;
+}
+function tlRenderList() {
+  const d = TL.data, box = $('#tl-list');
+  if (TL.tree && !TL.tree.root_ok) { box.innerHTML = `<div class="empty">The Master Templates folder isn't reachable:<br><span class="data">${esc(TL.tree.root)}</span><br>Check the path in Settings, then rescan.</div>`; return; }
+  if (!d.templates.length) {
+    const q = $('#q-templates').value.trim();
+    box.innerHTML = `<div class="empty">${q ? 'No templates match that search.' : TL.folder !== null ? 'No templates in this folder yet.' : 'No templates yet.'}
+      <br>${q ? '' : 'Use <b>Add template</b> to put a .btw file here, or <b>Rescan folder</b> to pick up files added on disk.'}</div>`; return;
+  }
+  if (TL.layout === 'grid') {
+    box.innerHTML = `<div class="tgrid">${d.templates.map(t => `<button type="button" class="tcard${t.id === TL.sel ? ' sel' : ''}" data-id="${t.id}" aria-label="${esc(t.name)}" aria-pressed="${t.id === TL.sel}">
+      <span class="img">${t.has_thumb ? `<img src="${thumbUrl(t.id)}" alt="" loading="lazy">` : 'No preview'}</span>
+      <span class="b">${esc(t.name)}<small>${esc(t.folder || 'Top level')} · ${kb(t.size)}${t.missing ? ' · file missing' : ''}</small></span></button>`).join('')}</div>`;
+    return;
+  }
+  const sortBtn = (k, label, cls = '') => `<th class="${cls}" scope="col" aria-sort="${TL.sort === k ? (TL.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort${TL.sort === k ? ' on' : ''}" onclick="tlSortBy('${k}')">${label}<span class="arrow" aria-hidden="true">${TL.sort === k ? (TL.dir === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>`;
+  box.innerHTML = `<table class="tl-table"><thead><tr><th class="th" scope="col"><span class="sr">Preview</span></th>${sortBtn('name', 'Name')}<th class="tl-hide-sm" scope="col">Folder</th>${sortBtn('modified', 'Modified', 'num tl-hide-sm tl-md')}${sortBtn('size', 'Size', 'num tl-hide-sm tl-md')}${sortBtn('used', 'Used', 'num')}</tr></thead>
+    <tbody id="tl-rows">${d.templates.map(t => `<tr tabindex="0" data-id="${t.id}" class="${t.id === TL.sel ? 'sel' : ''}" ${t.id === TL.sel ? 'aria-current="true"' : ''}>
+      <td class="th"><span class="thumb">${t.has_thumb ? `<img src="${thumbUrl(t.id)}" alt="" loading="lazy">` : 'none'}</span></td>
+      <td><span class="tl-nm">${esc(t.name)}${t.missing ? '<span class="tl-flag">file missing</span>' : ''}</span></td>
+      <td class="tl-hide-sm sub">${esc(t.folder || 'Top level')}</td>
+      <td class="num tl-hide-sm tl-md">${esc(day(t.modified))}</td><td class="num tl-hide-sm tl-md">${kb(t.size)}</td>
+      <td class="num">${t.used ? fmt(t.used) + (t.used === 1 ? ' job' : ' jobs') : '<span class="sub">–</span>'}</td></tr>`).join('')}</tbody></table>`;
+}
+function tlSortBy(k) { if (TL.sort === k) TL.dir = TL.dir === 'asc' ? 'desc' : 'asc'; else { TL.sort = k; TL.dir = k === 'name' ? 'asc' : 'desc'; } TL.page = 1; tlSyncControls(); tlLoadList(); }
+$('#tl-sort').onchange = e => { [TL.sort, TL.dir] = e.target.value.split(':'); TL.page = 1; tlLoadList(); };
+function tlRenderPager(d) {
+  const el = $('#tl-pager');
+  if (!d.matched) { el.innerHTML = `<span>${fmt(d.total)} templates in the library</span>`; return; }
+  const a = (d.page - 1) * d.per + 1, b = Math.min(d.matched, d.page * d.per);
+  el.innerHTML = `<span>Showing <b>${fmt(a)}–${fmt(b)}</b> of <b>${fmt(d.matched)}</b>${d.matched !== d.total ? ` (${fmt(d.total)} in the library)` : ''}</span>
+    ${d.pages > 1 ? `<div class="pg-ctl"><button type="button" class="pg" ${d.page <= 1 ? 'disabled' : ''} onclick="tlPage(${d.page - 1})" aria-label="Previous page">‹</button>
+      <span>Page <b>${d.page}</b> of ${d.pages}</span>
+      <button type="button" class="pg" ${d.page >= d.pages ? 'disabled' : ''} onclick="tlPage(${d.page + 1})" aria-label="Next page">›</button></div>` : ''}`;
+}
+function tlPage(p) { TL.page = p; tlLoadList(); }
+$('#q-templates').oninput = debounce(() => { TL.page = 1; tlLoadList().catch(e => toast(e.message, true)); }, 250);
+
+/* pick a template: click, Enter/Space, or arrow keys inside the list */
+$('#tl-list').addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) tlSelect(+r.dataset.id); });
+$('#tl-list').addEventListener('keydown', e => {
+  const r = e.target.closest('tr[data-id]'); if (!r) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tlSelect(+r.dataset.id); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); const n = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling;
+    if (n) { n.focus(); tlSelect(+n.dataset.id); }
+  }
+});
+async function tlSelect(id) {
+  TL.sel = id;
+  document.querySelectorAll('#tl-list [data-id]').forEach(el => {
+    const on = +el.dataset.id === id; el.classList.toggle('sel', on);
+    if (el.tagName === 'TR') el.toggleAttribute('aria-current', on); else el.setAttribute('aria-pressed', on);
+  });
+  try { TL.cur = await api(`/api/templates/${id}`); } catch (e) { TL.sel = null; TL.cur = null; toast(e.message, true); return loadTemplates(); }
+  if (TL.sel === id) tlRenderDetail(TL.cur);
+}
+function tlRenderDetail(t) {
+  const jobsMore = t.used - t.jobs.length;
+  $('#tl-detail').innerHTML = `
+    ${t.missing ? '<div class="td-warn" role="alert">The file is no longer on disk. Rescan the folder, or replace it with a new file.</div>' : ''}
+    <div class="td-img">${t.has_thumb ? `<img src="${thumbUrl(t.id)}" alt="Preview of ${esc(t.name)}">` : 'No preview yet'}</div>
+    <div style="margin-top:6px"><label class="btn sm quiet" style="display:inline-block">${t.has_thumb ? 'Change preview image' : 'Add preview image'}
+      <input type="file" accept="image/*" hidden onchange="tlPreview(${t.id}, this)"></label></div>
+    <h2>${esc(t.name)}</h2>
+    <div class="td-path"><span>${esc(t.file_path)}</span><button type="button" class="btn sm quiet" onclick="tlCopyPath()">Copy path</button></div>
+    <dl class="td-meta"><dt>Folder</dt><dd>${esc(t.folder || 'Top level')}</dd><dt>Size</dt><dd>${kb(t.size)}</dd>
+      <dt>Modified</dt><dd>${esc(t.modified || '—')}</dd><dt>Used on</dt><dd>${t.used ? fmt(t.used) + (t.used === 1 ? ' job' : ' jobs') : 'no jobs yet'}</dd></dl>
+    <div class="td-acts">
+      <a class="btn primary full" href="/api/templates/${t.id}/download" ${t.missing ? 'aria-disabled="true"' : ''}>Download .btw to edit in BarTender</a>
+      <label class="btn">Replace file<input type="file" accept=".btw" hidden onchange="tlReplace(${t.id}, this)"></label>
+      <button type="button" class="btn" onclick="tlRename()">Rename</button>
+      <button type="button" class="btn" onclick="tlMove()">Move to folder</button>
+      <button type="button" class="btn" onclick="tlDuplicate()">Duplicate</button>
+      <button type="button" class="btn danger full" onclick="tlRemove()">Remove from library</button></div>
+    <p class="td-note">BarTender files can't be edited in the browser. Download, change it in BarTender, then use Replace file. The old file is kept under Previous versions.</p>
+    <div class="td-sec"><h3>Used on jobs</h3>${t.jobs.length ? `<ul>${t.jobs.map(j => `<li><a onclick="openJob(${j.id})">${esc(j.customer || '')} ${esc(j.job_ticket || j.job_number)}</a><span class="sub">${esc(j.status)}</span></li>`).join('')}</ul>${jobsMore > 0 ? `<p class="td-note">and ${fmt(jobsMore)} more</p>` : ''}` : '<p class="td-note">No job has copied this template yet.</p>'}</div>
+    <div class="td-sec"><h3>Previous versions</h3>${t.versions.length ? `<ul>${t.versions.map(v => `<li><a href="/api/templates/${t.id}/versions/${encodeURIComponent(v.file)}">${esc(v.modified)}</a><span class="sub">${kb(v.size)}</span></li>`).join('')}</ul>` : '<p class="td-note">None. Replacing the file saves the old one here.</p>'}</div>`;
+}
+function tlCopyPath() { copyText(TL.cur.file_path).then(() => toast('Path copied')); }
+
+/* changing templates */
+async function tlWho() { return operator() || !!(await askName('Who is changing this template?', 'Saved on this PC and shown in the activity log.')); }
+let TL_DLG = null;
+function tlDialog({title, sub = '', label, value = '', ok = 'OK', list = [], submit}) {
+  $('#tp2-title').textContent = title; $('#tp2-sub').textContent = sub; $('#tp2-label').textContent = label; $('#tp2-msg').textContent = '';
+  $('#tp2-input').value = value; $('#tp2-ok').textContent = ok;
+  $('#tp2-list').innerHTML = list.map(v => `<option value="${esc(v)}">`).join(''); TL_DLG = {submit};
+  openOv('ov-tpl'); setTimeout(() => { $('#tp2-input').focus(); $('#tp2-input').select(); }, 30);
+}
+async function tlDlgDone(ok) {
+  if (!ok) { closeOv('ov-tpl'); TL_DLG = null; return; }
+  const btn = $('#tp2-ok'); btn.disabled = true;
+  try { await TL_DLG.submit($('#tp2-input').value.trim()); closeOv('ov-tpl'); TL_DLG = null; }
+  catch (e) { $('#tp2-msg').textContent = e.message; } finally { btn.disabled = false; }
+}
+$('#tp2-ok').onclick = () => tlDlgDone(true); $('#tp2-cancel').onclick = () => tlDlgDone(false);
+$('#tp2-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tlDlgDone(true); } });
+async function tlRefresh(selectId) {
+  await tlLoadFolders(); await tlLoadList(); tlSyncControls();
+  if (selectId) await tlSelect(selectId);
+}
+async function tlRename() {
+  const t = TL.cur; if (!await tlWho()) return;
+  tlDialog({title: 'Rename template', sub: 'Jobs that already have a copy keep their old name. Keep the "Customer - UPC" pattern so matching still finds it.', label: 'File name',
+    value: t.name, ok: 'Rename', submit: async v => { await api(`/api/templates/${t.id}/rename`, {method: 'POST', body: {name: v}}); toast('Renamed'); await tlRefresh(t.id); }});
+}
+async function tlMove() {
+  const t = TL.cur; if (!await tlWho()) return;
+  tlDialog({title: 'Move to folder', sub: 'Pick a folder, or type a new name to create one. Leave it blank for the top level.', label: 'Folder',
+    value: t.folder, ok: 'Move', list: TL.tree.folders.map(f => f.path),
+    submit: async v => { await api(`/api/templates/${t.id}/move`, {method: 'POST', body: {folder: v}}); toast('Moved'); await tlRefresh(t.id); }});
+}
+async function tlDuplicate() {
+  const t = TL.cur; if (!await tlWho()) return;
+  tlDialog({title: 'Duplicate template', sub: 'The copy goes in the same folder. Handy as a starting point for a new customer.', label: 'Name of the copy',
+    value: `${t.name} copy`, ok: 'Duplicate', submit: async v => { const d = await api(`/api/templates/${t.id}/duplicate`, {method: 'POST', body: {name: v}}); toast('Copy created'); await tlRefresh(d.id); }});
+}
+async function tlNewFolder() {
+  if (!await tlWho()) return;
+  const parent = TL.folder && TL.folder !== '.' ? TL.folder : '';
+  tlDialog({title: 'New folder', sub: parent ? `It will be created inside ${parent}.` : 'It will be created in Master Templates.', label: 'Folder name', ok: 'Create folder',
+    submit: async v => { const d = await api('/api/templates/folders', {method: 'POST', body: {parent, name: v}}); toast('Folder created'); TL.folder = d.path; TL.page = 1; await tlRefresh(); }});
+}
+async function tlReplace(id, input) {
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  if (!confirm(`Replace "${TL.cur.name}" with "${f.name}"?\n\nThe current file is kept under Previous versions. Jobs that already copied it aren't changed.`)) return;
+  if (!await tlWho()) return;
+  const fd = new FormData(); fd.append('file', f);
+  try { await api(`/api/templates/${id}/replace`, {method: 'POST', body: fd}); toast('File replaced'); await tlRefresh(id); }
   catch (e) { toast(e.message, true); }
 }
+async function tlRemove() {
+  const t = TL.cur;
+  if (!confirm(`Remove "${t.name}" from the library?\n\nThe file moves to the _Removed folder inside Master Templates, so it can be put back by hand. Jobs that already copied it aren't affected.`)) return;
+  if (!await tlWho()) return;
+  try { await api(`/api/templates/${t.id}/remove`, {method: 'POST'}); toast('Removed'); TL.sel = null; TL.cur = null; await loadTemplates(); }
+  catch (e) { toast(e.message, true); }
+}
+async function tlPreview(id, input) {
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  const fd = new FormData(); fd.append('file', f);
+  try { await api(`/api/templates/${id}/thumbnail`, {method: 'POST', body: fd}); toast('Preview saved'); TL.v = Date.now(); await tlRefresh(id); }
+  catch (e) { toast(e.message, true); }
+}
+$('#tl-upload').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!await tlWho()) return;
+  const fd = new FormData(); fd.append('file', f); fd.append('folder', TL.folder && TL.folder !== '.' ? TL.folder : '');
+  try { const d = await api('/api/templates/upload', {method: 'POST', body: fd}); toast(`Added ${f.name}`); await tlRefresh(d.id); }
+  catch (err) { toast(err.message, true); }
+};
 async function syncTemplates(btn) {
   btn.disabled = true; btn.textContent = 'Scanning…';
-  try { const d = await api('/api/templates/sync', {method: 'POST'}); toast(`Found ${fmt(d.found)} templates. ${d.added} added, ${d.hidden} no longer on disk.`); if (d.warning) toast(d.warning, true); loadTemplates(); }
-  catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = 'Rescan Master Templates'; }
+  try { const d = await api('/api/templates/sync', {method: 'POST'}); toast(`Found ${fmt(d.found)} templates. ${d.added} added, ${d.hidden} no longer on disk.`); if (d.warning) toast(d.warning, true); await loadTemplates(); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = 'Rescan folder'; }
 }
 
 /* ───────────────────────── settings ───────────────────────── */
@@ -2000,7 +2327,7 @@ async function deleteNote(id) {
 }
 function afterNoteChange() {
   if ($('#v-rolls').classList.contains('on') && WORK) { openWork(WORK.job.id); loadFloor(true); }
-  if (CURRENT && $('#drawer').classList.contains('on')) openJob(CURRENT.job.id);
+  if (CURRENT && jobOpen()) openJob(CURRENT.job.id);
   if ($('#v-jobs').classList.contains('on')) loadFeed();
 }
 
@@ -2643,7 +2970,7 @@ async function poll() {
     const {stamp, serials, backup} = await api('/api/stamp');
     showSerialStatus(serials); showBackupStatus(backup);
     if (STAMP && stamp !== STAMP && !document.querySelector('.ov.on')) {
-      refreshList(); if (CURRENT && $('#drawer').classList.contains('on')) openJob(CURRENT.job.id);
+      refreshList(); if (CURRENT && jobOpen()) openJob(CURRENT.job.id);
     }
     STAMP = stamp;
     if ($('#conn').textContent === 'Server not responding') loadMeta();
