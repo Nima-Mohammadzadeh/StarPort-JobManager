@@ -80,6 +80,22 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   folder; the Jobs list shows each job's proof state. BarTender previews render on the host PC. Saved proofs
   from the standalone app come over with `import_proofing.bat`. Details: `PROOFING.md`.
 
+## When something goes wrong
+
+- **Only one copy runs.** Starting Job Manager while it is already running (a second `run.bat`) stops
+  straight away and opens the running one. Two copies would both run backups, auto-archive and serial sync.
+- **Error log.** Server errors are written to `logs/jobmanager.log` next to `app.py`, with the page, the
+  person and the full details. The message in the browser ends with a reference such as `(ref 3f9a1c2e)`;
+  search the log for it. Requests slower than 3 seconds are logged too. The log keeps 5 files of 2 MB.
+- **A slow or dropped Z: drive doesn't freeze the app.** The serial registry, journal, job folders, Master
+  Templates and backup folder are checked by a background thread every 15 seconds; the pages read the last
+  result. A check stuck for over 30 seconds shows that share as not answering.
+- **Settings are checked before saving.** A number out of range (for example 1.5 hours between backups) is
+  refused with a message and nothing is saved. Settings changes go in the activity log with who made them.
+- **After an update**, open pages notice within 15 seconds. A page with nothing open or typed reloads
+  itself (the rewind tablets too); otherwise a bar asks to reload, and changes from the old page are refused
+  until it does, so nothing is saved by out-of-date page code.
+
 ## Serial numbers, in short
 
 Every range is kept in three places: the **registry** (`serial_registry\<UPC>.txt`),

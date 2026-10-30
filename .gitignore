@@ -16,3 +16,4 @@ venv/
 # demo sandbox (generated) and local tool settings
 mock_demo/site/
 .claude/settings.local.json
+logs/

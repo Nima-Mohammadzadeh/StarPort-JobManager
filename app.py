@@ -23,10 +23,17 @@ import tempfile
 import threading
 import subprocess
 import io
+import sys
+import socket
+import hashlib
+import logging
+import logging.handlers
+import secrets
+import traceback
 from html import escape
 from datetime import date, datetime, timedelta
 
-from flask import Flask, jsonify, render_template, request, send_file, abort, Response
+from flask import Flask, jsonify, render_template, request, send_file, abort, Response, g
 
 from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, THUMBNAIL_DIR, CONFIG_INI,
                     HOST, PORT, SYSTEM, validate_and_prepare)
@@ -54,6 +61,73 @@ EDITABLE    = ["title", "job_ticket", "customer", "status", "due_date", "notes",
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024   # uploads into job folders
+
+
+# ── Error log, request IDs, page build ────────────────────────────────────────
+# Every request gets a short ID (X-Request-ID). A server error is written to logs/jobmanager.log with
+# that ID, the page, the person and the full traceback, and the browser shows the ID ("ref a1b2c3d4"),
+# so a report from the floor can be matched to its log entry. Slow requests are logged too.
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+SLOW_REQUEST_SECONDS = 3.0
+log = logging.getLogger("jobmanager")
+
+
+def setup_log(log_dir=None):
+    """Rotating log file (5 x 2 MB). Called at startup; safe to call again."""
+    log_dir = log_dir or LOG_DIR
+    log.setLevel(logging.INFO)
+    for h in list(log.handlers):
+        log.removeHandler(h); h.close()
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        h = logging.handlers.RotatingFileHandler(os.path.join(log_dir, "jobmanager.log"), maxBytes=2_000_000,
+                                                 backupCount=5, encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        log.addHandler(h)
+    except OSError as e:
+        print(f"  [LOG] can't write {log_dir}: {e}")
+
+
+def _page_build():
+    """Fingerprint of the pages and their scripts. Changes when an update changes what the browser
+    runs, so pages left open from before the update can tell (see poll() in index.html)."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    hsh = hashlib.sha1()
+    for d in ("templates", os.path.join("proofing", "static")):
+        for dirpath, _dirs, files in sorted(os.walk(os.path.join(root, d))):
+            for f in sorted(files):
+                try:
+                    with open(os.path.join(dirpath, f), "rb") as fh:
+                        hsh.update(f.encode() + fh.read())
+                except OSError:
+                    pass
+    return hsh.hexdigest()[:10]
+
+
+BUILD = _page_build()
+
+
+@app.before_request
+def _begin_request():
+    g.rid = secrets.token_hex(4)
+    g.t0 = time.perf_counter()
+    # A page opened before an update sends the old build. Reading still works; changing data is refused
+    # until it reloads, so old page code can't send old-shaped data to the new server.
+    sent = request.headers.get("X-App-Build")
+    if sent and sent != BUILD and request.method in ("POST", "PATCH", "PUT", "DELETE") and request.path.startswith("/api/"):
+        return jsonify({"error": "Job Manager was updated since this page was opened. Reload the page (F5) "
+                                 "and try again. Nothing was changed.", "reload": True}), 409
+
+
+@app.after_request
+def _end_request(resp):
+    rid = getattr(g, "rid", "")
+    resp.headers["X-Request-ID"] = rid
+    took = time.perf_counter() - getattr(g, "t0", time.perf_counter())
+    if took >= SLOW_REQUEST_SECONDS:
+        log.warning("slow ref=%s %.1fs %s %s -> %s", rid, took, request.method, request.full_path.rstrip("?"),
+                    resp.status_code)
+    return resp
 
 
 def now_str():
@@ -210,20 +284,45 @@ def get_setting(key, default=""):
     return row["value"] if row else default
 
 
+# Number settings: (label, lowest, highest, whole numbers only, default). Saving checks these; reading
+# falls back to the default, so a bad value already in the database can never stop the app.
+NUMBER_SETTINGS = {
+    "default_overage_pct":   ("Default overage %", 0, 100, False, 0),
+    "backup_interval_hours": ("Backup every (hours)", 1, 168, True, 6),
+    "backup_keep":           ("Backups to keep", 5, 1000, True, 60),
+    "auto_archive_hours":    ("Archive completed jobs after (hours)", 0, 8760, True, 32),
+}
+
+
+def _setting_number(key, raw):
+    """The number in raw if it is valid for this setting, else None."""
+    _, lo, hi, whole, _ = NUMBER_SETTINGS[key]
+    try:
+        v = float(str(raw).strip().replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    if v != v or (whole and v != int(v)) or not lo <= v <= hi:
+        return None
+    return int(v) if whole else (int(v) if v == int(v) else v)
+
+
 def get_settings() -> dict:
     conn = get_db()
     s = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
     conn.close()
+    def num(k):
+        v = _setting_number(k, s.get(k, NUMBER_SETTINGS[k][4]))
+        return NUMBER_SETTINGS[k][4] if v is None else v
     return {
         "btw_template_dir":      s.get("btw_template_dir") or DEFAULT_TEMPLATE_DIR,
-        "default_overage_pct":   s.get("default_overage_pct", "0"),
+        "default_overage_pct":   str(num("default_overage_pct")),
         "backup_dir":            s.get("backup_dir", ""),
-        "backup_interval_hours": int(s.get("backup_interval_hours", "6") or 6),
+        "backup_interval_hours": num("backup_interval_hours"),
         "backup_auto":           s.get("backup_auto", "1") == "1",
-        "backup_keep":           int(s.get("backup_keep", "60") or 60),
+        "backup_keep":           num("backup_keep"),
         "rewind_base_url":       s.get("rewind_base_url", ""),
         "printers":              s.get("printers", DEFAULT_PRINTERS),
-        "auto_archive_hours":    max(0, min(8760, int(s.get("auto_archive_hours", "32") or 0))),
+        "auto_archive_hours":    num("auto_archive_hours"),
     }
 
 
@@ -595,7 +694,7 @@ def ensure_rolls(conn, job: dict) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/")
 def index():
-    return render_template("index.html", version=APP_VERSION)
+    return render_template("index.html", version=APP_VERSION, build=BUILD)
 
 
 @app.route("/favicon.ico")
@@ -603,18 +702,69 @@ def favicon():
     return Response(status=204)
 
 
-_folder_cache = {"t": 0, "names": []}
+# ── Shares (Z:, serial registry, journal, Master Templates, backup folder) ─────
+# A dropped or slow share can take tens of seconds per look. A background thread looks every
+# SHARE_EVERY seconds; the pages every browser polls (/api/stamp, /api/meta, the Data panel) read
+# the result, so they answer at once whatever the share is doing. A check stuck for longer than
+# SS.SHARE_STUCK_SECONDS is reported as "not answering".
+SHARE_EVERY = 15
+_share = {"at": None, "checking_since": None, "z_ok": None, "templates_ok": None, "backup_ok": None,
+          "registry_files": 0, "journal_info": {"exists": False}, "folders": [], "folders_at": 0.0}
+_share_lock = threading.Lock()
+
+
+def check_shares():
+    with _share_lock:
+        _share["checking_since"] = time.time()
+        try:
+            SS.check_shares()
+            s = get_settings()
+            z = os.path.isdir(Z_DRIVE_BASE)
+            found = {"z_ok": z, "templates_ok": os.path.isdir(s["btw_template_dir"]),
+                     "backup_ok": _dir_ok(backup_dir_effective(s))}
+            try:
+                found["registry_files"] = sum(1 for f in os.listdir(SERIAL_REGISTRY_DIR) if f.endswith(".txt"))
+            except OSError:
+                found["registry_files"] = 0
+            jp = SS.journal_path()
+            found["journal_info"] = _file_info(jp) if jp else {"exists": False}
+            if z and time.time() - _share["folders_at"] > 300:          # customer folder names, for the New job list
+                try:
+                    found["folders"] = sorted(e.name for e in os.scandir(Z_DRIVE_BASE)
+                                              if e.is_dir() and not e.name.startswith("."))
+                    found["folders_at"] = time.time()
+                except OSError:
+                    pass
+            _share.update(found, at=time.time())
+        finally:
+            _share["checking_since"] = None
+
+
+def share_state() -> dict:
+    """The last background look at the shares (the first call looks itself if none has run yet)."""
+    if _share["at"] is None and not _share["checking_since"]:
+        check_shares()
+    st = dict(_share)
+    since = st["checking_since"]
+    st["stuck"] = bool(since and time.time() - since > SS.SHARE_STUCK_SECONDS)
+    if st["stuck"]:
+        st.update(z_ok=False, templates_ok=False, backup_ok=False)
+    return st
+
+
+def start_share_watch():
+    def run():
+        while True:
+            try:
+                check_shares()
+            except Exception as e:
+                print(f"  [SHARE] check failed: {e}")
+            time.sleep(SHARE_EVERY)
+    threading.Thread(target=run, daemon=True, name="share-watch").start()
 
 
 def _customer_folders():
-    if time.time() - _folder_cache["t"] > 300:
-        try:
-            _folder_cache["names"] = sorted(
-                e.name for e in os.scandir(Z_DRIVE_BASE) if e.is_dir() and not e.name.startswith("."))
-        except OSError:
-            _folder_cache["names"] = []
-        _folder_cache["t"] = time.time()
-    return _folder_cache["names"]
+    return share_state()["folders"]
 
 
 def _dedupe(values):
@@ -637,11 +787,11 @@ def api_meta():
     return jsonify({
         "version": APP_VERSION, "system": SYSTEM,
         "db_path": DB_PATH, "registry_dir": SERIAL_REGISTRY_DIR, "z_drive_base": Z_DRIVE_BASE,
-        "z_reachable": os.path.isdir(Z_DRIVE_BASE), "z_shared": not Z_IS_DEFAULT,
+        "z_reachable": bool(share_state()["z_ok"]), "z_shared": not Z_IS_DEFAULT,
         "customers": _dedupe(CUSTOMERS + hist_c + _customer_folders()),
         "label_sizes": _dedupe(LABEL_SIZES + hist_s),
         "inlays": _dedupe(inlays), "statuses": STATUSES, "hold_reasons": HOLD_REASONS,
-        "names": _recent_names(), "serials": {**SS.health(), "registry_gaps": _registry_gap_count["n"]},
+        "names": _recent_names(), "serials": {**SS.health(probe=False), "registry_gaps": _registry_gap_count["n"]},
         "settings": get_settings(), "backup": backup_health(),
         "data_sheets": [{"key": k, "customer": c["customer"], "label": c["label"], "detail": c["detail"],
                          "sequential": c["sequential"]} for k, c in DATA_SHEETS.items()],
@@ -665,8 +815,8 @@ def api_stamp():
                                (SELECT MAX(id) FROM activity) a,
                                (SELECT value FROM app_settings WHERE key='priority_version') p""").fetchone()
     conn.close()
-    h = {**SS.health(), "registry_gaps": _registry_gap_count["n"]}
-    return jsonify({"stamp": f"{r['c']}|{r['m']}|{r['a']}|{r['p']}",
+    h = {**SS.health(probe=False), "registry_gaps": _registry_gap_count["n"]}
+    return jsonify({"stamp": f"{r['c']}|{r['m']}|{r['a']}|{r['p']}", "build": BUILD,
                     "serials_ok": h["registry_ok"] and not h["conflicts"], "serials": h,
                     "backup": backup_health()})
 
@@ -1266,7 +1416,7 @@ def api_activity():
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/rewind")
 def rewind_page():
-    return render_template("rewind.html", version=APP_VERSION)
+    return render_template("rewind.html", version=APP_VERSION, build=BUILD)
 
 
 def rewind_link():
@@ -2567,26 +2717,47 @@ def api_thumb_put(tid):
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/api/settings", methods=["POST"])
 def api_settings_save():
+    """Shared settings. Every value is checked first: one bad value saves nothing and says what is wrong.
+    Changes are written to the activity log with who made them."""
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
                "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
                "auto_archive_hours"}
-    conn = get_db()
+    clean = {}
     for k, v in data.items():
-        if k in allowed:
-            if k == "backup_auto":
-                v = "1" if v in (True, "1", 1, "true") else "0"
-            if k == "printers":
-                v = clean_printers(v)
-            if k == "auto_archive_hours":
-                try:
-                    v = max(0, min(8760, int(float(v))))
-                except (TypeError, ValueError):
-                    v = 32
-            conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, str(v).strip()))
+        if k not in allowed:
+            continue
+        if k == "backup_auto":
+            v = "1" if v in (True, "1", 1, "true") else "0"
+        elif k == "printers":
+            v = clean_printers(v)
+        elif k in NUMBER_SETTINGS:
+            label, lo, hi, whole, _ = NUMBER_SETTINGS[k]
+            n = _setting_number(k, v)
+            if n is None:
+                return err(f"{label} must be {'a whole number' if whole else 'a number'} from {lo:,} to {hi:,}. "
+                           "Nothing was saved.")
+            v = n
+        clean[k] = str(v).strip()
+    before = get_settings()
+    conn = get_db()
+    for k, v in clean.items():
+        conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, v))
+    after_raw = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
+    changed = [k for k, v in clean.items() if str(before.get(k, "")) != v and not (k == "backup_auto" and before[k] == (v == "1"))]
+    if changed:
+        names = {"btw_template_dir": "Master Templates folder", "backup_dir": "backup folder", "backup_auto": "automatic backups",
+                 "rewind_base_url": "rewind page address", "printers": "printer list",
+                 **{k: v[0] for k, v in NUMBER_SETTINGS.items()}}
+        def show(k, v):
+            v = ("on" if v in (True, "1") else "off") if k == "backup_auto" else str(v) if str(v).strip() else "(blank)"
+            return v if len(v) <= 60 else v[:57] + "…"
+        parts = [names[k] if k == "printers" else f"{names[k]} {show(k, before.get(k))} → {show(k, after_raw.get(k))}" for k in changed]
+        log_activity(conn, "settings", None, "Settings changed: " + "; ".join(parts))
     conn.commit(); conn.close()
     SS.set_journal_dir(get_settings()["backup_dir"])
     start_backup_scheduler()
+    threading.Thread(target=check_shares, daemon=True, name="share-check").start()   # folders may have changed
     return jsonify({"success": True, "settings": get_settings()})
 
 
@@ -2796,17 +2967,14 @@ def api_data_status():
               "serial_ranges": n("SELECT COUNT(*) FROM serial_allocations"),
               "templates": n("SELECT COUNT(*) FROM btw_templates WHERE active=1")}
     conn.close()
-    h = SS.health()
-    try:
-        reg_files = sum(1 for f in os.listdir(SERIAL_REGISTRY_DIR) if f.endswith(".txt"))
-    except OSError:
-        reg_files = 0
+    h, st = SS.health(probe=False), share_state()          # from the background look: never waits on a share
+    reg_files, z_ok, t_ok = st["registry_files"], bool(st["z_ok"]), bool(st["templates_ok"])
     try:
         previews = len(os.listdir(THUMBNAIL_DIR))
     except OSError:
         previews = 0
     db, jp = _file_info(DB_PATH), SS.journal_path()
-    jinfo = _file_info(jp) if jp else {"exists": False}
+    jinfo = st["journal_info"] if jp else {"exists": False}
     tdir = s["btw_template_dir"]
     ok_lv = lambda good: "ok" if good else "bad"
     stores = [
@@ -2824,13 +2992,13 @@ def api_data_status():
          "holds": "An off-PC copy of every serial range, appended as it is made",
          "status": (f"{_fmt_size(jinfo['size'])}, changed {jinfo['modified']}" if jinfo["exists"] else ("Not created yet" if jp else "Off")),
          "detail": "", "backup": "It lives in the backup folder; it is not zipped"},
-        {"key": "folders", "name": "Job folders", "path": Z_DRIVE_BASE, "level": "ok" if (os.path.isdir(Z_DRIVE_BASE) and not Z_IS_DEFAULT) else ("warn" if os.path.isdir(Z_DRIVE_BASE) else "bad"),
+        {"key": "folders", "name": "Job folders", "path": Z_DRIVE_BASE, "level": "ok" if (z_ok and not Z_IS_DEFAULT) else ("warn" if z_ok else "bad"),
          "holds": "Encoding databases, checklists, QC sheets, template copies, proofs",
-         "status": ("Shared" if not Z_IS_DEFAULT else "This PC only") if os.path.isdir(Z_DRIVE_BASE) else "Not reachable",
+         "status": ("Shared" if not Z_IS_DEFAULT else "This PC only") if z_ok else "Not reachable",
          "detail": "", "backup": "No: back up the share itself"},
-        {"key": "templates", "name": "Master Templates", "path": tdir, "level": ok_lv(os.path.isdir(tdir)),
+        {"key": "templates", "name": "Master Templates", "path": tdir, "level": ok_lv(t_ok),
          "holds": "The BarTender templates the app copies from",
-         "status": (f"{counts['templates']:,} indexed" if os.path.isdir(tdir) else "Not reachable"),
+         "status": (f"{counts['templates']:,} indexed" if t_ok else "Not reachable"),
          "detail": "", "backup": "No: back up the share itself"},
         {"key": "previews", "name": "Template previews", "path": THUMBNAIL_DIR, "level": "ok",
          "holds": "Preview images added on the Templates page", "status": f"{previews:,} images", "detail": "", "backup": "Yes, in every backup"},
@@ -2838,14 +3006,14 @@ def api_data_status():
          "holds": "Paths and the port", "status": "Found" if os.path.isfile(CONFIG_INI) else "Not found", "detail": "", "backup": "Yes, in every backup"},
         proofing.data_store(),
     ]
-    zips = _list_backups(bdir)
+    zips = _list_backups(bdir) if st["backup_ok"] else []
     newest = None
     if zips:
         info = _file_info(os.path.join(bdir, zips[-1]))
         newest = {"file": zips[-1], "modified": info.get("modified"), "size": _fmt_size(info.get("size", 0))}
     age = _backup_age_hours()
     health = backup_health(s)
-    backups = {"dir": bdir, "explicit": bool(s["backup_dir"]), "reachable": _dir_ok(bdir), "auto": s["backup_auto"],
+    backups = {"dir": bdir, "explicit": bool(s["backup_dir"]), "reachable": bool(st["backup_ok"]), "auto": s["backup_auto"],
                "interval_hours": s["backup_interval_hours"], "keep": s["backup_keep"], "count": len(zips),
                "newest": newest, "age_text": _fmt_age(age), "verify": _backup_state["verify"],
                "last_error": _backup_state["last_error"]}
@@ -2998,7 +3166,7 @@ def start_serial_keeper():
 
 @app.route("/api/serials/health")
 def api_serials_health():
-    return jsonify({**SS.health(), "registry_gaps": _registry_gap_count["n"]})
+    return jsonify({**SS.health(probe=False), "registry_gaps": _registry_gap_count["n"]})
 
 
 @app.route("/api/serials/<upc>")
@@ -3367,9 +3535,19 @@ def tool_database():
 
 @app.errorhandler(500)
 def _err500(e):
-    if request.path.startswith("/api/"):
-        return err(f"Server error: {getattr(e, 'original_exception', e)}", 500)
-    return e
+    orig = getattr(e, "original_exception", None) or e
+    rid = getattr(g, "rid", "") or secrets.token_hex(4)
+    who = ""
+    try:
+        who = actor() or ""
+    except Exception:
+        pass
+    log.error("error ref=%s %s %s operator=%r\n%s", rid, request.method, request.full_path.rstrip("?"), who,
+              "".join(traceback.format_exception(type(orig), orig, orig.__traceback__)).rstrip())
+    if request.path.startswith(("/api/", "/proofing/api/")):
+        return err(f"Server error: {orig} (ref {rid})", 500, ref=rid)
+    return Response(f"Server error (ref {rid}). The details are in logs/jobmanager.log on the host PC.",
+                    status=500, mimetype="text/plain")
 
 
 def _lan_ips():
@@ -3394,7 +3572,27 @@ proofing.init_app(app, get_db=get_db, log_activity=log_activity, job_label=job_l
                   match_templates=match_templates_fresh, jm_settings=get_settings, z_drive_base=Z_DRIVE_BASE)
 
 
+def port_in_use(host, port) -> bool:
+    """True if something already answers on this port. Checked before anything else at startup:
+    on Windows a second copy could otherwise share the port (waitress sets SO_REUSEADDR) and run its
+    own backups, auto-archive and serial sync against the same data."""
+    probe = "127.0.0.1" if host in ("", "0.0.0.0", "::") else host
+    try:
+        with socket.create_connection((probe, int(port)), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 if __name__ == "__main__":
+    if port_in_use(HOST, PORT):
+        print(f"[APP] Job Manager is already running on port {PORT} (another window, or another program).")
+        print("      Nothing was started. Use the one that is running, or close it first.")
+        if os.environ.get("JM_NO_BROWSER") != "1":
+            __import__("webbrowser").open(f"http://localhost:{PORT}")
+        sys.exit(1)
+    setup_log()
+    log.info("starting Job Manager %s, page build %s", APP_VERSION, BUILD)
     validate_and_prepare()
     init_db()
     serial_startup()
@@ -3404,6 +3602,7 @@ if __name__ == "__main__":
     start_serial_keeper()
     start_auto_archive()
     start_folder_watch()
+    start_share_watch()
     proofing.start()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")

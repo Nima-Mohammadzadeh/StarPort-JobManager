@@ -92,8 +92,33 @@ def registry_ok(force=False):
     return ok, msg
 
 
-def health():
-    ok, msg = registry_ok()
+SHARE_STUCK_SECONDS = 30
+_shares = {"journal_ok": None, "checking_since": None}
+
+
+def check_shares():
+    """Probe the registry and journal folders. Slow when the share is, so it runs in a background
+    thread (app.py start_share_watch); the pages every browser polls read the result through
+    health(probe=False) and never wait on the share themselves."""
+    _shares["checking_since"] = time.time()
+    try:
+        registry_ok(force=True)
+        _shares["journal_ok"] = bool(_journal["dir"]) and os.path.isdir(_journal["dir"])
+    finally:
+        _shares["checking_since"] = None
+
+
+def health(probe=True):
+    """probe=False: use the last background check (see check_shares). If that check has been waiting on
+    the share for more than SHARE_STUCK_SECONDS, the registry is reported as not answering."""
+    if probe or _health["val"] is None or _shares["journal_ok"] is None:
+        ok, msg = registry_ok()
+        journal_ok = bool(journal_path()) and os.path.isdir(_journal["dir"])
+    else:
+        (ok, msg), journal_ok = _health["val"], _shares["journal_ok"]
+        since = _shares["checking_since"]
+        if since and time.time() - since > SHARE_STUCK_SECONDS:
+            ok, msg = False, f"the share holding {SERIAL_REGISTRY_DIR} isn't answering (waiting {int(time.time() - since)} s)"
     jp = journal_path()
     conn = _db()
     pending = conn.execute("SELECT COUNT(*) FROM serial_allocations WHERE registry_state=0").fetchone()[0]
@@ -101,7 +126,7 @@ def health():
         'SELECT id, upc, job_number, start, "end", qty, created_at FROM serial_allocations WHERE registry_state=-1')]
     conn.close()
     return {"registry_ok": ok, "registry_message": msg, "registry_dir": SERIAL_REGISTRY_DIR,
-            "journal_path": jp, "journal_ok": bool(jp) and os.path.isdir(_journal["dir"]),
+            "journal_path": jp, "journal_ok": journal_ok,
             "pending": pending, "conflicts": conflicts}
 
 

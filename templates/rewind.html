@@ -152,6 +152,7 @@ h3.sec{font-size:15px;margin:18px 2px 8px;color:var(--muted);text-transform:uppe
 
 <script>
 const $ = s => document.querySelector(s);
+const BUILD = '{{ build }}';
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmt = n => (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString();
 const when = ts => ts ? ts.slice(5, 10).replace('-', '/') + ' ' + ts.slice(11, 16) : '';
@@ -256,6 +257,8 @@ async function refresh() {
 async function poll() {
   try {
     const r = await api('/api/stamp');
+    // Job Manager was updated: reload (the page keeps its place in the address), unless a scan is half typed.
+    if (r.build && r.build !== BUILD && !$('#q').value && !$('#scan').value) return location.reload();
     const changed = S.stamp !== null && r.stamp !== S.stamp;
     S.stamp = r.stamp; S.offline = false; S.updated = new Date();
     if (changed) { await refresh(); return; }
