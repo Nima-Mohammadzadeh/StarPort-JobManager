@@ -92,7 +92,7 @@ customers = ["Acme Apparel", "Northwind Retail", "Contoso Footwear", "Fabrikam G
              "Globex Sportswear", "Umbrella Pharma", "Wayne Logistics", "Stark Electronics", "Hooli Home"]
 upcs = ["012345678905", "036000291452", "042100005264", "049000028911", "070847811169", "078742013459"]
 today = datetime.date.today()
-for i in range(28):
+for i in range(50):
     cust = random.choice(customers)
     due = today + datetime.timedelta(days=random.randint(-4, 25))
     qty = random.choice([800, 1500, 3000, 5000, 9000])

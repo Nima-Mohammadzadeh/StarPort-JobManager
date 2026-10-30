@@ -359,6 +359,16 @@ def create_job(data: dict) -> tuple[dict, int]:
         v = validate_upc(upc)
         if not v["valid"]:
             return {"error": v["error"], "corrected_upc": v.get("corrected_upc")}, 400
+    # How the serials are chosen. The form always says; callers that don't (batch, scripts) get the
+    # old behaviour: automatic unless a start serial is given.
+    serial_mode = (g("serial_mode") or "").lower() or None
+    if serial_mode not in (None, "auto", "manual"):
+        return {"error": "Serial mode must be auto or manual"}, 400
+    if upc and serial_mode == "manual" and not start_override:
+        return {"error": "You chose to specify the start serial. Enter it, or choose Automatic."}, 400
+    if upc and serial_mode == "auto" and start_override:
+        return {"error": "Automatic serials were chosen, but a start serial was also given. Remove one."}, 400
+    manual_start = bool(upc and start_override)
 
     total_qty = production_qty(quantity, overage) if quantity else None
     if data_sheet:
@@ -426,6 +436,8 @@ def create_job(data: dict) -> tuple[dict, int]:
     alloc = None
     if upc:
         note = f"+{overage:g}%" if overage > 0 else "base"
+        if manual_start:
+            note += f"; start serial specified by {created_by or 'operator'}"
         try:
             alloc = SS.reserve(upc, job_number, total_qty, note, min_start=start_override,
                                who=created_by, offline_start=offline_start)
@@ -519,7 +531,9 @@ def create_job(data: dict) -> tuple[dict, int]:
                      + (f", ticket {ticket}" if ticket else "")
                      + (f" (special, {DATA_SHEETS[data_sheet]['customer']} data sheet)" if data_sheet
                         else " (special, no serials)" if job_type == "special" else "")
-                     + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else ""), created_by)
+                     + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else "")
+                     + (f"; serials {alloc['start']:,}–{alloc['end']:,} ({'specified by user' if manual_start else 'automatic'})"
+                        if alloc else ""), created_by)
         conn.commit()
         saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
     except Exception as e:

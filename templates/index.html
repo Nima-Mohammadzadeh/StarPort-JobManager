@@ -29,18 +29,18 @@ button,input,select,textarea{font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ── Side navigation (always open; icons only on narrow screens) + slim top bar ── */
-:root{--sw:284px}
-@media (max-width:900px){:root{--sw:76px}.sidenav .lbl,.brand .bt{display:none}}
-.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--ink);color:#fff;z-index:30;display:flex;flex-direction:column;padding:12px 12px 14px;transition:width .18s ease;overflow:hidden}
-.brand{font-weight:650;font-size:21px;letter-spacing:.01em;display:flex;align-items:center;gap:14px;height:56px;padding:0 12px;margin-bottom:12px;white-space:nowrap}
-.brand svg{width:30px;height:30px;flex:none;color:#5ED0C2}
+:root{--sw:227px}
+@media (max-width:900px){:root{--sw:61px}.sidenav .lbl,.brand .bt{display:none}}
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--ink);color:#fff;z-index:30;display:flex;flex-direction:column;padding:10px 10px 11px;transition:width .18s ease;overflow:hidden}
+.brand{font-weight:650;font-size:17px;letter-spacing:.01em;display:flex;align-items:center;gap:11px;height:45px;padding:0 10px;margin-bottom:10px;white-space:nowrap}
+.brand svg{width:24px;height:24px;flex:none;color:#5ED0C2}
 .sidenav nav{display:flex;flex-direction:column;gap:2px}
-.sidenav nav button{display:flex;align-items:center;gap:16px;width:100%;height:57px;padding:0 15px;background:none;border:0;border-radius:11px;color:#B4C9C8;cursor:pointer;font-weight:550;font-size:18px;white-space:nowrap;text-align:left;position:relative}
-.sidenav nav button svg{width:28px;height:28px;flex:none}
+.sidenav nav button{display:flex;align-items:center;gap:13px;width:100%;height:46px;padding:0 12px;background:none;border:0;border-radius:9px;color:#B4C9C8;cursor:pointer;font-weight:550;font-size:14.5px;white-space:nowrap;text-align:left;position:relative}
+.sidenav nav button svg{width:22px;height:22px;flex:none}
 .sidenav nav button:hover{background:#1D3C3E;color:#fff}
 .sidenav nav button.on{background:#17423F;color:#fff}
-.sidenav nav button.on::before{content:"";position:absolute;left:-12px;top:13px;bottom:13px;width:3px;border-radius:0 3px 3px 0;background:#5ED0C2}
-.nav-sep{height:1px;background:#2B4648;margin:10px 6px}
+.sidenav nav button.on::before{content:"";position:absolute;left:-10px;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:#5ED0C2}
+.nav-sep{height:1px;background:#2B4648;margin:8px 5px}
 .app{margin-left:var(--sw);transition:margin-left .18s ease;min-width:0;container:app/inline-size}
 header{display:flex;align-items:center;gap:16px;padding:0 18px;height:56px;background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);position:sticky;top:0;z-index:20}
 .crumb{font-weight:650;font-size:16px}
@@ -555,9 +555,11 @@ details.more p.d{margin:6px 0 0}
 .rb-body .ri{grid-template-columns:34px 18px minmax(0,1fr) auto;height:44px;gap:0 9px;padding-left:8px}
 .rb-body .ri .rno{display:grid;place-items:center;height:26px;min-width:26px;padding:0 4px;border-radius:7px;background:#E8EDF2;border:1px solid #CDD6DE;font-size:14px;font-weight:700;color:var(--ink)}
 .rb-body .ri .g{font-size:13px}
-.rb-body .ri .rec{font-size:17.5px;font-weight:750;color:var(--ink);letter-spacing:-.01em;white-space:nowrap}
-.rb-body .ri .rec small{margin-left:8px;font-size:11.5px;font-weight:600;color:var(--muted)}
-.rb-body .ri .who{font-size:14px;color:var(--ink);max-width:110px}
+.rb-body .ri .rec{font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;white-space:nowrap;line-height:1.2}
+.rb-body .ri .rec small{margin-left:6px;font-size:11px;font-weight:600;color:var(--muted)}
+/* .who is also the "who is working" form widget (margin-bottom, min-height, flex): reset it for the row */
+.rb-body .ri .who{display:block;margin:0;min-height:0;align-self:center;font-size:13px;line-height:1.2;color:var(--ink);max-width:96px}
+.rb-body .ri .who .pchip{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;font-size:12.5px}
 .rb-head{font-size:14.5px;padding:8px 10px}
 .rb-head .rb-n{font-size:13.5px}
 .rfilter button{font-size:13.5px}
@@ -1070,6 +1072,13 @@ details.more p.d{margin:6px 0 0}
       <div id="n-std" class="stack">
       <label class="f">UPC<input class="i data" id="n-upc" maxlength="12" inputmode="numeric" autocomplete="off"></label>
       <div class="fieldmsg" id="n-upc-msg"></div>
+      <div class="f" id="n-smode-wrap">Serial numbers
+        <div class="seg jt" id="n-smode" role="radiogroup" aria-label="Serial numbers">
+          <button type="button" role="radio" data-m="auto" aria-checked="false">Automatic: next free</button>
+          <button type="button" role="radio" data-m="manual" aria-checked="false">I'll specify the start</button>
+        </div>
+        <span class="hint" id="n-smode-hint">Choose how this job gets its serials.</span>
+      </div>
       <div id="n-start-row" hidden>
         <label class="f">Start serial<input class="i data" id="n-start" inputmode="numeric" autocomplete="off" placeholder="e.g. 26,004,500,001">
           <span class="hint" id="n-start-hint"></span></label>
@@ -1636,19 +1645,33 @@ document.addEventListener('keydown', e => {
 const N = id => $('#n-' + id);
 let N_TEMPLATE = null, N_UPC_INFO = null, N_TMANUAL = false, N_MATCH = null, N_LAST_UPC = '', N_START_UPC = '';
 /* Optional start serial: only for a UPC that ran before this app, or to skip ahead. Forward-only. */
-function startValue() { return +(N('start').value.replace(/[^\d]/g, '')) || 0; }
+function startValue() { return N_SMODE === 'manual' ? +(N('start').value.replace(/[^\d]/g, '')) || 0 : 0; }
+/* The operator must say whether serials are automatic or specified by them; nothing is assumed. */
+let N_SMODE = '';
+function setSerialMode(m) {
+  N_SMODE = m;
+  document.querySelectorAll('#n-smode button').forEach(b => { const on = b.dataset.m === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('#n-start-row').hidden = m !== 'manual';
+  if (m === 'manual') { N('start').focus(); startHint(); } else N('start').value = '';
+  smodeHint(); updateSummary();
+}
+function smodeHint() {
+  const h = $('#n-smode-hint'), d = N_UPC_INFO;
+  h.style.color = '';
+  h.textContent = !N_SMODE ? 'Choose how this job gets its serials.'
+    : N_SMODE === 'auto' ? (d && d.valid ? `The next free serial for this UPC, ${fmt(d.next_start)}, is used.` : 'The next free serial for this UPC is used.')
+    : 'You type the first serial. It is checked against every record for this UPC and can only move forward.';
+}
+document.querySelectorAll('#n-smode button').forEach(b => b.onclick = () => setSerialMode(b.dataset.m));
 function startProblem() {
+  if (N_SMODE === 'manual' && !N('start').value.trim()) return 'Enter the start serial, or choose Automatic';
   const v = startValue(); if (!N('start').value.trim()) return null;
   if (!N_UPC_INFO || !N_UPC_INFO.valid) return 'Enter a valid UPC first';
   if (v < N_UPC_INFO.next_start) return `Must be at least ${fmt(N_UPC_INFO.next_start)}, the next free serial for this UPC`;
   if (v + prodQty(N('qty').value, N('ov').value) > 2 ** 38) return 'Too large for an EPC serial';
   return null;
 }
-function toggleStart() {
-  const row = $('#n-start-row'); row.hidden = !row.hidden;
-  if (!row.hidden) { N('start').focus(); startHint(); } else N('start').value = '';
-  updateSummary();
-}
+function toggleStart() { setSerialMode('manual'); }
 function startHint() {
   const h = $('#n-start-hint'), p = startProblem(), d = N_UPC_INFO;
   h.style.color = p ? 'var(--red)' : '';
@@ -1669,7 +1692,7 @@ function setJobType(t) {
   sheetChanged();
   $('#n-type-note').textContent = std ? 'Serials come from the registry; nothing is ever reused.'
     : 'For jobs without a UPC or outside the normal process: folder, checklist, template, notes and rolls by quantity. No serials, no encoding database.';
-  if (!std) { N('upc').value = ''; N('start').value = ''; $('#n-start-row').hidden = true; checkNewUpc(); }
+  if (!std) { N('upc').value = ''; setSerialMode(''); checkNewUpc(); }
   updateSummary(); runMatch();
 }
 /* Customer data sheets. The sheet picker always shows on Special jobs. Typing a customer that has a sheet (GO2, CDO,
@@ -1717,7 +1740,7 @@ function openNewJob() {
   ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start'].forEach(k => N(k).value = '');
   fillSheetOptions(); N('sheet').value = ''; N_SHEET_AUTO = ''; N_AUTO_SPECIAL = false;
   N('ov').value = META.settings.default_overage_pct && +META.settings.default_overage_pct ? META.settings.default_overage_pct : '';
-  N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; $('#n-start-row').hidden = true; $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
+  N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; setSerialMode(''); $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
   renderTemplateMatch();
   updateSummary(); openOv('ov-new'); setTimeout(() => N('ticket').focus(), 30);
@@ -1758,7 +1781,7 @@ function updateSummary() {
 N('upc').addEventListener('input', debounce(checkNewUpc, 250));
 async function checkNewUpc() {
   const u = N('upc').value.trim(), msg = $('#n-upc-msg'); N_UPC_INFO = null; N('upc').classList.remove('bad');
-  if (u !== N_START_UPC) { N_START_UPC = u; N('start').value = ''; $('#n-start-row').hidden = true; }   // a start serial belongs to one UPC
+  if (u !== N_START_UPC) { N_START_UPC = u; setSerialMode(''); }   // a serial choice belongs to one UPC: ask again
   if (!u) { msg.textContent = ''; msg.className = 'fieldmsg'; updateSummary(); return; }
   const p = upcProblem(u);
   if (p) {
@@ -1775,7 +1798,7 @@ async function checkNewUpc() {
     msg.innerHTML = d.is_new ? `New UPC. Serials start at ${fmt(d.next_start)}. <a onclick="toggleStart()">Ran before this app? Set the start</a>`
       : `${d.allocations ? `Used on ${d.allocations} earlier job${d.allocations > 1 ? 's' : ''}` : 'Earlier runs are on record'}${la ? `, last ended at ${fmt(la.end)} (${esc(la.job_number)}, ${esc(la.date)})` : ''}. Next serial ${fmt(d.next_start)}. <a onclick="toggleStart()">Set a different start</a>`;
     if (d.last_job) msg.innerHTML += ` <a onclick="fillFromLast()">Fill from last job</a>`;
-    startHint();
+    startHint(); smodeHint();
   } catch (e) { msg.className = 'fieldmsg bad'; msg.textContent = e.message; }
   updateSummary();
 }
@@ -1861,6 +1884,7 @@ async function checkTicket() {
 }
 N('ticket').addEventListener('input', debounce(checkTicket, 300));
 let N_OFFLINE = null;
+const body_mode = () => (N_TYPE === 'standard' && N('upc').value.trim()) ? N_SMODE : '';
 async function submitNewJob(allowDup = false, offline = null) {
   const body = {
     job_type: N_TYPE, created_by: N('by').value.trim(),
@@ -1869,7 +1893,7 @@ async function submitNewJob(allowDup = false, offline = null) {
     label_size: N('size').value, inlay_type: N('inlay').value, part_number: N('part').value, po_number: N('po').value,
     notes: N('notes').value, upc: N('upc').value.trim(), quantity: N('qty').value, overage_pct: N('ov').value,
     lpr: N('lpr').value, qty_db: N('qtydb').value, template_id: N_TEMPLATE,
-    start_serial: startValue() || '',
+    start_serial: startValue() || '', serial_mode: body_mode(),
     data_sheet: N_TYPE === 'special' ? N('sheet').value : '',
   };
   const msg = $('#n-msg'); msg.textContent = '';
@@ -1880,6 +1904,7 @@ async function submitNewJob(allowDup = false, offline = null) {
   if (!body.created_by) return msg.textContent = 'Enter your name', N('by').focus();
   if (N_TYPE === 'standard' && !body.upc) return msg.textContent = 'A standard job needs a UPC. Choose Special for jobs without one.', N('upc').focus();
   if (body.upc && !body.quantity) return msg.textContent = 'Quantity is required when there is a UPC', N('qty').focus();
+  if (body.upc && !N_SMODE) { $('#n-smode-hint').style.color = 'var(--red)'; return msg.textContent = 'Choose Automatic or specify the start serial.', $('#n-smode button').focus(); }
   if (startProblem()) return msg.textContent = 'Start serial: ' + startProblem(), N('start').focus();
   if (body.data_sheet && sheetProblem()) return msg.textContent = sheetProblem(), N('customer').focus();
   if (body.data_sheet && !body.quantity) return msg.textContent = 'Quantity is required for a data sheet', N('qty').focus();

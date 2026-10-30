@@ -5,6 +5,7 @@
       "name": "mock-demo",
       "runtimeExecutable": "python",
       "runtimeArgs": ["mock_demo/run_mock.py"],
+      "env": {"PYTHONUTF8": "1"},
       "port": 5051
     }
   ]
