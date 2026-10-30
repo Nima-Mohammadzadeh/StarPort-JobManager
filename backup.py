@@ -133,10 +133,32 @@ def _count_job_folders(base):
         return None
 
 
+def _add_extra_sources(z, extra_sources):
+    """Copy other folders the app owns into the zip (proofing records). extra_sources is a
+    list of (folder, name in the zip, keep(file name) -> bool). Returns files added."""
+    n = 0
+    for folder, arc, keep in extra_sources or ():
+        if not folder or not os.path.isdir(folder):
+            continue
+        for dirpath, _dirs, files in os.walk(folder):
+            for f in files:
+                if f.startswith(".") or not keep(f):
+                    continue
+                fp = os.path.join(dirpath, f)
+                rel = os.path.relpath(fp, folder).replace("\\", "/")
+                try:
+                    z.write(fp, f"{arc}/{rel}")
+                    n += 1
+                except OSError:
+                    pass                  # a file removed while the backup runs is not an error
+    return n
+
+
 def write_snapshot(part_path, *, db_path, registry_dir, thumbnail_dir, config_ini, journal_path,
-                   job_folder_base, app_version, serial_lock):
+                   job_folder_base, app_version, serial_lock, extra_sources=None):
     """Write the zip to part_path. serial_lock is held while the serial records and the
-    database are copied, so they describe one moment. Returns the manifest."""
+    database are copied, so they describe one moment. Returns the manifest.
+    extra_sources: other folders to include (see _add_extra_sources); outside the lock."""
     fd, tmp_db = tempfile.mkstemp(suffix=".db"); os.close(fd)
     try:
         with zipfile.ZipFile(part_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -170,6 +192,7 @@ def write_snapshot(part_path, *, db_path, registry_dir, thumbnail_dir, config_in
                         z.write(fp, f"template_thumbnails/{f}")
             if config_ini and os.path.isfile(config_ini):
                 z.write(config_ini, "config.ini")
+            extra_files = _add_extra_sources(z, extra_sources)
             c = sqlite3.connect(tmp_db)
             try:
                 count = lambda sql: c.execute(sql).fetchone()[0]
@@ -177,7 +200,8 @@ def write_snapshot(part_path, *, db_path, registry_dir, thumbnail_dir, config_in
                           "rolls": count("SELECT COUNT(*) FROM job_rolls"),
                           "serial_ranges": count("SELECT COUNT(*) FROM serial_allocations"),
                           "registry_files": reg_files, "journal_rows": journal_rows,
-                          "job_folders": _count_job_folders(job_folder_base), "upcs": len(high)}
+                          "job_folders": _count_job_folders(job_folder_base), "upcs": len(high),
+                          "proofing_files": extra_files}
             finally:
                 c.close()
             manifest = {"format": FORMAT, "created_at": datetime.now().isoformat(timespec="seconds"),

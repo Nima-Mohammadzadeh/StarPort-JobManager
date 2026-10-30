@@ -8,9 +8,9 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-python -c "import flask, openpyxl, waitress, segno" >nul 2>&1
+python -c "import flask, openpyxl, waitress, segno, PIL, reportlab" >nul 2>&1
 if errorlevel 1 (
-    echo Installing Flask, openpyxl, waitress and segno...
+    echo Installing Flask, openpyxl, waitress, segno, Pillow and reportlab...
     python -m pip install -r requirements.txt --quiet
 )
 python app.py
