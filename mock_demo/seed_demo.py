@@ -134,4 +134,38 @@ if legacy:
     conn.execute("UPDATE jobs SET status='On Hold', hold_reason=NULL, hold_note=NULL, hold_by=NULL, hold_since=? WHERE id=?",
                  ((datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"), legacy["id"]))
 conn.commit(); conn.close()
+
+# Encoding floor: real roll times on Northwind (pace), first/last tag scans (verified rolls), a wrong tag,
+# reprints, and BarTender turned on with sandbox folders (one roll printed, one that failed).
+import os
+conn = A.get_db()
+t0 = datetime.datetime.now() - datetime.timedelta(hours=4)
+for n in range(1, 9):
+    st, en = t0 + datetime.timedelta(minutes=24 * (n - 1)), t0 + datetime.timedelta(minutes=24 * (n - 1) + 21 + n % 3)
+    conn.execute("UPDATE job_rolls SET started_at=?, completed_at=? WHERE job_id=? AND roll_number=?",
+                 (st.strftime("%Y-%m-%d %H:%M:%S"), en.strftime("%Y-%m-%d %H:%M:%S"), b, n))
+conn.execute("UPDATE job_rolls SET started_at=? WHERE job_id=? AND roll_number IN (9, 10)",
+             ((datetime.datetime.now() - datetime.timedelta(minutes=9)).strftime("%Y-%m-%d %H:%M:%S"), b))
+rolls_b = [dict(r) for r in conn.execute("SELECT * FROM job_rolls WHERE job_id=? ORDER BY roll_number", (b,))]
+folder_b = conn.execute("SELECT folder_path FROM jobs WHERE id=?", (b,)).fetchone()["folder_path"]
+conn.execute("UPDATE jobs SET template_path=? WHERE id=?", (os.path.join(folder_b, "Print", "Northwind hang tag 2x3.btw"), b))
+conn.commit(); conn.close()
+for r in rolls_b[:3]:
+    for e in (r["epc_start"], r["epc_end"]):
+        post("/api/rewind/lookup", {"raw": e, "job_id": b, "operator": "Lee"})
+post("/api/rewind/lookup", {"raw": rolls_b[5]["epc_start"], "job_id": b, "roll_number": 4, "source": "desktop", "operator": "Sam"})
+post(f"/api/jobs/{b}/reprints", {"roll_number": 2, "qty": 6, "reason": "Jam / torn", "note": "splice at label 410", "operator": "Sam"})
+post(f"/api/jobs/{b}/reprints", {"roll_number": 5, "serial_from": rolls_b[4]["serial_start"] + 10,
+                                 "serial_to": rolls_b[4]["serial_start"] + 13, "reason": "Bad encode", "operator": "Priya"})
+bt_root = os.path.join(site, "bartender")
+trig, ack = os.path.join(bt_root, "Triggers"), os.path.join(bt_root, "Acknowledgements")
+os.makedirs(trig, exist_ok=True); os.makedirs(ack, exist_ok=True)
+post("/api/settings", {"bt_enabled": True, "bt_trigger_dir": trig, "bt_ack_dir": ack,
+                       "bt_printer_map": "Printer 1 = ZDesigner ZT411-203dpi ZPL\nPrinter 2 = ZDesigner ZT411-203dpi ZPL (Copy 1)\nPrinter 3 = SATO CL4NX Plus 305dpi"})
+for n, reply in ((9, '<XMLScript Version="2.0"><Response><Message Severity="Information"><Text>Print job sent.</Text></Message></Response></XMLScript>'),
+                 (10, '<XMLScript Version="2.0"><Response><Message ID="3203" Severity="Error"><Text>Printer SATO CL4NX Plus 305dpi is offline.</Text></Message></Response></XMLScript>')):
+    rq = post(f"/api/jobs/{b}/rolls/{n}/print", {"operator": "Sam"})["requests"][0]
+    os.remove(os.path.join(trig, rq["req_id"] + ".btxml"))
+    open(os.path.join(ack, rq["req_id"] + ".response.xml"), "w").write(reply)
+A.check_print_requests()
 print("seeded", ids)

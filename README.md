@@ -70,9 +70,57 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   Lookups are read-only.
 - **Roll tracking**: pick any roll; Complete, Left in progress (with a note), Reopen.
   The app asks who did it at that moment. Nobody signs in.
-- **Tools**: roll tracker sheet, checklist, encoding database, serial lookup.
+- **Tag checks and verified rolls**: a tag scanned on a roll card (desktop) or on the rewind page with a job open is kept.
+  When a roll's FIRST and LAST tags have both passed, the done roll shows **Verified** (on the card, the roll list, the
+  rewind page). A tag from another roll, another job or another product is a failed check and shows in Needs attention
+  until the roll passes again. Scanner setup problems (not hex, a TID) aren't kept. Reopening or resetting a roll clears
+  its checks. Marking a job complete warns about rolls not done and, once a job's tags are being scanned, rolls not verified.
+- **Next roll on the same printer**: completing a roll that ran on a printer offers "Start roll N on <printer>" (and, with
+  BarTender on, "Start and send to BarTender"), using the name already given, as long as that printer isn't running something else.
+- **Pace**: from rolls with a real start and finish time (1 minute to 8 hours; bulk "done through" marks are left out):
+  minutes per roll, labels per hour, and when the job should be done at that pace with the printers running it now.
+  Shown on the roll tracking header and in the job dialog once two rolls have been timed.
+- **Reprints and spoiled labels**: **Log reprint…** on a roll card records how many labels (or which serials), why
+  (Bad encode, Print defect, Jam / torn, Setup / test, Wrong data, Other) and who. Totals show on the job; entries can be
+  removed (the activity log keeps that).
+- **Shift summary** (`/shift`, Tools, or under the job list on Roll tracking): rolls done by job, printer and person, labels per
+  hour, rolls left in progress with their last note, jobs on hold, important notes, status changes, reprints, failed tag
+  checks and BarTender failures, for this shift or the previous one, ready to print. Shift start times are in Settings >
+  Printers and BarTender (default 06:00, 14:00, 22:00).
+- **New job like this** (job dialog, More): opens New job with the customer, item, size, inlay, part, UPC, labels per roll,
+  rows per database file, overage, data sheet and the same Master Template filled in. Never the ticket, PO, quantity, due date
+  or serials.
+- **Tools**: roll tracker sheet, checklist, encoding database, serial lookup, shift summary.
 - **BarTender**: the template is copied into `Print\`. Each job shows **Copy path** buttons
   for the template and the encoding database so they can be pasted into BarTender's file box.
+- **Send to BarTender** (BarTender Enterprise; Settings > Printers and BarTender): see *Sending rolls to BarTender* below.
+
+## Sending rolls to BarTender
+
+With it turned on, each roll card has **Send to BarTender**. Job Manager writes a BarTender XML script (BTXML) into the
+**trigger folder** (default `…\3 Encoding and Printing Files\BarTender Triggers`): the job's template from its `Print\`
+folder, `UseDatabase`, the roll's **record range** (the same numbers the card shows), and the Windows printer for the
+roll's printer (from the printer names list in Settings; a printer not listed prints on the printer saved in the
+template). The file is written under a temporary name and renamed to `<request id>.btxml`, so BarTender never reads half a file.
+
+- A roll whose records cross into a second database file is sent as one request per file. BTXML can't name an Excel
+  database, so BarTender prints from the database the template is pointed at (as it does when an encoder opens it):
+  for split jobs, the card names the file each part needs. The database path is also written in each request as a comment.
+- States: *sent* → *BarTender has it* (the file left the trigger folder) → *printed* or *didn't print* (from the reply in
+  the **acknowledgement folder**, matched by the request id in the file name or contents; `Severity="Error"` in a BTXML
+  response, or a line saying error/failed in a text reply, is a failure with BarTender's message). With no
+  acknowledgement folder set, *taken by BarTender* is as far as it goes.
+- A roll can't be sent again while a request is waiting; a roll already printed asks before sending again. A request not
+  picked up yet can be cancelled. Not picked up after 3 minutes, or failed, shows in Needs attention.
+- Folders are watched by a background thread every 5 seconds; sending waits at most 10 seconds for the share.
+
+**One-time setup on the BarTender PC (Integration Builder, BarTender Enterprise):**
+1. New Integration, trigger **File**: folder = the trigger folder, file name filter `*.btxml`, after processing **delete** the file.
+2. Action **Run BarTender XML Script** (BTXML), script = the trigger file's contents (*Event Data*). Turn on *Save response*
+   (or add a **Write File** action) to the acknowledgement folder with a file name that contains the trigger file name,
+   for example `%FileName%.response.xml`.
+3. Deploy it with the Administration Console so it runs as a service, and give its account read/write on both folders and
+   read on the job folders.
 - **Templates**: Master Templates index, picked automatically by UPC.
 - **Proofing** (`/proofing`, sidebar **Proofing**, or **Start proof** in a job's drawer): the RFID Proofing
   Utility (Lean Core) inside Job Manager. A proof started from a job is filled in from it, including the first
@@ -138,6 +186,8 @@ is flagged as a conflict.
 | `serial_registry.py` | Per-UPC registry files with locks |
 | `generators.py` | EPC encoding, UPC checks, databases, roll plans, QC sheet |
 | `checklist_generator.py` | Encoding checklist |
+| `floor_ops.py` | BarTender print requests, tag checks, reprints, pace, shift summary |
+| `integrity.py`, `host_check.py`, `jm_tools.py`, `JM_TOOLS.bat` | Serial and database check, host PC check, tools menu |
 | `config.py`, `config.ini.example` | Paths and port |
 | `lists.py` | Starter customer and label size lists |
 | `templates/index.html` | The desktop interface |

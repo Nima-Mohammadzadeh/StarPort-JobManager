@@ -41,9 +41,11 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
-                        sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+                        sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name,
+                        go2_file_names, XLSX_AVAILABLE)
 import serial_store as SS
 import integrity
+import floor_ops as F
 import host_check as H
 import sheet_serials as SHEETS_SEQ
 import backup
@@ -241,6 +243,7 @@ def init_db():
     add_col("job_rolls", "paused_at", "paused_at TEXT")
     add_col("job_rolls", "paused_by", "paused_by TEXT")
     add_col("job_rolls", "printer", "printer TEXT")
+    F.init_schema(cur)                                     # tag checks, reprints, BarTender print requests
     add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
     add_col("btw_templates", "file_size", "file_size INTEGER")
     add_col("btw_templates", "file_mtime", "file_mtime TEXT")
@@ -308,6 +311,26 @@ def _setting_number(key, raw):
     return int(v) if whole else (int(v) if v == int(v) else v)
 
 
+# BarTender Integration folders: next to "Customers Encoding Files" on the share by default.
+_ENC_ROOT = os.path.dirname(Z_DRIVE_BASE.rstrip("\\/"))
+BT_DEFAULT_TRIGGERS = os.path.join(_ENC_ROOT, "BarTender Triggers")
+BT_DEFAULT_ACKS = os.path.join(_ENC_ROOT, "BarTender Acknowledgements")
+SHIFT_DEFAULT = "06:00,14:00,22:00"
+
+
+def clean_shift_starts(raw):
+    """'6:00, 14:00,22:00' -> '06:00,14:00,22:00', or None if any part isn't a time."""
+    out = []
+    for part in re.split(r"[,;\s]+", str(raw or "").strip()):
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d{1,2}):(\d{2})", part)
+        if not m or int(m[1]) > 23 or int(m[2]) > 59:
+            return None
+        out.append(f"{int(m[1]):02d}:{m[2]}")
+    return ",".join(sorted(set(out))) or None
+
+
 def get_settings() -> dict:
     conn = get_db()
     s = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
@@ -325,6 +348,11 @@ def get_settings() -> dict:
         "rewind_base_url":       s.get("rewind_base_url", ""),
         "printers":              s.get("printers", DEFAULT_PRINTERS),
         "auto_archive_hours":    num("auto_archive_hours"),
+        "bt_enabled":            s.get("bt_enabled", "0") == "1",
+        "bt_trigger_dir":        s.get("bt_trigger_dir", BT_DEFAULT_TRIGGERS),
+        "bt_ack_dir":            s.get("bt_ack_dir", BT_DEFAULT_ACKS),          # blank = don't wait for replies
+        "bt_printer_map":        s.get("bt_printer_map", ""),
+        "shift_starts":          s.get("shift_starts") or SHIFT_DEFAULT,
     }
 
 
@@ -982,9 +1010,10 @@ def api_job_detail(job_id):
         conn.close(); return err("Job not found", 404)
     rolls = ensure_rolls(conn, job)
     notes = _notes(conn, job_id)
+    floor = _floor_detail(conn, job_id, rolls)
     conn.close()
     total = production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None
-    return jsonify({"job": job, "rolls": rolls, "notes": notes, "files": _list_files(job["folder_path"]),
+    return jsonify({"job": job, "rolls": rolls, "notes": notes, "files": _list_files(job["folder_path"]), **floor,
                     "total_qty": total,
                     "end_serial": (job["start_serial"] + total - 1) if job["start_serial"] and total else None,
                     "folder_exists": bool(job["folder_path"] and os.path.isdir(job["folder_path"]))})
@@ -1228,9 +1257,10 @@ def _ranges(nums):
 
 
 def _set_rolls(job_id, nums, status, who, note=""):
-    """Roll states: pending (not started) → running (in progress) ⇄ paused → complete.
+    """Roll states: pending (not started) → running (in progress) ⇄ paused → complete → verified.
     Any state can be reset to pending. An optional note (e.g. why it was paused) is
-    saved on the roll."""
+    saved on the roll. A roll whose first and last tags have passed a scan (see record_check) is
+    'verified' when it is done; reopening or resetting a done roll clears that."""
     if status not in ("pending", "running", "paused", "complete"):
         return err("Unknown roll status")
     conn = get_db()
@@ -1241,14 +1271,22 @@ def _set_rolls(job_id, nums, status, who, note=""):
     ts, changed, words = now_str(), [], []
     for n in nums:
         row = conn.execute("SELECT status FROM job_rolls WHERE job_id=? AND roll_number=?", (job_id, n)).fetchone()
-        if not row or row["status"] == status:
+        if not row or row["status"] == status or (status == "complete" and row["status"] == "verified"):
             continue
         before = row["status"]
+        if before in ("complete", "verified") or status == "pending":
+            conn.execute("""UPDATE job_rolls SET verified_at=NULL, verified_by=NULL
+                            WHERE job_id=? AND roll_number=?""", (job_id, n))
+            if status == "pending" or before == "verified":
+                conn.execute("""UPDATE job_rolls SET first_ok_at=NULL, last_ok_at=NULL
+                                WHERE job_id=? AND roll_number=?""", (job_id, n))
         if status == "complete":
             conn.execute("""UPDATE job_rolls SET status='complete', completed_at=?, completed_by=?,
                 started_at=COALESCE(started_at, ?), started_by=COALESCE(started_by, ?), paused_at=NULL, paused_by=NULL
                 WHERE job_id=? AND roll_number=?""", (ts, who, ts, who, job_id, n))
             words.append("done")
+            if _maybe_verify(conn, job_id, n, ts):
+                words[-1] = "done (first and last tags already checked: verified)"
         elif status == "running":
             # Start, resume after a pause, or reopen a finished roll.
             conn.execute("""UPDATE job_rolls SET status='running',
@@ -1281,8 +1319,38 @@ def _set_rolls(job_id, nums, status, who, note=""):
         kind = {"complete": "roll", "running": "roll_start", "paused": "roll_pause", "pending": "roll_undo"}[status]
         log_activity(conn, kind, job_id, f"{job_label(job)}: {label} {_ranges(changed)} {word}"
                      + (f" — {note[:80]}" if note else "") + _roll_progress(conn, job_id), who)
+    nxt = _next_on_printer(conn, job_id, changed[0]) if status == "complete" and len(changed) == 1 else None
     conn.commit(); conn.close()
-    return jsonify({"success": True, "changed": changed})
+    return jsonify({"success": True, "changed": changed, "next": nxt})
+
+
+def _maybe_verify(conn, job_id, n, ts=None, who=None) -> bool:
+    """A done roll whose first and last tags have both passed becomes 'verified'."""
+    cur = conn.execute("""UPDATE job_rolls SET status='verified', verified_at=?,
+                              verified_by=COALESCE(?, (SELECT c.who FROM roll_checks c WHERE c.job_id=job_rolls.job_id
+                                  AND c.roll_number=job_rolls.roll_number AND c.result='pass' ORDER BY c.id DESC LIMIT 1))
+                          WHERE job_id=? AND roll_number=? AND status='complete'
+                            AND first_ok_at IS NOT NULL AND last_ok_at IS NOT NULL""", (ts or now_str(), who, job_id, n))
+    return cur.rowcount > 0
+
+
+def _next_on_printer(conn, job_id, done_roll):
+    """After a roll on a printer is done: the next roll of this job not started yet, to offer
+    "Start roll N on <printer>". None if the roll had no printer, nothing is left, or that printer
+    is already running something else."""
+    r = conn.execute("SELECT printer FROM job_rolls WHERE job_id=? AND roll_number=?", (job_id, done_roll)).fetchone()
+    if not r or not r["printer"]:
+        return None
+    busy = conn.execute("""SELECT 1 FROM job_rolls x JOIN jobs j ON j.id=x.job_id WHERE x.printer=? COLLATE NOCASE
+                           AND x.status='running' AND j.archived_at IS NULL LIMIT 1""", (r["printer"],)).fetchone()
+    if busy:
+        return None
+    nxt = conn.execute("""SELECT roll_number, quantity FROM job_rolls WHERE job_id=? AND status='pending'
+                          ORDER BY (roll_number < ?), roll_number LIMIT 1""", (job_id, done_roll)).fetchone()
+    if not nxt:
+        return None
+    return {"roll_number": nxt["roll_number"], "quantity": nxt["quantity"], "printer": r["printer"],
+            "can_print": bool(get_settings()["bt_enabled"])}
 
 
 def _roll_progress(conn, job_id):
@@ -1530,7 +1598,8 @@ def api_rewind_job(job_id):
     notes = _notes(conn, job_id)
     conn.close()
     keep = ("roll_number", "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
-            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by")
+            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by",
+            "first_ok_at", "last_ok_at", "verified_at", "verified_by")
     return jsonify({"job": job, "rolls": [{k: r.get(k) for k in keep} for r in rolls], "notes": notes,
                     "total_qty": production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None})
 
@@ -1605,13 +1674,67 @@ def _lookup(conn, raw, job_id=None):
                               if hit["covered"] else f"UPC {upc}, serial {serial:,}: this tag was not made by Job Manager."))
 
 
+CHECK_FAIL = ("other_job", "wrong_product", "not_issued")      # a real tag that doesn't belong here
+
+
+def record_check(conn, job_id, expected_roll, res, source, who):
+    """Keep a scan made against an open job (tablet or desktop). Scanner setup problems (not hex,
+    a TID, wrong length) aren't kept: they say nothing about the roll. A pass on a roll's first or
+    last tag is marked on the roll; when both have passed and the roll is done, it is verified.
+    A tag from another roll of the same job, when a roll was open, is a fail for the open roll."""
+    result, roll = res["result"], res.get("roll") or {}
+    if result != "found" and result not in CHECK_FAIL:
+        return None
+    ts = now_str()
+    on_roll = roll.get("roll_number") if result == "found" else expected_roll
+    ok, msg = result == "found", res.get("message") or ""
+    if ok and expected_roll and roll.get("roll_number") != expected_roll:
+        ok, on_roll = False, expected_roll
+        msg = f"Tag {roll.get('label_no')} of roll {roll.get('roll_number')}, not roll {expected_roll}."
+    elif ok:
+        msg = f"Tag {roll.get('label_no'):,} of {roll.get('quantity'):,}" + (
+            f" ({roll['position'].upper()} tag)" if roll.get("position") in ("first", "last") else "")
+    conn.execute("""INSERT INTO roll_checks (job_id, roll_number, epc, serial, position, result, message, source, who, ts)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                 (job_id, on_roll, res.get("epc"), roll.get("serial"), roll.get("position") if ok else None,
+                  "pass" if ok else "fail", msg[:300], source, who, ts))
+    out = {"recorded": True, "result": "pass" if ok else "fail", "roll_number": on_roll, "verified": False}
+    job = _load_job(conn, job_id)
+    if ok and roll.get("serial") is not None:
+        if roll["serial"] == roll.get("serial_start"):
+            conn.execute("UPDATE job_rolls SET first_ok_at=COALESCE(first_ok_at, ?) WHERE job_id=? AND roll_number=?", (ts, job_id, on_roll))
+        if roll["serial"] == roll.get("serial_end"):
+            conn.execute("UPDATE job_rolls SET last_ok_at=COALESCE(last_ok_at, ?) WHERE job_id=? AND roll_number=?", (ts, job_id, on_roll))
+        if _maybe_verify(conn, job_id, on_roll, ts, who):
+            out["verified"] = True
+            log_activity(conn, "roll_verify", job_id, f"{job_label(job)}: roll {on_roll} verified (first and last tags scanned)", who)
+    elif not ok:
+        log_activity(conn, "check_fail", job_id, f"{job_label(job)}: tag check failed"
+                     + (f" on roll {on_roll}" if on_roll else "") + f" — {msg[:120]}", who)
+    r = conn.execute("SELECT first_ok_at, last_ok_at, status FROM job_rolls WHERE job_id=? AND roll_number=?",
+                     (job_id, on_roll)).fetchone() if on_roll else None
+    if r:
+        out.update(first_ok=bool(r["first_ok_at"]), last_ok=bool(r["last_ok_at"]), roll_status=r["status"])
+    conn.commit()
+    return out
+
+
 @app.route("/api/rewind/lookup", methods=["POST"])
 def api_rewind_lookup():
+    """What is this tag? With a job open, the scan is also kept as a tag check (record_check);
+    roll_number = the roll the person has open, if any. record=false looks only."""
     data = request.get_json(silent=True) or {}
     jid = data.get("job_id")
+    jid = int(jid) if str(jid or "").isdigit() else None
+    rn = data.get("roll_number")
+    rn = int(rn) if str(rn or "").isdigit() else None
     conn = get_db()
     try:
-        return jsonify(_lookup(conn, str(data.get("raw") or ""), int(jid) if str(jid or "").isdigit() else None))
+        res = _lookup(conn, str(data.get("raw") or ""), jid)
+        if jid and data.get("record", True) is not False and _load_job(conn, jid):
+            res["check"] = record_check(conn, jid, rn, res, str(data.get("source") or "rewind")[:12],
+                                        (data.get("operator") or "").strip()[:40] or actor())
+        return jsonify(res)
     finally:
         conn.close()
 
@@ -2724,13 +2847,22 @@ def api_settings_save():
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
                "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
-               "auto_archive_hours"}
+               "auto_archive_hours", "bt_enabled", "bt_trigger_dir", "bt_ack_dir", "bt_printer_map", "shift_starts"}
     clean = {}
     for k, v in data.items():
         if k not in allowed:
             continue
-        if k == "backup_auto":
+        if k in ("backup_auto", "bt_enabled"):
             v = "1" if v in (True, "1", 1, "true") else "0"
+        elif k == "shift_starts":
+            v = clean_shift_starts(v)
+            if v is None:
+                return err("Shift start times must be times like 06:00, 14:00, 22:00. Nothing was saved.")
+        elif k == "bt_printer_map":
+            v = "\n".join(f"{a} = {b}" for a, b in ((l.split("=", 1)[0].strip(), l.split("=", 1)[1].strip())
+                                                     for l in str(v or "").splitlines() if "=" in l) if a and b)
+        elif k in ("bt_trigger_dir", "bt_ack_dir"):
+            v = str(v or "").strip().strip('"')
         elif k == "printers":
             v = clean_printers(v)
         elif k in NUMBER_SETTINGS:
@@ -2746,15 +2878,18 @@ def api_settings_save():
     for k, v in clean.items():
         conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, v))
     after_raw = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
-    changed = [k for k, v in clean.items() if str(before.get(k, "")) != v and not (k == "backup_auto" and before[k] == (v == "1"))]
+    changed = [k for k, v in clean.items() if str(before.get(k, "")) != v
+               and not (k in ("backup_auto", "bt_enabled") and before[k] == (v == "1"))]
     if changed:
         names = {"btw_template_dir": "Master Templates folder", "backup_dir": "backup folder", "backup_auto": "automatic backups",
-                 "rewind_base_url": "rewind page address", "printers": "printer list",
+                 "rewind_base_url": "rewind page address", "printers": "printer list", "bt_enabled": "sending to BarTender",
+                 "bt_trigger_dir": "BarTender trigger folder", "bt_ack_dir": "BarTender acknowledgement folder",
+                 "bt_printer_map": "BarTender printer names", "shift_starts": "shift start times",
                  **{k: v[0] for k, v in NUMBER_SETTINGS.items()}}
         def show(k, v):
-            v = ("on" if v in (True, "1") else "off") if k == "backup_auto" else str(v) if str(v).strip() else "(blank)"
+            v = ("on" if v in (True, "1") else "off") if k in ("backup_auto", "bt_enabled") else str(v) if str(v).strip() else "(blank)"
             return v if len(v) <= 60 else v[:57] + "…"
-        parts = [names[k] if k == "printers" else f"{names[k]} {show(k, before.get(k))} → {show(k, after_raw.get(k))}" for k in changed]
+        parts = [names[k] if k in ("printers", "bt_printer_map") else f"{names[k]} {show(k, before.get(k))} → {show(k, after_raw.get(k))}" for k in changed]
         log_activity(conn, "settings", None, "Settings changed: " + "; ".join(parts))
     conn.commit(); conn.close()
     SS.set_journal_dir(get_settings()["backup_dir"])
@@ -3283,6 +3418,9 @@ ATTN_KINDS = {
     "stale_rolls":         ("warn", "Roll left in progress", 6),
     "rolls_done":          ("warn", "All rolls done", 7),
     "no_template":         ("warn", "No template", 8),
+    "tag_check":           ("bad",  "Tag check failed", 1),
+    "print_failed":        ("bad",  "BarTender didn't print", 2),
+    "print_waiting":       ("warn", "Waiting on BarTender", 6),
 }
 
 # Job folders live on the share. Requests never look at them: a background thread does, every
@@ -3409,6 +3547,33 @@ def attention(conn, today=None) -> dict:
             more = f" (and {len(rolls) - 1} more)" if len(rolls) > 1 else ""
             add(jid, "stale_rolls", f"Roll {first['roll_number']} started{where}{by} {_span(first['started_at'])} ago "
                                     f"and still in progress{more}")
+
+    # Tag checks: a roll whose latest check (last 3 days) failed and that hasn't been verified since.
+    since = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+    for c in conn.execute("""SELECT c.job_id, c.roll_number, c.message, c.ts, c.who FROM roll_checks c
+            JOIN job_rolls r ON r.job_id = c.job_id AND r.roll_number = c.roll_number
+            WHERE c.ts >= ? AND c.result = 'fail' AND (r.verified_at IS NULL OR r.verified_at < c.ts)
+              AND c.id = (SELECT MAX(id) FROM roll_checks x WHERE x.job_id = c.job_id AND x.roll_number = c.roll_number)
+            ORDER BY c.job_id, c.roll_number""", (since,)):
+        if c["job_id"] in issues:
+            add(c["job_id"], "tag_check", f"Roll {c['roll_number']}: {c['message']} ({c['ts'][11:16]}"
+                                          + (f", {c['who']}" if c["who"] else "") + "). Scan it again once it's sorted.")
+    # BarTender: each roll's latest request.
+    stuck_before = (datetime.now() - timedelta(minutes=F.BT_STUCK_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+    for p in conn.execute("""SELECT p.* FROM print_requests p WHERE p.id = (SELECT MAX(id) FROM print_requests x
+            WHERE x.job_id = p.job_id AND x.roll_number = p.roll_number AND x.part = p.part)
+            AND p.state IN ('failed','writing','sent') ORDER BY p.job_id, p.roll_number"""):
+        if p["job_id"] not in issues:
+            continue
+        roll = f"Roll {p['roll_number']}" + (f" part {p['part']}" if p["parts"] > 1 else "")
+        if p["state"] == "failed" and p["created_at"] >= since:
+            add(p["job_id"], "print_failed", f"{roll}: {p['message'] or 'BarTender reported an error'}")
+        elif p["state"] in ("writing", "sent") and p["created_at"] <= stuck_before:
+            add(p["job_id"], "print_waiting", f"{roll} sent {_span(p['created_at'])} ago and not picked up yet. "
+                                              "Is the BarTender Integration running?" if p["state"] == "sent" else
+                                              f"{roll}: the trigger folder hasn't taken the request for {_span(p['created_at'])}.")
+    if _bt["error"]:
+        glob.append({"kind": "print_waiting", "level": "warn", "label": "BarTender folders", "detail": _bt["error"]})
 
     by_number = {j["job_number"]: jid for jid, j in jobs.items()}
     last = _integrity["result"]          # the last serial and database check (see run_integrity)
@@ -3537,6 +3702,406 @@ def api_attention():
         return jsonify(attention(conn))
     finally:
         conn.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Encoding floor: BarTender print requests, tag checks, reprints, pace, shift summary, repeat job
+# (logic in floor_ops.py)
+# ══════════════════════════════════════════════════════════════════════════════
+BT_WRITE_WAIT = 10                   # seconds a request waits for the trigger file to be written
+BT_WATCH_EVERY = 5                   # seconds between looks at the trigger and acknowledgement folders
+BT_OPEN = ("writing", "sent", "picked_up")
+_bt = {"at": None, "error": None, "busy": False}
+
+
+def _floor_detail(conn, job_id, rolls):
+    """Extra parts of a job's detail: tag checks, reprints, print requests, pace."""
+    q = lambda sql: [dict(r) for r in conn.execute(sql, (job_id,))]
+    checks = q("SELECT * FROM roll_checks WHERE job_id=? ORDER BY id DESC LIMIT 300")
+    reprints = q("SELECT * FROM reprints WHERE job_id=? ORDER BY id DESC")
+    prints = q("SELECT * FROM print_requests WHERE job_id=? ORDER BY id DESC LIMIT 300")
+    s = get_settings()
+    return {"checks": checks, "reprints": reprints, "prints": prints, "pace": F.pace(rolls),
+            "reprint_reasons": F.REPRINT_REASONS, "reprinted_total": sum(r["qty"] for r in reprints),
+            "bt": {"enabled": s["bt_enabled"], "mapped": sorted(F.printer_map(s["bt_printer_map"]))}}
+
+
+def _db_files(job, total):
+    """The job's encoding database file name(s), in order, as the generators name them."""
+    parts = len(db_file_split(total, job.get("qty_db")))
+    if job.get("upc"):
+        ext = ".xlsx" if XLSX_AVAILABLE else ".csv"
+        return [f"{job['upc']}{f'_DB{i}' if parts > 1 else ''}{ext}" for i in range(1, parts + 1)]
+    if job.get("data_sheet"):
+        return go2_file_names(job.get("job_ticket") or job["job_number"], parts)
+    return []
+
+
+def _safe_id(text):
+    return re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")[:40]
+
+
+def _bt_write(rows, trigger_dir):
+    """Background: write each request's file, then mark it sent (or failed). Own connection."""
+    conn = get_db()
+    try:
+        os.makedirs(trigger_dir, exist_ok=True)
+        for r in rows:
+            path = F.write_request(trigger_dir, r["req_id"], r["text"])
+            conn.execute("UPDATE print_requests SET state='sent', trigger_path=?, updated_at=? WHERE req_id=? AND state='writing'",
+                         (path, now_str(), r["req_id"]))
+            conn.commit()
+    except OSError as e:
+        conn.execute(f"""UPDATE print_requests SET state='failed', message=?, updated_at=?
+                         WHERE state='writing' AND req_id IN ({','.join('?' * len(rows))})""",
+                     (f"Couldn't write to the BarTender trigger folder: {e}"[:300], now_str(), *[r["req_id"] for r in rows]))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.route("/api/jobs/<int:job_id>/rolls/<int:roll_number>/print", methods=["POST"])
+def api_roll_print(job_id, roll_number):
+    """Send one roll to BarTender: a BTXML file per database file the roll's records are in, written into the
+    trigger folder that a BarTender Integration watches. A roll can't be sent while an earlier request for it
+    is still waiting, and a roll already printed needs again=true. A roll not started yet is started."""
+    data = request.get_json(silent=True) or {}
+    who = (data.get("operator") or "").strip()[:40] or actor()
+    s = get_settings()
+    if not s["bt_enabled"]:
+        return err("Sending to BarTender is turned off (Settings > BarTender).")
+    if not s["bt_trigger_dir"]:
+        return err("No BarTender trigger folder is set (Settings > BarTender).")
+    conn = get_db()
+    try:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        if job["status"] in ("On Hold", "Cancelled"):
+            return err(f"This job is {job['status'].lower()}. Resume it before printing.")
+        if not job.get("template_path"):
+            return err("This job has no BarTender template in its Print folder. Pick one in the job first.")
+        rolls = ensure_rolls(conn, job)
+        roll = next((r for r in rolls if r["roll_number"] == roll_number), None)
+        if not roll:
+            return err("Roll not found", 404)
+        if roll["status"] in ("complete", "verified"):
+            return err("This roll is done. Reopen it to print it again, or log a reprint.")
+        prev = [dict(r) for r in conn.execute("SELECT * FROM print_requests WHERE job_id=? AND roll_number=? ORDER BY id DESC",
+                                              (job_id, roll_number))]
+        waiting = [p for p in prev if p["state"] in BT_OPEN]
+        if waiting:
+            p = waiting[0]
+            return err(f"Roll {roll_number} was sent to BarTender at {p['created_at'][11:16]} and BarTender hasn't "
+                       f"{'picked it up' if p['state'] != 'picked_up' else 'answered'} yet. Wait for it, or cancel it first.",
+                       409, waiting=True)
+        done = [p for p in prev if p["state"] in ("printed", "taken")]
+        if done and not data.get("again"):
+            return err(f"Roll {roll_number} was already sent to BarTender at {done[0]['updated_at'][5:16]} "
+                       f"by {done[0]['who'] or 'someone'}. Send it again?", 409, needs_again=True)
+        printer = " ".join(str(data.get("printer") or roll.get("printer") or "").split())[:30] or None
+        bt_printer = F.printer_map(s["bt_printer_map"]).get((printer or "").lower())
+        total = sum(r["quantity"] for r in rolls)
+        names = _db_files(job, total)
+        segs = F.segments(rolls, roll_number, job.get("qty_db"))
+        ts, rows = now_str(), []
+        for i, (f, a, b) in enumerate(segs, start=1):
+            req_id = f"JM-{_safe_id(job['job_ticket'] or job['job_number'])}-R{roll_number}" + (
+                f"-P{i}" if len(segs) > 1 else "") + f"-{secrets.token_hex(3)}"
+            db_path = os.path.join(job["folder_path"], "Data", names[f - 1]) if job.get("folder_path") and len(names) >= f else None
+            label = f"{job_label(job)} roll {roll_number}" + (f" part {i} of {len(segs)}" if len(segs) > 1 else "")
+            text = F.btxml(req_id, job["template_path"], a, b, bt_printer, db_path, label)
+            conn.execute("""INSERT INTO print_requests (req_id, job_id, roll_number, part, parts, template, database, rec_from,
+                            rec_to, printer, bt_printer, state, who, created_at, updated_at)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,'writing',?,?,?)""",
+                         (req_id, job_id, roll_number, i, len(segs), job["template_path"], db_path, a, b, printer, bt_printer, who, ts, ts))
+            rows.append({"req_id": req_id, "text": text, "file": f, "from": a, "to": b, "database": db_path})
+        if roll["status"] == "pending":
+            conn.execute("""UPDATE job_rolls SET status='running', started_at=?, started_by=?, printer=COALESCE(?, printer)
+                            WHERE job_id=? AND roll_number=?""", (ts, who, printer, job_id, roll_number))
+            if job["status"] == "Pending":
+                conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+        elif printer and printer != roll.get("printer"):
+            conn.execute("UPDATE job_rolls SET printer=? WHERE job_id=? AND roll_number=?", (printer, job_id, roll_number))
+        rec = ", ".join(f"records {r['from']}–{r['to']}" + (f" of DB{r['file']}" if len(names) > 1 else "") for r in rows)
+        log_activity(conn, "print", job_id, f"{job_label(job)}: roll {roll_number} sent to BarTender ({rec})"
+                     + (f" on {printer}" if printer else "") + (" — again" if done else ""), who)
+        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
+        conn.commit()
+    finally:
+        conn.close()
+    t = threading.Thread(target=_bt_write, args=(rows, s["bt_trigger_dir"]), daemon=True, name="bt-write")
+    t.start(); t.join(BT_WRITE_WAIT)
+    conn = get_db()
+    got = [dict(r) for r in conn.execute(f"SELECT * FROM print_requests WHERE req_id IN ({','.join('?' * len(rows))}) ORDER BY part",
+                                         [r["req_id"] for r in rows])]
+    conn.close()
+    warn = []
+    if printer and not bt_printer:
+        warn.append(f"{printer} has no Windows printer name in Settings > BarTender, so BarTender uses the printer saved in the template.")
+    elif not printer:
+        warn.append("The roll has no printer, so BarTender uses the printer saved in the template.")
+    if len(names) > 1:
+        warn.append("This job's database is split into files. BarTender prints from the file the template is pointed at, "
+                    "so check it is " + " / ".join(os.path.basename(r["database"] or "") for r in rows) + ".")
+    failed = [g_ for g_ in got if g_["state"] == "failed"]
+    if failed:
+        return err(failed[0]["message"] or "The print request couldn't be written.", 502, requests=got)
+    if t.is_alive():
+        warn.append("The trigger folder is slow to answer; the request will go when it can be written.")
+    return jsonify({"success": True, "requests": got, "warnings": warn})
+
+
+@app.route("/api/print-requests/<int:rid>/cancel", methods=["POST"])
+def api_print_cancel(rid):
+    """Take back a request BarTender hasn't picked up yet (its file is removed from the trigger folder)."""
+    conn = get_db()
+    row = conn.execute("SELECT * FROM print_requests WHERE id=?", (rid,)).fetchone()
+    if not row:
+        conn.close(); return err("Not found", 404)
+    row = dict(row)
+    if row["state"] == "picked_up":
+        conn.close()
+        return err("BarTender has already taken this request. Stop it in BarTender (Print Portal or the printer queue) if needed.", 409)
+    if row["state"] not in ("writing", "sent"):
+        conn.close(); return err("This request is finished; nothing to cancel.", 409)
+    path = row["trigger_path"]
+    gone = {"ok": not path}
+
+    def rm():
+        try:
+            os.remove(path)
+            gone["ok"] = True
+        except FileNotFoundError:
+            gone["picked"] = True                  # BarTender took it a moment ago
+        except OSError as e:
+            gone["error"] = str(e)
+    if path:
+        t = threading.Thread(target=rm, daemon=True); t.start(); t.join(BT_WRITE_WAIT)
+    if gone.get("picked"):
+        conn.execute("UPDATE print_requests SET state='picked_up', updated_at=? WHERE id=?", (now_str(), rid))
+        conn.commit(); conn.close()
+        return err("BarTender picked it up just now, so it can't be cancelled.", 409)
+    if not gone.get("ok"):
+        conn.close()
+        return err(f"Couldn't remove the request from the trigger folder: {gone.get('error') or 'the folder is not answering'}", 502)
+    who = actor()
+    conn.execute("UPDATE print_requests SET state='cancelled', message=?, updated_at=? WHERE id=?",
+                 (f"Cancelled by {who or 'someone'}", now_str(), rid))
+    log_activity(conn, "print", row["job_id"], f"{job_label(_load_job(conn, row['job_id']))}: BarTender request for roll "
+                                              f"{row['roll_number']} cancelled", who)
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+def check_print_requests():
+    """Background (BT_WATCH_EVERY): a request whose file has left the trigger folder was picked up; a file in
+    the acknowledgement folder naming the request (or containing its ID) says printed or failed.
+    With no acknowledgement folder set, picked up is as far as it goes ('taken')."""
+    if _bt["busy"]:
+        return
+    _bt["busy"] = True
+    conn = get_db()
+    try:
+        open_ = [dict(r) for r in conn.execute(
+            "SELECT * FROM print_requests WHERE state IN ('sent','picked_up') AND created_at >= ?",
+            ((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),))]
+        conn.execute("""UPDATE print_requests SET state='failed', message='No answer from BarTender within 2 days', updated_at=?
+                        WHERE state IN ('sent','picked_up') AND created_at < ?""",
+                     (now_str(), (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+        if not open_:
+            _bt.update(at=now_str(), error=None)
+            return
+        ack = get_settings()["bt_ack_dir"]
+        files = []
+        if ack:
+            try:
+                files = [e for e in os.scandir(ack) if e.is_file()]
+            except OSError as e:
+                _bt.update(at=now_str(), error=f"Can't read the acknowledgement folder {ack}: {e}")
+                files = None
+        oldest = min(datetime.strptime(p["created_at"][:19], "%Y-%m-%d %H:%M:%S").timestamp() for p in open_) - 120
+        recent = []
+        for e in files or []:
+            try:
+                if e.stat().st_mtime >= oldest:
+                    recent.append(e)
+            except OSError:
+                pass
+        recent = recent[:200]
+        texts = {}
+        for p in open_:
+            state, msg = None, None
+            hit = next((e.path for e in recent if p["req_id"].lower() in e.name.lower()), None)
+            if not hit:
+                for e in recent:
+                    if e.path not in texts:
+                        try:
+                            with open(e.path, encoding="utf-8", errors="replace") as fh:
+                                texts[e.path] = fh.read(65536)
+                        except OSError:
+                            texts[e.path] = ""
+                    if p["req_id"] in texts[e.path]:
+                        hit = e.path; break
+            if hit:
+                try:
+                    with open(hit, encoding="utf-8", errors="replace") as fh:
+                        state, msg = F.read_reply(fh.read(200_000))
+                except OSError:
+                    pass
+            elif p["state"] == "sent" and p["trigger_path"] and not os.path.exists(p["trigger_path"]):
+                state = "picked_up" if ack else "taken"
+                msg = None if ack else "Taken by BarTender (no acknowledgement folder is set, so printing isn't confirmed)"
+            if state and state != p["state"]:
+                conn.execute("UPDATE print_requests SET state=?, message=?, updated_at=? WHERE id=?", (state, msg, now_str(), p["id"]))
+                if state in ("printed", "failed"):
+                    job = _load_job(conn, p["job_id"])
+                    part = f" (part {p['part']} of {p['parts']})" if p["parts"] > 1 else ""
+                    log_activity(conn, "print" if state == "printed" else "print_fail", p["job_id"],
+                                 f"{job_label(job) if job else 'Job'}: roll {p['roll_number']}{part} "
+                                 + ("printed by BarTender" if state == "printed" else f"BarTender couldn't print it — {msg}"), "BarTender")
+                conn.commit()
+        if files is not None:
+            _bt.update(at=now_str(), error=None)
+    except Exception as e:
+        _bt.update(at=now_str(), error=str(e))
+        log.exception("print request check failed")
+    finally:
+        conn.close()
+        _bt["busy"] = False
+
+
+def start_print_watch():
+    def run():
+        while True:
+            check_print_requests()
+            time.sleep(BT_WATCH_EVERY)
+    threading.Thread(target=run, daemon=True, name="bt-watch").start()
+
+
+@app.route("/api/jobs/<int:job_id>/reprints", methods=["POST"])
+def api_reprint_add(job_id):
+    """Log labels reprinted or spoiled on a roll: how many, why, optionally which serials."""
+    data = request.get_json(silent=True) or {}
+    who = (data.get("operator") or "").strip()[:40] or actor()
+    conn = get_db()
+    try:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        ensure_rolls(conn, job)
+        try:
+            n = int(data.get("roll_number"))
+        except (TypeError, ValueError):
+            return err("Pick a roll")
+        roll = conn.execute("SELECT * FROM job_rolls WHERE job_id=? AND roll_number=?", (job_id, n)).fetchone()
+        if not roll:
+            return err("Roll not found", 404)
+        reason = str(data.get("reason") or "").strip()
+        if reason not in F.REPRINT_REASONS:
+            return err("Pick a reason")
+        note = " ".join(str(data.get("note") or "").split())[:300]
+        if reason == "Other" and not note:
+            return err("Say what happened")
+        sf, st_ = data.get("serial_from"), data.get("serial_to")
+        if sf not in (None, "") or st_ not in (None, ""):
+            try:
+                sf, st_ = int(str(sf).replace(",", "")), int(str(st_ if st_ not in (None, "") else sf).replace(",", ""))
+            except ValueError:
+                return err("Serials must be numbers")
+            if sf > st_:
+                sf, st_ = st_, sf
+            if roll["serial_start"] is None or sf < roll["serial_start"] or st_ > roll["serial_end"]:
+                return err(f"Those serials aren't on roll {n}" + (f" ({roll['serial_start']:,}–{roll['serial_end']:,})"
+                                                                  if roll["serial_start"] is not None else ""))
+            qty = st_ - sf + 1
+        else:
+            sf = st_ = None
+            try:
+                qty = int(str(data.get("qty") or "").replace(",", ""))
+            except ValueError:
+                return err("How many labels?")
+        if not 1 <= qty <= roll["quantity"]:
+            return err(f"How many labels? (1 to {roll['quantity']:,}, the roll's size)")
+        ts = now_str()
+        conn.execute("""INSERT INTO reprints (job_id, roll_number, qty, serial_from, serial_to, reason, note, who, ts)
+                        VALUES (?,?,?,?,?,?,?,?,?)""", (job_id, n, qty, sf, st_, reason, note or None, who, ts))
+        log_activity(conn, "reprint", job_id, f"{job_label(job)}: roll {n}, {qty:,} label{'s' if qty != 1 else ''} reprinted — "
+                     f"{reason}" + (f": {note[:80]}" if note else "") + (f" (serials {sf:,}–{st_:,})" if sf else ""), who)
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        conn.close()
+
+
+@app.route("/api/reprints/<int:rid>", methods=["DELETE"])
+def api_reprint_delete(rid):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM reprints WHERE id=?", (rid,)).fetchone()
+    if not row:
+        conn.close(); return err("Not found", 404)
+    conn.execute("DELETE FROM reprints WHERE id=?", (rid,))
+    job = _load_job(conn, row["job_id"])
+    log_activity(conn, "reprint", row["job_id"], f"{job_label(job) if job else 'Job'}: reprint entry removed "
+                 f"(roll {row['roll_number']}, {row['qty']:,} labels, {row['reason']}, logged by {row['who'] or '?'})")
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/shift")
+def api_shift():
+    which = "previous" if request.args.get("which") == "previous" else "current"
+    start, end, label = F.shift_window(get_settings()["shift_starts"], which)
+    conn = get_db()
+    try:
+        return jsonify({"label": label, "which": which, **F.shift_summary(conn, start, end)})
+    finally:
+        conn.close()
+
+
+@app.route("/shift")
+def shift_page():
+    """Printable shift hand-off: ?which=current|previous, &print=1 opens the print dialog."""
+    which = "previous" if request.args.get("which") == "previous" else "current"
+    start, end, label = F.shift_window(get_settings()["shift_starts"], which)
+    conn = get_db()
+    try:
+        d = F.shift_summary(conn, start, end)
+    finally:
+        conn.close()
+    return Response(F.shift_html(d, f"{'Previous' if which == 'previous' else 'This'} shift, {label}",
+                                 request.args.get("print") == "1"), mimetype="text/html")
+
+
+REPEAT_FIELDS = ("customer", "title", "label_size", "inlay_type", "part_number", "upc", "lpr", "qty_db",
+                 "overage_pct", "job_type", "data_sheet")
+
+
+@app.route("/api/jobs/<int:job_id>/repeat")
+def api_job_repeat(job_id):
+    """What a new job like this one starts with: the product (customer, item, size, inlay, part, UPC,
+    labels per roll, rows per database file, overage, data sheet) and the same template. Never the
+    ticket, PO, quantity, due date or serials: those belong to the new order."""
+    conn = get_db()
+    job = _load_job(conn, job_id)
+    if not job:
+        conn.close(); return err("Job not found", 404)
+    out = {k: job.get(k) for k in REPEAT_FIELDS}
+    tpl = None
+    if job.get("template_path"):
+        base = re.split(r"[\\/]", job["template_path"])[-1]
+        m = re.match(r"^JOB-\d+ - (.+)$", base, re.I)
+        name = (m.group(1) if m else base).lower()
+        for r in conn.execute("SELECT id, name, file_path FROM btw_templates WHERE active=1"):
+            if re.split(r"[\\/]", r["file_path"])[-1].lower() == name:
+                tpl = {"id": r["id"], "name": r["name"], "file_name": re.split(r"[\\/]", r["file_path"])[-1], "file_path": r["file_path"]}
+                break
+        if not tpl:
+            missing = m.group(1) if m else base
+    conn.close()
+    return jsonify({"fields": out, "template": tpl, "template_missing": missing if job.get("template_path") and not tpl else None,
+                    "from": job_label(job)})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3719,6 +4284,7 @@ if __name__ == "__main__":
     start_folder_watch()
     start_share_watch()
     start_integrity_watch()
+    start_print_watch()
     proofing.start()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")

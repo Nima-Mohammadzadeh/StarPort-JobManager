@@ -347,6 +347,7 @@ details.more p.d{margin:6px 0 0}
 .fi.k-roll{border-left-color:var(--green)}
 .fi.k-roll_start{border-left-color:var(--blue-bright)}
 .fi.k-roll_pause{border-left-color:#C98A1B}
+.fi.k-roll_verify,.fi.k-print{border-left-color:var(--green)}.fi.k-check_fail,.fi.k-print_fail{border-left-color:var(--red)}.fi.k-reprint{border-left-color:#C98A1B}
 .fi.k-roll_undo,.fi.k-edited,.fi.k-archived,.fi.k-import{border-left-color:var(--line-strong)}
 .fi.k-note{border-left-color:#8BA3A8}
 .fi.k-note_important{border-left-color:var(--amber);background:#FFFBF2}
@@ -463,6 +464,20 @@ details.more p.d{margin:6px 0 0}
 .btn.big{padding:11px 20px;font-size:15.5px}
 .pausebox{display:none;gap:6px;margin-top:8px;align-items:center}
 .pausebox.on{display:flex}
+/* Floor: BarTender line, tag-check marks, reprints, next-roll offer, pace */
+.rc .btbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.btbox .bst{color:var(--muted)}.btbox .bst.ok{color:var(--green)}.btbox .bst.bad{color:var(--red)}.btbox .bst.wait{color:var(--blue)}
+.vmarks{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px}
+.vmark{font-size:12px;border-radius:999px;padding:2px 9px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.vmark.ok{background:var(--green-soft);color:var(--green);border-color:#B9DCC5}
+.rstate.s-verified{background:var(--green-soft);color:var(--green)}
+.rpbox{display:none;flex-wrap:wrap;gap:6px;align-items:flex-end;padding:8px 14px;background:var(--sunk);border-bottom:1px solid var(--line)}
+.rpbox.on{display:flex}.rpbox .i{width:auto}.rpbox .f{margin:0;font-size:12px}
+.rplist{margin-top:10px;font-size:13px}.rplist .rp{display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--line)}
+.rplist .rp span{color:var(--muted)}
+.nextoffer{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 14px;background:#E4EFF9;border-bottom:1px solid var(--line);font-size:13.5px}
+.fl-foot{display:flex;gap:6px;padding:10px 4px 4px;border-top:1px solid var(--line);margin-top:8px}
+.chip.pace{background:#E4EFF9;border-color:#C6DBEF}
 /* roll tracking: compact header, roll tiles, three-column work area */
 .w-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start;padding:14px 20px 12px;border-top:3px solid var(--sc);border-radius:8px 8px 0 0}
 .wh-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -864,6 +879,8 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
             <input class="i" id="q-floor" placeholder="Ticket, customer, UPC" autocomplete="off" aria-label="Search jobs"></div>
         </div>
         <div id="floor-cards"></div>
+        <div class="fl-foot"><button class="btn sm quiet" onclick="window.open('/shift','_blank')">Shift summary</button>
+          <button class="btn sm quiet" onclick="window.open('/shift?which=previous','_blank')">Last shift</button></div>
       </div>
       <div class="work" id="work"><div class="empty">Pick a job on the left to track its rolls.</div></div>
     </div>
@@ -950,6 +967,14 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
         <div id="hc-out" aria-live="polite"></div>
       </div>
       <div class="panel tool">
+        <h2>Shift summary</h2>
+        <p class="d">For the hand-off: rolls done by job, printer and person, rolls left in progress with their last note, jobs on hold,
+          important notes, reprints, failed tag checks and BarTender failures. Shifts start at <span class="data" id="tl-shifts"></span> (Settings > Printers and BarTender).</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="window.open('/shift','_blank')">This shift</button>
+          <button class="btn" onclick="window.open('/shift?which=previous','_blank')">Previous shift</button>
+          <button class="btn" onclick="window.open('/shift?which=previous&print=1','_blank')">Print previous shift</button></div>
+      </div>
+      <div class="panel tool">
         <h2>Roll tracker and checklist</h2>
         <p class="d">Print a roll tracker (QC sheet) or an encoding checklist from details you type in. For a job that already exists, use its own Print roll sheet button instead.</p>
         <div class="grid3">
@@ -1004,7 +1029,7 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
     <nav class="set-nav" id="set-nav" aria-label="Settings sections">
       <button data-sec="data" onclick="setSettingsSection('data')">Data and backups</button>
       <button data-sec="backup" onclick="setSettingsSection('backup')">Backup schedule</button>
-      <button data-sec="printers" onclick="setSettingsSection('printers')">Printers</button>
+      <button data-sec="printers" onclick="setSettingsSection('printers')">Printers and BarTender</button>
       <button data-sec="shared" onclick="setSettingsSection('shared')">Shared settings</button>
       <button data-sec="pc" onclick="setSettingsSection('pc')">This PC</button>
       <button data-sec="tablets" onclick="setSettingsSection('tablets')">Tablets (rewind)</button>
@@ -1033,6 +1058,23 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
       <p class="d">One printer name per line. Encoders pick one of these on a roll to say where it is running. Running rolls show their printer in the list.</p>
       <label class="f">Printer names<textarea class="i" id="s-printers" rows="5" placeholder="Printer 1&#10;Printer 2"></textarea></label>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="savePrinters()">Save printers</button></div>
+      <h3 style="margin-top:22px">Send rolls to BarTender</h3>
+      <details class="more"><summary>How this works</summary><p class="d">With this on, each roll card has <b>Send to BarTender</b>. It writes a BarTender XML print request
+        (the job's template, the roll's record range, the printer) into the trigger folder. A BarTender Integration (Enterprise) watches that folder, prints, and writes
+        its reply into the acknowledgement folder; the roll card then shows printed or BarTender's error. A roll can't be sent twice while one is waiting, and sending
+        a roll again after it printed asks first. BarTender prints from the database the template points at: for a job split into several database files, check the
+        template is pointed at the file the card names. Leave the acknowledgement folder blank if the Integration doesn't write replies (the card then only shows
+        that BarTender took the request).</p></details>
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="s-bt-on"> Show <b>Send to BarTender</b> on roll cards</label>
+      <div class="grid2">
+        <label class="f">Trigger folder (BarTender watches it)<input class="i data" id="s-bt-trig" placeholder="Z:\3 Encoding and Printing Files\BarTender Triggers"></label>
+        <label class="f">Acknowledgement folder (BarTender's replies)<input class="i data" id="s-bt-ack" placeholder="Z:\3 Encoding and Printing Files\BarTender Acknowledgements"></label>
+      </div>
+      <label class="f">Windows printer names<span class="hint">One per line: <span class="data">Printer 1 = ZDesigner ZT411-203dpi ZPL</span>. A printer not listed prints on the printer saved in the template.</span>
+        <textarea class="i data" id="s-bt-map" rows="4"></textarea></label>
+      <h3 style="margin-top:22px">Shifts</h3>
+      <label class="f" style="max-width:340px">Shift start times<span class="hint">For the shift summary, e.g. 06:00, 14:00, 22:00</span><input class="i data" id="s-shifts"></label>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveBarTender(this)">Save BarTender and shifts</button></div>
     </div>
     <div class="panel" data-sec="tablets" id="rewind-panel">
       <h2>Rewind page for tablets and phones</h2>
@@ -1332,7 +1374,7 @@ function showView(v) {
   if (v === 'archive') loadArchive();
   if (v === 'rolls') loadFloor();
   if (v === 'jobs') { loadFeed(); loadPriority(); loadAttention(); }
-  if (v === 'tools') loadTools();
+  if (v === 'tools') { loadTools(); if ($('#tl-shifts')) $('#tl-shifts').textContent = ((META.settings || {}).shift_starts || '').split(',').join(', '); }
   if (v === 'templates') loadTemplates();
   if (v === 'settings') loadSettings();
 }
@@ -1560,7 +1602,8 @@ function renderDrawer(keepRoll) {
     <dl class="jm-tiles">
       ${tile('Due', j.due_date ? dueHtml(j, new Date().toISOString().slice(0, 10)) : '<span class="sub">Not set</span>')}
       ${tile(j.job_type === 'special' ? 'Quantity' : 'To encode', fmt(total_qty || j.quantity), j.overage_pct ? `<small>incl. +${j.overage_pct}% overage</small>` : '')}
-      ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>` : '')}
+      ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>`
+        + floorLine(CURRENT) : '')}
       ${tile('Serial range', j.start_serial ? `<span class="data" style="font-size:14px">${fmt(j.start_serial)} –<br>${fmt(j.start_serial + total_qty - 1)}</span>` : '<span class="sub">None</span>')}
     </dl>
     <div class="d-actions">
@@ -1574,6 +1617,7 @@ function renderDrawer(keepRoll) {
                                            : `<button class="btn sm" onclick="priorityChange('add', ${j.id})">Add to priority</button>`}
         ${archived ? `<button class="btn sm" onclick="archiveJob(true)">Move back to jobs</button>`
                    : `<button class="btn sm" onclick="archiveJob(false)">Archive</button>`}
+        <button class="btn sm" onclick="newJobLike(${j.id})">New job like this…</button>
         <label for="jm-status">Set status</label>
         <select class="i" id="jm-status" onchange="setStatus(this.value)">${META.statuses.map(x => `<option ${x === j.status ? 'selected' : ''}>${x}</option>`).join('')}</select>
         <div class="sep"></div>
@@ -1687,7 +1731,8 @@ function groupFiles(files, id, folder) {
 }
 async function setStatus(s) {
   let who = '', hold = {};
-  if (s === 'Complete') { who = await askName('Who is completing this job?', `${CURRENT.job.customer}, ticket ${CURRENT.job.job_ticket || CURRENT.job.job_number}`); if (!who) { openJob(CURRENT.job.id); return; } }
+  if (s === 'Complete') { const w = completeWarning(CURRENT); if (w && !confirm(w)) { openJob(CURRENT.job.id); return; }
+    who = await askName('Who is completing this job?', `${CURRENT.job.customer}, ticket ${CURRENT.job.job_ticket || CURRENT.job.job_number}`); if (!who) { openJob(CURRENT.job.id); return; } }
   if (s === 'On Hold') { hold = await askHold(CURRENT.job); if (!hold) { openJob(CURRENT.job.id); return; } who = hold.operator; }
   try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body: {...hold, status: s, operator: who}}); toast(`Status set to ${s}`); openJob(CURRENT.job.id); refreshList(); }
   catch (e) { toast(e.message, true); openJob(CURRENT.job.id); }
@@ -1762,6 +1807,7 @@ document.addEventListener('keydown', e => {
 
 /* ───────────────────────── new job ───────────────────────── */
 const N = id => $('#n-' + id);
+let N_PICKED = null;      // the template of the job a "New job like this" was copied from
 let N_TEMPLATE = null, N_UPC_INFO = null, N_TMANUAL = false, N_MATCH = null, N_LAST_UPC = '', N_START_UPC = '';
 /* Optional start serial: only for a UPC that ran before this app, or to skip ahead. Forward-only. */
 function startValue() { return +(N('start').value.replace(/[^\d]/g, '')) || 0; }
@@ -1845,7 +1891,7 @@ function openNewJob() {
   ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start'].forEach(k => N(k).value = '');
   fillSheetOptions(); N('sheet').value = ''; N_SHEET_AUTO = ''; N_AUTO_SPECIAL = false;
   N('ov').value = META.settings.default_overage_pct && +META.settings.default_overage_pct ? META.settings.default_overage_pct : '';
-  N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; $('#n-start-row').hidden = true; $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
+  N_TEMPLATE = null; N_PICKED = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; $('#n-start-row').hidden = true; $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
   renderTemplateMatch();
   updateSummary(); openOv('ov-new'); setTimeout(() => N('ticket').focus(), 30);
@@ -1953,6 +1999,7 @@ function renderTemplateMatch() {
   else if (upcOk) set('warn', c.length ? 'No template has this UPC. Pick one or search.' : 'No template has this UPC.');
   else set('muted', c.length ? 'Pick one, or enter the UPC' : '');
   const strong = r => r.startsWith('UPC') || r.startsWith('Used before for this UPC');
+  if (N_PICKED && N_TEMPLATE === N_PICKED.id && !c.some(t => t.id === N_PICKED.id)) c.unshift({...N_PICKED, reasons: ['Used on the job this was copied from']});
   list.innerHTML = c.map(t => `<label class="${t.id === N_TEMPLATE ? 'sel' : ''}"><input type="radio" name="ntpl" value="${t.id}" ${t.id === N_TEMPLATE ? 'checked' : ''}>
       <span>${esc(t.file_name)}<span class="why">${t.reasons.map(r => `<i class="${strong(r) ? 'k' : ''}">${esc(r)}</i>`).join('')}</span><small>${esc(t.file_path)}</small></span></label>`).join('')
     + `<label class="${!N_TEMPLATE ? 'sel' : ''}"><input type="radio" name="ntpl" value="" ${!N_TEMPLATE ? 'checked' : ''}><span>No template</span></label>`;
@@ -2338,6 +2385,8 @@ async function loadSettings() {
   $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct; $('#s-autoarch').value = s.auto_archive_hours;
   $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
   $('#s-printers').value = s.printers || '';
+  $('#s-bt-on').checked = !!s.bt_enabled; $('#s-bt-trig').value = s.bt_trigger_dir || ''; $('#s-bt-ack').value = s.bt_ack_dir || '';
+  $('#s-bt-map').value = s.bt_printer_map || ''; $('#s-shifts').value = s.shift_starts || '';
   loadDataPanel(); loadBackups(); showHelperState(); loadRewind();
   setSettingsSection(pref('setsec', 'data'));
 }
@@ -2355,6 +2404,14 @@ async function saveShared(btn) {
 async function savePrinters() {
   try { await api('/api/settings', {method: 'POST', body: {printers: $('#s-printers').value}}); await loadMeta(); $('#s-printers').value = META.settings.printers; toast('Printers saved'); loadPrinters(); }
   catch (e) { toast(e.message, true); }
+}
+async function saveBarTender(btn) {
+  btn.disabled = true;
+  try {
+    await api('/api/settings', {method: 'POST', body: {bt_enabled: $('#s-bt-on').checked, bt_trigger_dir: $('#s-bt-trig').value, bt_ack_dir: $('#s-bt-ack').value,
+      bt_printer_map: $('#s-bt-map').value, shift_starts: $('#s-shifts').value}});
+    await loadMeta(); const s = META.settings; $('#s-bt-map').value = s.bt_printer_map; $('#s-shifts').value = s.shift_starts; toast('Saved');
+  } catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
 }
 function copyPlain(btn) { copyText(btn.dataset.path); toast('Path copied'); }
 async function loadDataPanel() {
@@ -2792,7 +2849,8 @@ function renderWork() {
     dbf.map(f => `<span>Database <span class="data">${esc(f.name)}</span> <button class="btn sm quiet" data-path="${esc(fullPath(j.folder_path, f.path))}" onclick="copyThis(this)">Copy path</button></span>`).join('') + `</div>` : '';
   const chips = [j.upc && `<span class="chip data">${esc(j.upc)}</span>`, j.label_size && `<span class="chip">${esc(j.label_size)}</span>`,
     j.inlay_type && `<span class="chip">${esc(j.inlay_type)}</span>`, total_qty && `<span class="chip">${fmt(total_qty)} labels, ${rolls.length} rolls of ${fmt(j.lpr)}</span>`,
-    j.due_date && `<span class="chip">Due ${esc(j.due_date)}</span>`].filter(Boolean).join('');
+    j.due_date && `<span class="chip">Due ${esc(j.due_date)}</span>`, paceChip(WORK.pace),
+    WORK.reprinted_total && `<span class="chip" title="Labels reprinted or spoiled on this job">${fmt(WORK.reprinted_total)} reprinted</span>`].filter(Boolean).join('');
   const pct = n => rolls.length ? n / rolls.length * 100 : 0;
 
   const listHtml = !rolls.length ? `<div class="ticketnote">This job has no rolls to track (no UPC or labels per roll).</div>` : `
@@ -2829,6 +2887,7 @@ function renderWork() {
       <div class="w-roll" id="rollpanel">${rollPanelHtml()}</div>
     </div>`;
   if (NOTE_TAB === 'hist') loadJobHistory(j.id);
+  schedulePrintPoll();
 }
 
 /* One card per roll: header with the actions, what the roll is (strip + tag range), the tag check, and
@@ -2874,8 +2933,16 @@ function rollPanelHtml() {
     running: `<button class="btn primary big" onclick="rollAction('complete')">Complete roll ${r.roll_number}</button>
               <button class="btn" onclick="showLeft()">Update where it stopped…</button>`,
     done:    `<button class="btn" onclick="rollAction('running', 'Reopen roll ${r.roll_number}? It goes back to in progress.')">Reopen</button>`,
-  }[st];
-  const checks = (VERIFY[`${j.id}:${r.roll_number}`] || []);
+  }[st] + (st !== 'pending' ? `<button class="btn quiet sm" onclick="showReprint()">Log reprint…</button>` : '');
+  const mine = (WORK.checks || []).filter(c => c.roll_number === r.roll_number);
+  const checks = VERIFY[`${j.id}:${r.roll_number}`] || mine.slice(0, 3).reverse().map(c => ({epc: c.epc || '', ok: c.result === 'pass', msg: `${c.message} (${t(c.ts)}${c.who ? ', ' + c.who : ''})`}));
+  const vmarks = r.serial_start ? `<div class="vmarks" aria-label="Tag checks">
+      <span class="vmark ${r.first_ok_at ? 'ok' : ''}">${r.first_ok_at ? '✓' : '○'} First tag</span><span class="vmark ${r.last_ok_at ? 'ok' : ''}">${r.last_ok_at ? '✓' : '○'} Last tag</span>
+      ${r.status === 'verified' ? `<span class="vmark ok">Verified ${t(r.verified_at)}${r.verified_by ? ' by ' + esc(r.verified_by) : ''}</span>` : ''}</div>` : '';
+  const reps = (WORK.reprints || []).filter(x => x.roll_number === r.roll_number);
+  const repList = reps.length ? `<div class="rplist"><b>Reprints on this roll</b>${reps.map(x => `<div class="rp"><b>${fmt(x.qty)}</b> ${esc(x.reason)}${x.note ? ': ' + esc(x.note) : ''}
+          ${x.serial_from ? `<span class="data">${fmt(x.serial_from)}–${fmt(x.serial_to)}</span>` : ''}<span>${t(x.ts)} ${esc(x.who || '')}</span>
+          <button class="btn sm quiet" onclick="deleteReprint(${x.id})" aria-label="Remove this reprint entry">✕</button></div>`).join('')}</div>` : '';
   const cp = (v, what) => `<button class="btn sm quiet" data-copy="${esc(String(v))}" onclick="copyRaw(this)" aria-label="Copy ${what}">Copy</button>`;
   return `<div class="rc">
     <div class="rc-head">
@@ -2883,12 +2950,15 @@ function rollPanelHtml() {
         <button class="btn sm quiet" onclick="openRoll(${prev ? prev.roll_number : r.roll_number})" ${prev ? '' : 'disabled'} aria-label="Previous roll">‹</button>
         <h3>Roll ${r.roll_number} <span>of ${rolls.length}</span></h3>
         <button class="btn sm quiet" onclick="openRoll(${next ? next.roll_number : r.roll_number})" ${next ? '' : 'disabled'} aria-label="Next roll">›</button>
-        <span class="rstate s-${st}">${RLABEL[st]}</span>
+        <span class="rstate s-${r.status === 'verified' ? 'verified' : st}">${r.status === 'verified' ? '✓ Verified' : RLABEL[st]}</span>
       </div>
       <div class="rc-acts">${actions}${st !== 'pending' && st !== 'done' ? `<button class="btn quiet sm" onclick="rollAction('pending', 'Reset roll ${r.roll_number} to not started?')">Reset</button>` : ''}</div>
       <div class="rc-sub">${timeline}${r.printer && st !== 'done' ? ' · on ' + esc(r.printer) : ''}</div>
     </div>
+    ${nextOfferHtml(r)}
     <div id="rc-printer">${printerBarHtml(r)}</div>
+    ${btBoxHtml(r)}
+    ${reprintBoxHtml(r)}
     <div class="pausebox" id="pausebox"><input class="i" id="pause-why" aria-label="Where did it stop" placeholder="Where did it stop? (optional, saved as a note)" maxlength="300"
         onkeydown="if(event.key==='Enter')rollAction('running')"><button class="btn" onclick="rollAction('running')">Save as in progress</button>
         <button class="btn quiet" onclick="$('#pausebox').classList.remove('on')">Cancel</button></div>
@@ -2906,13 +2976,14 @@ function rollPanelHtml() {
         ${r.serial_start ? `<table class="trange"><caption class="sr">Tag range for roll ${r.roll_number}</caption><tbody>
           <tr><th scope="row">Serials</th><td class="data">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</td><td>${cp(r.serial_start + '-' + r.serial_end, 'serial range')}</td></tr>
           <tr><th scope="row">First EPC</th><td class="data epc">${epc(r.epc_start)}</td><td>${cp(r.epc_start, 'first EPC')}</td></tr>
-          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr></tbody></table>
+          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr></tbody></table>${repList}
         ${!j.upc ? `<div class="ticketnote" style="margin:0"><span class="chip-special">Data sheet</span> Serials and EPCs for this roll come from the customer's data sheet. The tag check is for UPC jobs.</div>` : `<div class="verify">
-          <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll.</span>
+          ${vmarks}
+          <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll and kept; the first and last tag passing verifies the roll.</span>
             <input class="i data" id="verify-in" placeholder="24-character EPC" autocomplete="off" spellcheck="false"
               onkeydown="if(event.key==='Enter'){event.preventDefault();verifyEpc()}"></label>
           <div class="vlist" role="status" aria-live="polite">${checks.slice(-3).reverse().map(c => `<div class="v ${c.ok ? 'ok' : 'bad'}"><span class="data">${esc(c.epc)}</span>${c.ok ? '✓ ' : '✗ '}${esc(c.msg)}${c.go ? ` <button class="btn sm" onclick="openRoll(${c.go})">Go to roll ${c.go}</button>` : ''}</div>`).join('')}</div>
-        </div>`}` : `<div class="ticketnote" style="margin:0"><span class="chip-special">Special job</span> No UPC, so no serials are given out and there is no tag to check.</div>`}
+        </div>`}` : `<div class="ticketnote" style="margin:0"><span class="chip-special">Special job</span> No UPC, so no serials are given out and there is no tag to check.</div>${repList}`}
       </div>
       <div class="rc-notes" id="rollnotes">${notesBlockHtml(r)}</div>
     </div>
@@ -2935,42 +3006,176 @@ async function rollAction(status, confirmText) {
   const who = await askName(q, status === 'complete' ? `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}` : '');
   if (!who) return;
   try {
-    await api(`/api/jobs/${WORK.job.id}/rolls/${n}`, {method: 'POST', body: {status, note, operator: who}});
+    const d = await api(`/api/jobs/${WORK.job.id}/rolls/${n}`, {method: 'POST', body: {status, note, operator: who}});
     toast({running: `Roll ${n} saved as in progress`, complete: `Roll ${n} done`, pending: `Roll ${n} reset`}[status]);
-    // After completing, move on to the next roll that still needs work.
+    // After completing, move on to the next roll that still needs work (and offer it on the same printer).
     if (status === 'complete') {
       const after = WORK.rolls.find(x => x.roll_number > n && !isDone(x) && x.roll_number !== n) || WORK.rolls.find(x => !isDone(x) && x.roll_number !== n);
       if (after) WORK_ROLL = after.roll_number;
+      NEXT_OFFER = d.next ? {...d.next, job: WORK.job.id, done: n, who} : null;
+      if (NEXT_OFFER) WORK_ROLL = NEXT_OFFER.roll_number;
     }
     await openWork(WORK.job.id); loadFloor(true);
   } catch (e) { toast(e.message, true); }
 }
 
-/* EPC check: decode the tag and compare with this roll's product prefix and serial range. */
-function epcParts(hex) {
-  const bits = BigInt('0x' + hex).toString(2).padStart(96, '0');
-  return {prefix: bits.slice(0, 58), serial: BigInt('0b' + bits.slice(58))};
-}
-function verifyEpc() {
-  const inp = $('#verify-in'); const raw = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw) return;
-  const {job: j, rolls} = WORK, r = rolls.find(x => x.roll_number === WORK_ROLL);
-  let ok = false, msg, go = null;
-  if (!/^[0-9A-F]{24}$/.test(raw)) msg = 'Not an EPC: needs 24 characters, 0–9 and A–F.';
-  else {
-    const got = epcParts(raw), exp = epcParts(r.epc_start), s = got.serial;
-    const fmtS = x => Number(x).toLocaleString();
-    if (got.prefix !== exp.prefix) msg = `Wrong product: this tag is not encoded for UPC ${j.upc}.`;
-    else if (s >= BigInt(r.serial_start) && s <= BigInt(r.serial_end)) {
-      ok = true; msg = `Belongs to roll ${r.roll_number}: serial ${fmtS(s)}, label ${fmtS(s - BigInt(r.serial_start) + 1n)} of ${fmt(r.quantity)}.`;
-    } else {
-      const other = rolls.find(x => s >= BigInt(x.serial_start) && s <= BigInt(x.serial_end));
-      go = other ? other.roll_number : null;
-      msg = other ? `Serial ${fmtS(s)} belongs to roll ${other.roll_number}, not roll ${r.roll_number}.`
-                  : `Serial ${fmtS(s)} is not part of this job.`;
-    }
+async function verifyEpc() {
+  const inp = $('#verify-in'); const raw = inp.value.trim(); if (!raw) return;
+  const {job: j} = WORK, n = WORK_ROLL, key = `${j.id}:${n}`;
+  inp.value = '';
+  let d;
+  try { d = await api('/api/rewind/lookup', {method: 'POST', body: {raw, job_id: j.id, roll_number: n, source: 'desktop', operator: operator()}}); }
+  catch (e) { toast(e.message, true); return; }
+  const c = d.check, rr = d.roll || {};
+  let ok = !!(c && c.result === 'pass'), msg = d.message || '', go = null;
+  if (d.result === 'found') {
+    if (rr.roll_number !== n) { msg = `Serial ${fmt(rr.serial)} belongs to roll ${rr.roll_number}, not roll ${n}.`; go = rr.roll_number; }
+    else msg = `Belongs to roll ${n}: serial ${fmt(rr.serial)}, label ${fmt(rr.label_no)} of ${fmt(rr.quantity)}` + (rr.position !== 'middle' ? ` (${String(rr.position).toUpperCase()} tag).` : '.');
   }
-  const key = `${j.id}:${r.roll_number}`; (VERIFY[key] = VERIFY[key] || []).push({epc: raw, ok, msg, go});
-  refreshCard(); $('#verify-in').focus();
+  if (d.note) msg += ' ' + d.note;
+  if (!c) msg += ' (Not kept: this is a scanner setting, not the roll.)';
+  (VERIFY[key] = VERIFY[key] || []).push({epc: d.epc || raw, ok, msg, go});
+  if (c && c.verified) toast(`Roll ${c.roll_number} verified: first and last tags checked`);
+  await openWork(j.id, true);
+  if ($('#verify-in')) $('#verify-in').focus();
+}
+
+/* BarTender: send a roll as a print request (the Integration on the BarTender PC prints it and answers). */
+let NEXT_OFFER = null, PRINT_POLL = null;
+const BT_OPEN = ['writing', 'sent', 'picked_up'];
+const BT_STATE = {writing: ['wait', 'Writing the request…'], sent: ['wait', 'Sent, waiting for BarTender to pick it up'], picked_up: ['wait', 'BarTender has it'],
+  printed: ['ok', 'Printed by BarTender'], taken: ['ok', 'Taken by BarTender'], failed: ['bad', "BarTender didn't print it"], cancelled: ['', 'Cancelled']};
+function btBoxHtml(r) {
+  const bt = WORK.bt || {}, j = WORK.job, mine = (WORK.prints || []).filter(p => p.roll_number === r.roll_number);
+  if ((!bt.enabled || RSTATE(r) === 'done') && !mine.length) return '';
+  const t = s => s ? esc(s.slice(5, 16).replace('-', '/')) : '';
+  const last = mine[0], group = last ? mine.filter(p => p.created_at === last.created_at).sort((a, b) => a.part - b.part) : [];
+  const open = group.some(p => BT_OPEN.includes(p.state)), printed = mine.some(p => ['printed', 'taken'].includes(p.state));
+  const status = group.map(p => { const [cls, txt] = BT_STATE[p.state] || ['', p.state];
+    return `<span class="bst ${cls}">${group.length > 1 ? `Part ${p.part} (records ${fmt(p.rec_from)}–${fmt(p.rec_to)}): ` : ''}${txt}${p.message ? ' — ' + esc(p.message) : ''}</span>`
+      + (['writing', 'sent'].includes(p.state) ? `<button class="btn sm quiet" onclick="cancelPrint(${p.id})">Cancel</button>` : ''); }).join('');
+  const done = RSTATE(r) === 'done';
+  const why = !bt.enabled ? 'Sending to BarTender is off (Settings > BarTender)' : !j.template_path ? 'This job has no template in its Print folder'
+    : j.status === 'On Hold' ? 'The job is on hold' : done ? 'This roll is done' : open ? 'Waiting for BarTender' : '';
+  const btn = done ? '' : `<button class="btn ${printed ? '' : 'primary'} sm" onclick="printRoll()" ${why ? 'disabled' : ''} title="${esc(why)}">${printed ? 'Send again…' : 'Send to BarTender'}</button>`;
+  const idle = why || (r.printer ? `Prints roll ${r.roll_number} on ${r.printer}` : "No printer picked: the template's own printer is used");
+  return `<div class="btbox"><b>BarTender</b>${btn}
+    ${last ? `<span>Sent ${t(last.created_at)}${last.who ? ' by ' + esc(last.who) : ''}${last.printer ? ' to ' + esc(last.printer) : ''}:</span>${status}` : `<span class="bst">${esc(idle)}</span>`}</div>`;
+}
+async function printRoll() {
+  const r = currentRoll(), j = WORK.job; if (!r) return;
+  const who = await askName(`Who is sending roll ${r.roll_number} to BarTender?`, r.printer ? `On ${r.printer}` : "No printer picked: BarTender uses the template's printer"); if (!who) return;
+  await sendPrint(j.id, r.roll_number, who, false);
+}
+async function sendPrint(jid, n, who, again, printer) {
+  try {
+    const d = await api(`/api/jobs/${jid}/rolls/${n}/print`, {method: 'POST', body: {operator: who, again, printer}});
+    toast(`Roll ${n} sent to BarTender`); (d.warnings || []).forEach(w => toast(w, true));
+  } catch (e) {
+    if (e.data && e.data.needs_again) { if (confirm(e.message)) return sendPrint(jid, n, who, true, printer); }
+    else toast(e.message, true);
+  }
+  if (WORK && WORK.job.id === jid) await openWork(jid, true);
+  loadFloor(true);
+}
+async function cancelPrint(id) {
+  if (!confirm('Take this request back before BarTender picks it up?')) return;
+  try { await api(`/api/print-requests/${id}/cancel`, {method: 'POST'}); toast('Cancelled'); } catch (e) { toast(e.message, true); }
+  openWork(WORK.job.id, true);
+}
+function schedulePrintPoll() {
+  clearTimeout(PRINT_POLL);
+  if (!WORK || !(WORK.prints || []).some(p => BT_OPEN.includes(p.state))) return;
+  const id = WORK.job.id;
+  // Don't redraw the card under someone filling in a reprint, a where-it-stopped note or another field on it.
+  const typing = () => $('#rpbox.on') || $('#pausebox.on') || (document.activeElement && document.activeElement.closest
+    && document.activeElement.closest('#rollpanel') && document.activeElement.id !== 'verify-in' && document.activeElement.matches('input, select, textarea'));
+  PRINT_POLL = setTimeout(() => { if (WORK && WORK.job.id === id && !document.hidden && !typing()) openWork(id, true); else schedulePrintPoll(); }, 4000);
+}
+function nextOfferHtml(r) {
+  const o = NEXT_OFFER;
+  if (!o || o.job !== WORK.job.id || o.roll_number !== r.roll_number || RSTATE(r) !== 'pending') return '';
+  return `<div class="nextoffer" role="status"><span>Roll ${o.done} is done and <b>${esc(o.printer)}</b> is free. Start roll ${o.roll_number} on it?</span>
+    <button class="btn primary sm" onclick="takeNext(false)">Start roll ${o.roll_number}</button>
+    ${o.can_print && WORK.job.template_path ? `<button class="btn sm" onclick="takeNext(true)">Start and send to BarTender</button>` : ''}
+    <button class="btn quiet sm" onclick="NEXT_OFFER = null; refreshCard()">Not now</button></div>`;
+}
+async function takeNext(print) {
+  const o = NEXT_OFFER; if (!o) return; NEXT_OFFER = null;
+  try {
+    await api(`/api/jobs/${o.job}/rolls/${o.roll_number}/printer`, {method: 'POST', body: {printer: o.printer, operator: o.who}});
+    toast(`Roll ${o.roll_number} started on ${o.printer}`);
+    if (print) return sendPrint(o.job, o.roll_number, o.who, false, o.printer);
+  } catch (e) { toast(e.message, true); }
+  await openWork(o.job, true); loadFloor(true);
+}
+
+/* Reprints and spoiled labels on a roll. */
+function reprintBoxHtml(r) {
+  const reasons = WORK.reprint_reasons || [];
+  return `<div class="rpbox" id="rpbox">
+    <label class="f">Labels<input class="i data" id="rp-qty" type="number" min="1" max="${r.quantity}" style="width:90px"></label>
+    ${r.serial_start ? `<label class="f">or serials from<input class="i data" id="rp-from" inputmode="numeric" style="width:130px" placeholder="${r.serial_start}"></label>
+      <label class="f">to<input class="i data" id="rp-to" inputmode="numeric" style="width:130px"></label>` : ''}
+    <label class="f">Why<select class="i" id="rp-reason"><option value="">Pick…</option>${reasons.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
+    <label class="f" style="flex:1;min-width:160px">Note<input class="i" id="rp-note" maxlength="300" placeholder="optional, needed for Other"></label>
+    <button class="btn primary" onclick="saveReprint()">Log reprint</button><button class="btn quiet" onclick="$('#rpbox').classList.remove('on')">Cancel</button></div>`;
+}
+function showReprint() { $('#rpbox').classList.add('on'); $('#rp-qty').focus(); }
+async function saveReprint() {
+  const n = WORK_ROLL, j = WORK.job, v = id => ($('#' + id) ? $('#' + id).value.trim() : '');
+  const body = {roll_number: n, qty: v('rp-qty'), serial_from: v('rp-from'), serial_to: v('rp-to'), reason: v('rp-reason'), note: v('rp-note')};
+  if (!body.reason) return toast('Pick why the labels were reprinted', true);
+  const who = await askName(`Who reprinted labels on roll ${n}?`); if (!who) return;
+  try { await api(`/api/jobs/${j.id}/reprints`, {method: 'POST', body: {...body, operator: who}}); toast('Reprint logged'); await openWork(j.id, true); }
+  catch (e) { toast(e.message, true); }
+}
+async function deleteReprint(id) {
+  if (!confirm('Remove this reprint entry? (The activity log keeps a note that it was removed.)')) return;
+  try { await api(`/api/reprints/${id}`, {method: 'DELETE'}); toast('Removed'); } catch (e) { toast(e.message, true); }
+  if (WORK) openWork(WORK.job.id, true);
+}
+
+/* Pace: from rolls with real start and finish times (pace in floor_ops.py). */
+function finishText(ts) {
+  if (!ts) return '';
+  const d = new Date(ts.replace(' ', 'T')), hm = ts.slice(11, 16);
+  return d.toDateString() === new Date().toDateString() ? `today ${hm}` : `${d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'})} ${hm}`;
+}
+function paceChip(p) {
+  if (!p) return '';
+  const tip = `From ${p.timed_rolls} rolls with a start and finish time` + (p.finish_at ? `; ${p.rolls_left} rolls left over ${p.printers} printer${p.printers > 1 ? 's' : ''}` : '');
+  return `<span class="chip pace" title="${esc(tip)}">~${p.minutes_per_roll} min a roll · ${fmt(p.labels_per_hour)} labels/h${p.finish_at ? ' · done about ' + finishText(p.finish_at) : ''}</span>`;
+}
+function floorLine(d) {
+  const p = d.pace, rolls = d.rolls || [], v = rolls.filter(r => r.status === 'verified').length;
+  const bits = [p && `~${p.minutes_per_roll} min a roll${p.finish_at ? ', done about ' + finishText(p.finish_at) : ''}`,
+    v && `${v} verified`, d.reprinted_total && `${fmt(d.reprinted_total)} reprinted`].filter(Boolean);
+  return bits.length ? `<small>${esc(bits.join(' · '))}</small>` : '';
+}
+function completeWarning(d) {
+  const rolls = d.rolls || [], open = rolls.filter(r => !isDone(r)).length;
+  const unv = (d.checks || []).length ? rolls.filter(r => r.status === 'complete').length : 0;
+  const parts = [open && `${open} of ${rolls.length} rolls aren't done`, unv && `${unv} done roll${unv > 1 ? 's were' : ' was'} not verified (first and last tag scanned)`].filter(Boolean);
+  return parts.length ? `${parts.join(', and ')}. Mark the job complete anyway?` : '';
+}
+
+/* New job like this: same product and template, new order details. */
+async function newJobLike(id) {
+  let d; try { d = await api(`/api/jobs/${id}/repeat`); } catch (e) { return toast(e.message, true); }
+  closeDrawer(); openNewJob();
+  const f = d.fields, set = (k, v) => { if (v !== null && v !== undefined) N(k).value = v; };
+  setJobType(f.job_type === 'special' ? 'special' : 'standard');
+  set('customer', f.customer); set('title', f.title); set('size', f.label_size); set('inlay', f.inlay_type); set('part', f.part_number);
+  set('upc', f.upc); set('lpr', f.lpr); set('qtydb', f.qty_db); set('ov', f.overage_pct);
+  if (f.data_sheet) { N('sheet').value = f.data_sheet; sheetChanged(); }
+  N_LAST_UPC = (f.upc || '').trim();
+  if (d.template) { N_TEMPLATE = d.template.id; N_TMANUAL = true; N_PICKED = d.template; }
+  if (f.upc) checkNewUpc();
+  runMatch(); updateSummary();
+  toast(`Filled in from ${d.from}. Enter the ticket, PO, quantity and due date for this order.`);
+  if (d.template_missing) toast(`Its template (${d.template_missing}) isn't in Master Templates any more: pick one.`, true);
+  setTimeout(() => N('ticket').focus(), 60);
 }
 
 function rangesText(nums) {
@@ -2980,7 +3185,8 @@ function rangesText(nums) {
 }
 async function workStatus(s) {
   let who = '', hold = {};
-  if (s === 'Complete') { who = await askName('Who is completing this job?', `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}`); if (!who) return; }
+  if (s === 'Complete') { const w = completeWarning(WORK); if (w && !confirm(w)) return;
+    who = await askName('Who is completing this job?', `${WORK.job.customer}, ticket ${WORK.job.job_ticket || WORK.job.job_number}`); if (!who) return; }
   if (s === 'On Hold') { hold = await askHold(WORK.job); if (!hold) return; who = hold.operator; }
   try { await api('/api/jobs/' + WORK.job.id, {method: 'PATCH', body: {...hold, status: s, operator: who}}); toast(`Status set to ${s}`);
     await openWork(WORK.job.id); loadFloor(true); loadAttention(); }
