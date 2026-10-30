@@ -87,6 +87,15 @@ reset to `desktop` afterwards):
 Also glance at the Jobs drawer (Rolls section) and `/rewind` if the change touched shared roll
 logic or helpers.
 
+## Templates page (mock BarTender library)
+
+`mock_demo/seed_templates.py` fills `mock_demo/site/Master Templates/` with about 40 fake `.btw` files (random
+bytes, not real BarTender documents) in customer folders, with preview images and a few jobs that already copied
+one. `run_mock.py` runs it whenever that folder is missing; `--reset` rebuilds it. Check: folder tree and counts,
+search, sort, List / Previews toggle, select a row (arrow keys too), then Rename, Move to folder (new folder name),
+Duplicate, Replace file (old one appears under Previous versions), Remove (file lands in `_Removed`), Add template,
+New folder. Bad names (`..`, slashes) must be refused. At tablet width the folder tree becomes a dropdown.
+
 ## Archive page (long-term list)
 
 The Archive is paged, sorted and filtered by the server (`/api/archive`). To judge it with realistic volume,
