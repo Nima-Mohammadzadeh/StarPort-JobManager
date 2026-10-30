@@ -8,6 +8,7 @@ generators.py — everything that turns job numbers into encoding data
   • Quality Control sheet (job folder root)
 """
 import os
+import re
 import csv
 import math
 from html import escape
@@ -113,27 +114,101 @@ def db_file_split(total_qty: int, qty_db: int | None) -> list:
 # ── Encoding database files ───────────────────────────────────────────────────
 def generate_db_files(job_dir: str, upc: str, start_serial: int,
                       total_qty: int, qty_db: int | None) -> dict:
+    """Write the encoding database file(s) into <job_dir>/Data, safely:
+      - an existing file is never replaced (FileExistsError, nothing written);
+      - each file is written under a hidden temporary name, re-opened and checked row by row
+        (serial, UPC, EPC), and only renamed to its real name once every file has passed;
+      - if anything fails, the temporary files are removed and nothing appears in Data.
+    So a dropped share or a crash can't leave a half-written database an encoder might load."""
     data_dir = os.path.join(job_dir, "Data")
     os.makedirs(data_dir, exist_ok=True)
     split   = db_file_split(total_qty, qty_db)
-    serial  = int(start_serial)
-    files   = []
-    for idx, rows in enumerate(split, start=1):
-        records = []
-        for _ in range(rows):
-            records.append((serial, upc, generate_epc(upc, serial)))
-            serial += 1
-        suffix = f"_DB{idx}" if len(split) > 1 else ""
-        if XLSX_AVAILABLE:
-            path = os.path.join(data_dir, f"{upc}{suffix}.xlsx")
-            _write_xlsx(path, records, f"DB{idx}" if len(split) > 1 else "Database")
-        else:
-            path = os.path.join(data_dir, f"{upc}{suffix}.csv")
-            with open(path, "w", newline="", encoding="utf-8") as fh:
-                w = csv.writer(fh); w.writerow(["Serial #", "UPC", "EPC"]); w.writerows(records)
-        files.append(path)
-    return {"files": files, "file_count": len(files), "split": split,
+    ext     = ".xlsx" if XLSX_AVAILABLE else ".csv"
+    names   = [f"{upc}{f'_DB{i}' if len(split) > 1 else ''}{ext}" for i in range(1, len(split) + 1)]
+    taken   = [n for n in names if os.path.exists(os.path.join(data_dir, n))]
+    if taken:
+        raise FileExistsError(f"{', '.join(taken)} already in the Data folder; it was left as it is and nothing was written")
+    serial, parts = int(start_serial), []
+    try:
+        for idx, (rows, name) in enumerate(zip(split, names), start=1):
+            part = os.path.join(data_dir, f".writing-{name}")      # hidden; keeps the extension
+            parts.append((part, os.path.join(data_dir, name), serial, rows))
+            records = [(s, upc, generate_epc(upc, s)) for s in range(serial, serial + rows)]
+            if XLSX_AVAILABLE:
+                _write_xlsx(part, records, f"DB{idx}" if len(split) > 1 else "Database")
+            else:
+                with open(part, "w", newline="", encoding="utf-8") as fh:
+                    w = csv.writer(fh); w.writerow(["Serial #", "UPC", "EPC"]); w.writerows(records)
+            verify_db_file(part, upc, serial, rows, name)
+            serial += rows
+        for part, final, *_ in parts:          # every file passed: give them their real names
+            if os.path.exists(final):
+                raise FileExistsError(f"{os.path.basename(final)} appeared in the Data folder while writing")
+            os.replace(part, final)
+    except Exception:
+        for part, *_ in parts:
+            try: os.remove(part)
+            except OSError: pass
+        raise
+    return {"files": [p[1] for p in parts], "file_count": len(parts), "split": split,
             "start_serial": int(start_serial), "end_serial": serial - 1}
+
+
+_CELL = re.compile(r'<c r="([A-Z]+)(\d+)"[^>]*?(?:/>|>(?:<v>([^<]*)</v>|<is><t[^>]*>([^<]*)</t></is>)?</c>)')
+
+
+def _xlsx_rows_fast(path):
+    """Rows 2.. of the first sheet as (A, B, C) strings, read straight from the file's XML: about ten
+    times faster than openpyxl for a big database. None if the sheet isn't laid out as expected."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = z.namelist()
+            if "xl/worksheets/sheet1.xml" not in names or "xl/sharedStrings.xml" in names:
+                return None
+            xml = z.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    except (OSError, zipfile.BadZipFile, UnicodeDecodeError):
+        return None
+    rows = {}
+    for col, r, v, t in _CELL.findall(xml):
+        if col in ("A", "B", "C"):
+            rows.setdefault(int(r), {})[col] = v if v else t
+    out = []
+    for r in range(2, max(rows, default=1) + 1):
+        cells = rows.get(r)
+        if cells is None:
+            return None                               # a gap: let openpyxl decide what is there
+        out.append((cells.get("A"), cells.get("B"), cells.get("C")))
+    return out
+
+
+def verify_db_file(path: str, upc: str, start_serial: int, expected_rows: int, name: str = "") -> None:
+    """Re-open a written encoding database and check every row: serial counts up from start_serial,
+    UPC is the job's, EPC is the one generate_epc gives. Raises ValueError on any problem."""
+    name = name or os.path.basename(path)
+    if path.endswith(".xlsx"):
+        rows = _xlsx_rows_fast(path)
+        if rows is None:                              # not laid out the way _write_xlsx writes: read it the slow way
+            from openpyxl import load_workbook
+            wb = load_workbook(path, read_only=True)
+            try:
+                rows = [r[:3] for r in wb.active.iter_rows(min_row=2, values_only=True)]
+            finally:
+                wb.close()
+    else:
+        with open(path, newline="", encoding="utf-8") as fh:
+            rows = [tuple(r[:3]) for r in list(csv.reader(fh))[1:]]
+    if len(rows) != expected_rows:
+        raise ValueError(f"{name}: expected {expected_rows:,} rows, found {len(rows):,}")
+    for i, (serial, u, epc) in enumerate(rows):
+        want = int(start_serial) + i
+        try:
+            ok = int(serial) == want and str(u) == str(upc) and epc == generate_epc(upc, want)
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise ValueError(f"{name}: row {i + 2} should be {want} / {upc} / {generate_epc(upc, want)}, "
+                             f"found {serial!r} / {u!r} / {epc!r}")
 
 
 def _write_xlsx(path, records, sheet_title):

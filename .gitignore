@@ -17,3 +17,4 @@ venv/
 mock_demo/site/
 .claude/settings.local.json
 logs/
+check_reports/

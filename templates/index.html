@@ -940,6 +940,16 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
     <div class="bar"><h1>Tools</h1><span style="color:var(--muted);font-size:13px">Standalone helpers. Nothing here creates a job.</span></div>
     <div class="tools">
       <div class="panel tool">
+        <h2>Check this PC</h2>
+        <p class="d">Checks that Job Manager can do its job on the host PC: the database, the job folders, the serial registry, backups,
+          Master Templates, proofing, BarTender, and the serial and database check. Nothing is changed. The report is saved in
+          <span class="data">check_reports</span> next to the app. For the full check with the hands-on steps, run
+          <span class="data">JM_TOOLS.bat</span> on the host PC.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="hostCheck(this)">Check this PC</button>
+          <button class="btn" onclick="dbUpkeep(this)">Database upkeep</button></div>
+        <div id="hc-out" aria-live="polite"></div>
+      </div>
+      <div class="panel tool">
         <h2>Roll tracker and checklist</h2>
         <p class="d">Print a roll tracker (QC sheet) or an encoding checklist from details you type in. For a job that already exists, use its own Print roll sheet button instead.</p>
         <div class="grid3">
@@ -1009,6 +1019,7 @@ button.ai{cursor:pointer}button.ai:hover{background:var(--sunk)}
       <div id="dp-bk" class="dp-bk"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" onclick="backupNow(this)">Back up now</button><button class="btn" onclick="verifyBackup(this)">Check the latest backup</button></div>
       <div class="fieldmsg" id="dp-verify" style="margin-top:8px"></div>
+      <div id="dp-int" class="dp-bk" aria-live="polite"></div>
     </div>
     <div class="panel" data-sec="pc">
       <h2>This computer</h2>
@@ -2348,6 +2359,7 @@ async function savePrinters() {
 function copyPlain(btn) { copyText(btn.dataset.path); toast('Path copied'); }
 async function loadDataPanel() {
   let d;
+  loadIntegrity();
   try { d = await api('/api/data/status'); } catch (e) { $('#dp-warn').innerHTML = `<div class="dwarn bad">${esc(e.message)}</div>`; return; }
   $('#dp-warn').innerHTML = d.warnings.length ? d.warnings.map(w => `<div class="dwarn ${w.level}">${esc(w.text)}</div>`).join('')
     : `<div class="dwarn ok">No problems found. ${esc(d.health.text)}.</div>`;
@@ -2360,6 +2372,47 @@ async function loadDataPanel() {
     Automatic: ${b.auto ? `every ${b.interval_hours} h, keeping the newest ${b.keep}` : '<b style="color:var(--amber)">off</b>'}. ${b.count} on hand${b.newest ? `, newest ${esc(b.newest.file)}, made ${esc(b.age_text)} (${esc(b.newest.size)})` : ''}.</div>
     <div>${v ? (v.ok ? `<span style="color:var(--green);font-weight:650">✓ Last check passed</span>: ${esc(v.file)}, serial history complete for ${fmt(v.upcs_checked)} UPCs; ${fmt(v.jobs)} jobs, ${fmt(v.serial_ranges)} serial ranges, ${fmt(v.registry_files)} registry files${v.has_journal ? ', journal' : ''}${v.has_config ? ', config.ini' : ''}.`
         : `<span style="color:var(--red);font-weight:650">✗ Last check failed</span>: ${esc(v.error || v.integrity || 'the zip is damaged')}.`) : 'Not checked since the app started. Every backup is checked as it is made; use the button below to check the newest one again.'}</div>`;
+}
+/* Serial and database check: read-only, runs every few hours by itself; problems also go to Needs attention. */
+function integrityHtml(d) {
+  const r = d.result;
+  const head = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Serial and database check</b>
+    <button class="btn sm" onclick="runIntegrity(this)">Check now</button></div>`;
+  if (!r) return head + `<div>${d.error ? `<span style="color:var(--red)">The last check failed: ${esc(d.error)}</span>` : `Not run yet. It runs by itself a couple of minutes after the app starts, then every ${d.every_hours} h.`}</div>`;
+  const summary = `Checked ${esc(r.checked_at)}: ${fmt(r.jobs_checked)} jobs' rolls and serials, ${fmt(r.ranges_checked)} recorded ranges, and the database.`;
+  if (r.ok) return head + `<div><span style="color:var(--green);font-weight:650">✓ Everything adds up.</span> ${summary}</div>`;
+  const list = r.problems.slice(0, 12).map(p => `<li style="color:${p.level === 'bad' ? 'var(--red)' : '#6B4207'}">${esc(p.detail)}</li>`).join('');
+  return head + `<div>${summary}</div><div style="font-weight:650;color:${r.counts.bad ? 'var(--red)' : 'var(--amber)'}">
+    ${r.counts.bad ? `${r.counts.bad} problem${r.counts.bad > 1 ? 's' : ''}` : ''}${r.counts.bad && r.counts.warn ? ', ' : ''}${r.counts.warn ? `${r.counts.warn} to look at` : ''}</div>
+    <ul style="margin:4px 0 0 18px;padding:0">${list}</ul>${r.problems.length > 12 ? `<div class="sub2">and ${r.problems.length - 12} more (all are in Needs attention).</div>` : ''}`;
+}
+async function loadIntegrity() {
+  try { $('#dp-int').innerHTML = integrityHtml(await api('/api/integrity')); } catch (_) {}
+}
+async function runIntegrity(btn) {
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try { const d = await api('/api/integrity', {method: 'POST'}); $('#dp-int').innerHTML = integrityHtml({...d, every_hours: 6}); loadAttention(); }
+  catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Check now'; }
+}
+/* Tools > Check this PC (host_check.py run inside the app) and database upkeep. */
+async function hostCheck(btn) {
+  const out = $('#hc-out'); btn.disabled = true; btn.textContent = 'Checking… (up to 20 s)'; out.innerHTML = '';
+  try {
+    const r = await api('/api/tools/host-check');
+    const cls = {PASS: 'ok', WARN: 'warn', FAIL: 'bad', SKIP: 'warn'};
+    out.innerHTML = `<div class="dwarn ${r.status === 'PASS' ? 'ok' : r.status === 'FAIL' ? 'bad' : 'warn'}" style="margin-top:12px">
+        <b>${esc(r.status)}</b>: ${r.critical_failures} critical failure${r.critical_failures === 1 ? '' : 's'}, ${r.warnings_or_skips} warning${r.warnings_or_skips === 1 ? '' : 's'} or skip${r.warnings_or_skips === 1 ? '' : 's'}.
+        ${r.saved_to ? `Saved to <span class="data">${esc(r.saved_to)}</span>` : ''}</div>
+      <table class="dtab" style="margin-top:8px"><tbody>${r.results.map(x => `<tr><td><span class="st ${cls[x.status]}">${esc(x.status)}</span></td>
+        <td><b>${esc(x.name)}</b>${x.critical ? '' : ' <span class="sub2" style="display:inline">(advisory)</span>'}<div class="sub2">${esc(x.detail)}</div></td></tr>`).join('')}</tbody></table>`;
+  } catch (e) { out.innerHTML = `<div class="dwarn bad" style="margin-top:12px">${esc(e.message)}</div>`; }
+  finally { btn.disabled = false; btn.textContent = 'Check this PC'; }
+}
+async function dbUpkeep(btn) {
+  btn.disabled = true;
+  try { const r = await api('/api/tools/db-upkeep', {method: 'POST'}); const c = r.checkpoint;
+    toast(`Database optimized; ${c.checkpointed} of ${c.frames} log pages written back${c.busy ? ' (others were reading; that is fine)' : ''}.`); }
+  catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
 }
 async function verifyBackup(btn) {
   const m = $('#dp-verify'); m.className = 'fieldmsg'; m.textContent = ''; btn.disabled = true;

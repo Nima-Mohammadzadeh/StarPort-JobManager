@@ -43,6 +43,8 @@ from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import serial_store as SS
+import integrity
+import host_check as H
 import sheet_serials as SHEETS_SEQ
 import backup
 from generators import decode_epc
@@ -2836,6 +2838,7 @@ def make_backup(label=""):
                 for old in _list_backups(bdir)[:-max(s["backup_keep"], 5)]:
                     try: os.remove(os.path.join(bdir, old))
                     except OSError: pass
+                db_upkeep()                         # good backup in hand: tidy the live database
                 return {"success": True, "file": name, "verify": check,
                         "size_kb": round(os.path.getsize(os.path.join(bdir, name)) / 1024, 1)}
             failed = "failed_" + name
@@ -2854,6 +2857,28 @@ def make_backup(label=""):
             if part and os.path.exists(part):
                 try: os.remove(part)
                 except OSError: pass
+
+
+_upkeep_state = {"last": None}
+
+
+def db_upkeep() -> dict:
+    """SQLite upkeep, run after every good backup and from Tools: PRAGMA optimize (refreshes the
+    query planner's statistics) and a PASSIVE write-ahead-log checkpoint (copies finished changes
+    into the main file without waiting on anyone; it never blocks the app). Never raises."""
+    try:
+        conn = get_db()
+        try:
+            conn.execute("PRAGMA optimize")
+            busy, frames, done = conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+        finally:
+            conn.close()
+        r = {"at": now_str(), "optimized": True, "checkpoint": {"busy": busy, "frames": frames, "checkpointed": done}}
+    except Exception as e:
+        r = {"at": now_str(), "error": str(e)}
+        log.warning("database upkeep failed: %s", e)
+    _upkeep_state["last"] = r
+    return r
 
 
 def _dir_ok(d):
@@ -3248,6 +3273,8 @@ ATTN_FOLDER_EVERY = 300         # seconds between background checks of the job f
 # kind: (level, label, sort order). bad = something is wrong; warn = needs someone to look.
 ATTN_KINDS = {
     "serial_conflict":     ("bad",  "Serial conflict", 0),
+    "serial_check":        ("bad",  "Serial check", 0),        # from the integrity check (level per problem)
+    "data_check":          ("warn", "Database check", 9),
     "folder_missing":      ("bad",  "Job folder missing", 1),
     "overdue":             ("bad",  "Overdue", 2),
     "complete_open_rolls": ("bad",  "Complete, rolls not done", 3),
@@ -3384,6 +3411,15 @@ def attention(conn, today=None) -> dict:
                                     f"and still in progress{more}")
 
     by_number = {j["job_number"]: jid for jid, j in jobs.items()}
+    last = _integrity["result"]          # the last serial and database check (see run_integrity)
+    for p in (last or {}).get("problems", []):
+        kind = "data_check" if p["kind"] == "database" else "serial_check"
+        item = {"kind": kind, "level": p["level"], "label": "Serial check" if kind == "serial_check" else "Database check",
+                "detail": p["detail"]}
+        if p.get("job_id") in issues:
+            issues[p["job_id"]].append(item)
+        else:
+            glob.append(item)
     for c in conn.execute('SELECT job_number, upc, start, "end" FROM serial_allocations WHERE registry_state=-1'):
         detail = f"UPC {c['upc']}, serials {c['start']:,}–{c['end']:,} overlap another range. Check before encoding."
         jid = by_number.get(c["job_number"])
@@ -3410,6 +3446,85 @@ def attention(conn, today=None) -> dict:
             "bad": sum(1 for it in items if it["level"] == "bad") + sum(1 for g in glob if g["level"] == "bad"),
             "total": len(items) + len(glob), "folders_checked_at": folders["at"],
             "stale_roll_hours": ATTN_STALE_ROLL_HOURS, "now": now_str()}
+
+
+# ── Serial and database check (integrity.py) ──────────────────────────────────
+# Read-only. Runs a couple of minutes after startup and every INTEGRITY_EVERY hours, and on demand
+# (Settings > Data, "Check now"). Problems go into Needs attention. Database only: no share is touched.
+INTEGRITY_EVERY = 6
+_integrity = {"result": None, "error": None}
+_integrity_lock = threading.Lock()
+
+
+def run_integrity() -> dict:
+    with _integrity_lock:
+        conn = get_db()
+        try:
+            r = integrity.run(conn)
+            _integrity.update(result=r, error=None)
+        except Exception as e:
+            _integrity.update(error=str(e))
+            log.exception("integrity check failed")
+            raise
+        finally:
+            conn.close()
+    bad = r["counts"].get("bad", 0)
+    if bad:
+        log.warning("integrity check: %d serious problem(s): %s", bad,
+                    "; ".join(p["detail"] for p in r["problems"] if p["level"] == "bad")[:2000])
+    return r
+
+
+def start_integrity_watch():
+    def run():
+        time.sleep(120)
+        while True:
+            try:
+                run_integrity()
+            except Exception as e:
+                print(f"  [CHECK] serial/database check failed: {e}")
+            time.sleep(INTEGRITY_EVERY * 3600)
+    threading.Thread(target=run, daemon=True, name="integrity").start()
+
+
+@app.route("/api/integrity")
+def api_integrity():
+    return jsonify({"result": _integrity["result"], "error": _integrity["error"], "every_hours": INTEGRITY_EVERY})
+
+
+@app.route("/api/integrity", methods=["POST"])
+def api_integrity_run():
+    try:
+        r = run_integrity()
+    except Exception as e:
+        return err(f"The check couldn't run: {e}", 500)
+    conn = get_db()
+    log_activity(conn, "check", None, "Serial and database check: " + (
+        "everything adds up" if r["ok"] else
+        f"{r['counts'].get('bad', 0)} problem(s), {r['counts'].get('warn', 0)} to look at"))
+    conn.commit(); conn.close()
+    return jsonify({"result": r})
+
+
+@app.route("/api/tools/db-upkeep", methods=["POST"])
+def api_db_upkeep():
+    r = db_upkeep()
+    return err(r["error"], 500) if r.get("error") else jsonify(r)
+
+
+@app.route("/api/tools/host-check")
+def api_host_check():
+    """Tools > Check this PC: the automatic part of the host PC check (host_check.py), run inside the
+    app, saved to check_reports/ like the JM_TOOLS.bat version. Each check has a time limit."""
+    started = time.time()
+    results = H.run_automatic(include_server=False)
+    results.append(H._res("Job Manager running", H.PASS, f"Answering on port {PORT} (this check ran inside it)"))
+    rep = H.report(results, f"Tools page ({actor() or 'unnamed PC'})", started)
+    try:
+        rep["saved_to"] = H.save(rep)
+    except OSError as e:
+        rep["saved_to"] = None; rep["save_error"] = str(e)
+    return jsonify(rep)
 
 
 @app.route("/api/attention")
@@ -3603,6 +3718,7 @@ if __name__ == "__main__":
     start_auto_archive()
     start_folder_watch()
     start_share_watch()
+    start_integrity_watch()
     proofing.start()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")
@@ -3610,7 +3726,18 @@ if __name__ == "__main__":
         print(f"      From other PCs:    http://{ip}:{PORT}")
     print("      (Leave this window open. Closing it stops the app for everyone.)")
     if os.environ.get("JM_NO_BROWSER") != "1":
-        threading.Timer(2.0, lambda: __import__("webbrowser").open(f"http://localhost:{PORT}")).start()
+        def open_when_ready():
+            """Open the browser once the server answers (up to a minute), not after a fixed delay,
+            so a slow start never shows a "can't connect" page."""
+            import urllib.request
+            for _ in range(120):
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/api/stamp", timeout=2):
+                        break
+                except Exception:
+                    time.sleep(0.5)
+            __import__("webbrowser").open(f"http://localhost:{PORT}")
+        threading.Thread(target=open_when_ready, daemon=True, name="open-browser").start()
     try:
         from waitress import serve        # multi-user production server (pure Python, Windows-friendly)
         print("[APP] Serving with waitress")

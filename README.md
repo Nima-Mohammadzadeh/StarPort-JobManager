@@ -96,6 +96,30 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   itself (the rewind tablets too); otherwise a bar asks to reload, and changes from the old page are refused
   until it does, so nothing is saved by out-of-date page code.
 
+## Checks and tools
+
+- **`JM_TOOLS.bat`** (on the host PC) opens a menu: host PC check, serial and database check, back up now, check
+  the newest backup, database upkeep, restore a backup, and the check reports folder.
+- **Host PC check** (`JM_TOOLS.bat` option 1, or Tools > **Check this PC**): checks the Python packages, config.ini,
+  the database (integrity, and that it isn't inside OneDrive, which can corrupt a live database), read and write
+  on the job folders, serial registry, backup folder and proofing folder, Master Templates, BarTender, the serial
+  and database check, and that Job Manager answers. `JM_TOOLS.bat` then walks through a few hands-on steps (create a
+  job, open its database, scan a tag on a tablet, open from another PC, a BarTender preview, a restart). Each
+  check has a 20-second limit. The result goes to `check_reports\HOST_CHECK_<date>.txt` and `.json`: PASS, FAIL,
+  or INCOMPLETE when a required step was skipped (not checked is never a pass). Nothing is changed.
+- **Serial and database check** (runs a couple of minutes after start and every 6 hours; Settings > Data, *Check
+  now*): every standard job's rolls start at its first serial, run one after another with no gaps or repeats, add
+  up to quantity + overage and carry the right EPCs; each job's range is recorded and covers its rolls; no two
+  recorded ranges for a UPC overlap (nor two jobs' own ranges, nor two CDO sheet ranges); and the database passes
+  SQLite's quick check, with no rolls or notes left without a job. Read-only. Problems show in Needs attention.
+  Conflicts already reviewed on the Tools page aren't reported again.
+- **Encoding files are written safely.** The encoding database is written under a hidden temporary name,
+  re-opened and checked row by row (serial, UPC, EPC), and only then given its real name; if any file fails,
+  none appear. An existing file is never replaced.
+- **Database upkeep** (SQLite optimize and a write-ahead-log checkpoint) runs after every good backup, and from
+  Tools or `JM_TOOLS.bat`.
+- **Start-up** opens the browser once the app actually answers, not after a fixed delay.
+
 ## Serial numbers, in short
 
 Every range is kept in three places: the **registry** (`serial_registry\<UPC>.txt`),

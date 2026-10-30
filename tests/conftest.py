@@ -11,7 +11,7 @@ import pytest
 
 SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_MODULES = ("config", "serial_registry", "serial_store", "sheet_serials", "generators", "checklist_generator",
-               "lists", "app", "backup", "restore_backup", "import_old")
+               "lists", "integrity", "host_check", "jm_tools", "app", "backup", "restore_backup", "import_old")
 
 
 def _upc(n):
