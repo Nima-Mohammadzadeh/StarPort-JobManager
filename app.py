@@ -34,7 +34,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
-                        sheet_customer, roll_plan_seq, generate_qc_sheet, qc_html, _safe_name)
+                        sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
@@ -164,6 +164,8 @@ def init_db():
     add_col("job_rolls", "paused_by", "paused_by TEXT")
     add_col("job_rolls", "printer", "printer TEXT")
     add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
+    add_col("btw_templates", "file_size", "file_size INTEGER")
+    add_col("btw_templates", "file_mtime", "file_mtime TEXT")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
     # Old per-roll notes become entries in the job's note log.
@@ -250,10 +252,10 @@ def clean_po(po):
 def job_folder_parts(customer, label_size, po, ticket, job_number):
     """<customer>\\<label size>\\<MM.DD.YY> - <job ticket>   (job number if there is no ticket).
     A folder that already holds another job gets " - JOB-####" added (see create_job)."""
-    name   = _safe_name(f"{datetime.now():%m.%d.%y} - {ticket or job_number}")
-    parts  = [_safe_name(customer)]
+    name   = safe_folder_name(f"{datetime.now():%m.%d.%y} - {ticket or job_number}")
+    parts  = [safe_folder_name(customer)]
     if label_size:
-        parts.append(_safe_name(label_size))
+        parts.append(safe_folder_name(label_size))
     parts.append(name)
     return parts
 
@@ -268,7 +270,7 @@ def _int(v, field, required=False, minimum=1):
         return None
     try:
         n = int(float(v))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(f"{field} must be a whole number")
     if n < minimum:
         raise ValueError(f"{field} must be at least {minimum}")
@@ -368,6 +370,10 @@ def create_job(data: dict) -> tuple[dict, int]:
             return {"error": v["error"], "corrected_upc": v.get("corrected_upc")}, 400
 
     total_qty = production_qty(quantity, overage) if quantity else None
+    if data_sheet:
+        too_big = sheet_size_error(total_qty, qty_db)
+        if too_big:
+            return {"error": too_big}, 400
     template_id = data.get("template_id")
 
     # Pre-flight: if the shared job folders can't be reached, nothing is reserved,
@@ -750,20 +756,27 @@ def api_archive_list():
 
 @app.route("/api/jobs", methods=["POST"])
 def api_create_job():
-    result, code = create_job(request.get_json(silent=True) or {})
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return err("Send the job as a JSON object")
+    result, code = create_job(data)
     return jsonify(result), code
 
 
 @app.route("/api/jobs/batch", methods=["POST"])
 def api_batch_create():
-    rows = (request.get_json(silent=True) or {}).get("jobs") or []
+    body = request.get_json(silent=True)
+    rows = (body.get("jobs") if isinstance(body, dict) else None) or []
     if not isinstance(rows, list) or not rows:
         return err("No rows to create")
     if len(rows) > 100:
         return err("Create at most 100 jobs at a time")
     results = []
     for i, row in enumerate(rows):
-        row = row or {}
+        if not isinstance(row, dict):
+            results.append({"row": i, "ok": False, "job_number": None, "template": None,
+                            "error": "This row isn't a job", "duplicate_of": None, "warnings": []})
+            continue
         picked = None
         if not row.get("template_id") and not row.get("no_template"):
             m = match_templates_fresh(row.get("upc", ""), row.get("customer", ""),
@@ -1976,26 +1989,462 @@ def api_templates_match():
                                          a.get("label_size", ""), a.get("part_number", "")))
 
 
+# ── Template library: browse, view and change the Master Templates files ───────
+# Nothing here deletes a template for good. A replaced file is kept in "_Previous versions"
+# and a removed one is moved to "_Removed", both inside the Master Templates folder.
+TPL_RESERVED = {"_Removed", "_Previous versions"}
+_BAD_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+TPL_MAX_BYTES = 200 * 1024 * 1024
+
+
+def _tpl_root():
+    return os.path.normpath(get_settings()["btw_template_dir"])
+
+
+def _same(p):
+    return os.path.normcase(os.path.realpath(p))
+
+
+def _inside(root, p):
+    r, q = _same(root), _same(p)
+    return q == r or q.startswith(r + os.sep)
+
+
+def _tpl_rel_dir(root, file_path):
+    """Folder of a template relative to Master Templates, with '/' separators ('' = top level)."""
+    try:
+        rel = os.path.relpath(os.path.dirname(file_path), root)
+    except ValueError:
+        return ""
+    return "" if rel in (".", "") or rel.startswith("..") else rel.replace("\\", "/")
+
+
+def _tpl_stat_update(conn, path):
+    try:
+        st = os.stat(path)
+    except OSError:
+        return
+    conn.execute("UPDATE btw_templates SET file_size=?, file_mtime=? WHERE file_path=?",
+                 (st.st_size, datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"), path))
+
+
+def _clean_name(name):
+    """A template file name without '.btw'. Returns (stem, error)."""
+    stem = re.sub(r"\.btw$", "", (name or "").strip(), flags=re.I).strip()
+    if not stem:
+        return None, "Type a name"
+    if _BAD_CHARS.search(stem) or stem.endswith("."):
+        return None, 'A name can\'t contain  < > : " / \\ | ? *  or end with a dot'
+    if len(stem) > 150:
+        return None, "That name is too long"
+    return stem, None
+
+
+def _clean_folder(rel):
+    """Validated folder parts for a path under Master Templates. Returns (parts, error)."""
+    parts = [p.strip() for p in re.split(r"[\\/]+", rel or "") if p.strip()]
+    for p in parts:
+        if p in (".", "..") or _BAD_CHARS.search(p) or p.endswith(".") or p in TPL_RESERVED:
+            return None, f'"{p}" can\'t be used as a folder name'
+    if len(parts) > 4:
+        return None, "Folders can go four levels deep at most"
+    return parts, None
+
+
+def _unique_path(path):
+    base, ext = os.path.splitext(path)
+    n, cand = 2, path
+    while os.path.exists(cand):
+        cand = f"{base} ({n}){ext}"; n += 1
+    return cand
+
+
+def _tpl_get(tid):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM btw_templates WHERE id=? AND active=1", (tid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _tpl_used_counts(conn):
+    """How many jobs got a copy of each template, keyed by the template's lower-case file name.
+    A job's copy is '<JOB-####> - <template name>.btw'."""
+    used = {}
+    for r in conn.execute("SELECT template_path FROM jobs WHERE template_path IS NOT NULL AND template_path != ''"):
+        base = re.split(r"[\\/]", r["template_path"])[-1]
+        m = re.match(r"^JOB-\d+ - (.+)$", base, re.I)
+        key = (m.group(1) if m else base).lower()
+        used[key] = used.get(key, 0) + 1
+    return used
+
+
+def _tpl_public(r, root, thumbs, used):
+    base = os.path.basename(r["file_path"])
+    return {"id": r["id"], "name": r["name"], "file_name": base, "file_path": r["file_path"],
+            "folder": _tpl_rel_dir(root, r["file_path"]), "size": r.get("file_size"),
+            "modified": r.get("file_mtime"), "has_thumb": str(r["id"]) in thumbs,
+            "used": used.get(base.lower(), 0)}
+
+
+def _thumb_ids():
+    try:
+        return {os.path.splitext(f)[0] for f in os.listdir(THUMBNAIL_DIR)}
+    except OSError:
+        return set()
+
+
 @app.route("/api/templates")
 def api_templates():
-    q = request.args.get("q", "").strip()
-    sql, params = "SELECT id, name, file_path FROM btw_templates WHERE active=1", []
+    """List templates. With no `per` it returns the first 40 matches (the job-picker's shape);
+    with `per` it pages. `folder` limits to a folder and its subfolders ('.' = top level only)."""
+    a = request.args
+    q = a.get("q", "").strip()
+    folder = a.get("folder")
+    sort = a.get("sort") if a.get("sort") in ("name", "modified", "size", "used") else "name"
+    desc = a.get("dir") == "desc"
+    sql, params = "SELECT * FROM btw_templates WHERE active=1", []
     for w in re.split(r"[\s\-_]+", q):
         if w:
             sql += " AND (name || ' ' || file_path) LIKE ?"; params.append(f"%{w}%")
-    sql += " ORDER BY name LIMIT 40"
+    root = _tpl_root()
     conn = get_db()
     rows = [dict(r) for r in conn.execute(sql, params)]
     total = conn.execute("SELECT COUNT(*) FROM btw_templates WHERE active=1").fetchone()[0]
+    used = _tpl_used_counts(conn)
     conn.close()
-    thumbs = set()
+    thumbs = _thumb_ids()
+    items = [_tpl_public(r, root, thumbs, used) for r in rows]
+    if folder is not None:
+        if folder == ".":
+            items = [t for t in items if t["folder"] == ""]
+        else:
+            f = folder.strip("/")
+            items = [t for t in items if t["folder"] == f or t["folder"].startswith(f + "/")]
+    keys = {"name": lambda t: t["name"].lower(), "modified": lambda t: t["modified"] or "",
+            "size": lambda t: t["size"] or 0, "used": lambda t: t["used"]}
+    items.sort(key=keys["name"])                          # ties fall back to name order
+    if sort != "name" or desc:
+        items.sort(key=keys[sort], reverse=desc)
+    matched = len(items)
     try:
-        thumbs = {os.path.splitext(f)[0] for f in os.listdir(THUMBNAIL_DIR)}
+        per = max(1, min(200, int(a.get("per") or 0))) if a.get("per") else 40
+        page = max(1, int(a.get("page") or 1))
+    except ValueError:
+        per, page = 40, 1
+    pages = max(1, -(-matched // per))
+    page = min(page, pages)
+    items = items[(page - 1) * per: page * per]
+    for t in items:
+        t["missing"] = not os.path.isfile(t["file_path"])
+    return jsonify({"templates": items, "total": total, "matched": matched, "page": page, "pages": pages, "per": per})
+
+
+@app.route("/api/templates/folders")
+def api_template_folders():
+    root = _tpl_root()
+    conn = get_db()
+    paths = [r["file_path"] for r in conn.execute("SELECT file_path FROM btw_templates WHERE active=1")]
+    conn.close()
+    direct = {}
+    for p in paths:
+        d = _tpl_rel_dir(root, p)
+        direct[d] = direct.get(d, 0) + 1
+    dirs = {d for d in direct if d}
+
+    def scan(base, rel, depth):
+        if depth > 4:
+            return
+        try:
+            with os.scandir(base) as it:
+                for e in it:
+                    if e.is_dir() and e.name not in TPL_RESERVED:
+                        r = f"{rel}/{e.name}" if rel else e.name
+                        dirs.add(r); scan(e.path, r, depth + 1)
+        except OSError:
+            pass
+    root_ok = os.path.isdir(root)
+    if root_ok:
+        scan(root, "", 1)
+    for d in list(dirs):                                  # every ancestor of a folder is a folder too
+        parts = d.split("/")
+        for i in range(1, len(parts)):
+            dirs.add("/".join(parts[:i]))
+    out = []
+    for d in sorted(dirs, key=str.lower):
+        n = sum(c for k, c in direct.items() if k == d or k.startswith(d + "/"))
+        out.append({"path": d, "name": d.split("/")[-1], "depth": d.count("/"), "count": n})
+    return jsonify({"root": root, "root_ok": root_ok, "total": len(paths), "top": direct.get("", 0), "folders": out})
+
+
+@app.route("/api/templates/<int:tid>")
+def api_template_detail(tid):
+    row = _tpl_get(tid)
+    if not row:
+        return err("Template not found", 404)
+    root = _tpl_root()
+    conn = get_db()
+    used = _tpl_used_counts(conn)
+    base = os.path.basename(row["file_path"])
+    jobs = [dict(r) for r in conn.execute(
+        """SELECT id, job_number, job_ticket, customer, status FROM jobs
+           WHERE template_path IS NOT NULL AND lower(template_path) LIKE ? ORDER BY id DESC LIMIT 8""",
+        (f"%- {base.lower()}",))]
+    conn.close()
+    t = _tpl_public(row, root, _thumb_ids(), used)
+    t["missing"] = not os.path.isfile(row["file_path"])
+    t["jobs"] = jobs
+    t["versions"] = _tpl_versions(root, os.path.splitext(base)[0])
+    return jsonify(t)
+
+
+def _tpl_versions(root, stem):
+    d = os.path.join(root, "_Previous versions")
+    out = []
+    try:
+        for f in os.listdir(d):
+            if f.startswith(stem + " (replaced ") and f.lower().endswith(".btw"):
+                st = os.stat(os.path.join(d, f))
+                out.append({"file": f, "size": st.st_size,
+                            "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")})
     except OSError:
         pass
-    for r in rows:
-        r["has_thumb"] = str(r["id"]) in thumbs
-    return jsonify({"templates": rows, "total": total})
+    return sorted(out, key=lambda v: v["file"], reverse=True)
+
+
+def _tpl_log(conn, msg):
+    log_activity(conn, "template", None, msg)
+
+
+def _tpl_register(conn, path):
+    ts = now_str()
+    cur = conn.execute("INSERT INTO btw_templates (name, file_path, active, created_at, updated_at) VALUES (?,?,1,?,?)",
+                       (os.path.splitext(os.path.basename(path))[0], path, ts, ts))
+    _tpl_stat_update(conn, path)
+    return cur.lastrowid
+
+
+def _tpl_save_upload(f, dest):
+    """Write an uploaded .btw to dest through a temp file, so a failed upload never leaves half a template."""
+    data = f.read()
+    if not data:
+        return "That file is empty"
+    if len(data) > TPL_MAX_BYTES:
+        return "That file is larger than 200 MB"
+    tmp = dest + ".uploading"
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp, dest)
+    except OSError as e:
+        try: os.remove(tmp)
+        except OSError: pass
+        return str(e)
+    return None
+
+
+@app.route("/api/templates/<int:tid>/rename", methods=["POST"])
+def api_template_rename(tid):
+    row = _tpl_get(tid)
+    if not row:
+        return err("Template not found", 404)
+    stem, bad = _clean_name((request.get_json(silent=True) or {}).get("name"))
+    if bad:
+        return err(bad)
+    old = row["file_path"]
+    new = os.path.join(os.path.dirname(old), stem + ".btw")
+    if _same(new) == _same(old):
+        return jsonify({"success": True})
+    if os.path.exists(new):
+        return err(f'A template called "{stem}" is already in that folder')
+    if not os.path.isfile(old):
+        return err("The file isn't on disk any more. Rescan Master Templates.")
+    try:
+        os.rename(old, new)
+        root = _tpl_root()
+        old_stem = os.path.splitext(os.path.basename(old))[0]
+        for v in _tpl_versions(root, old_stem):           # keep the version history with the template
+            src = os.path.join(root, "_Previous versions", v["file"])
+            os.rename(src, os.path.join(root, "_Previous versions", stem + v["file"][len(old_stem):]))
+    except OSError as e:
+        return err(str(e))
+    conn = get_db()
+    conn.execute("UPDATE btw_templates SET name=?, file_path=?, updated_at=? WHERE id=?", (stem, new, now_str(), tid))
+    _tpl_log(conn, f'Template renamed: "{os.path.basename(old)}" to "{stem}.btw"')
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/templates/<int:tid>/move", methods=["POST"])
+def api_template_move(tid):
+    row = _tpl_get(tid)
+    if not row:
+        return err("Template not found", 404)
+    root = _tpl_root()
+    parts, bad = _clean_folder((request.get_json(silent=True) or {}).get("folder"))
+    if bad:
+        return err(bad)
+    dest_dir = os.path.join(root, *parts)
+    old = row["file_path"]
+    new = os.path.join(dest_dir, os.path.basename(old))
+    if not _inside(root, new):
+        return err("That folder is outside Master Templates")
+    if _same(new) == _same(old):
+        return jsonify({"success": True})
+    if os.path.exists(new):
+        return err("A template with that name is already in that folder")
+    if not os.path.isfile(old):
+        return err("The file isn't on disk any more. Rescan Master Templates.")
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        shutil.move(old, new)
+    except OSError as e:
+        return err(str(e))
+    conn = get_db()
+    conn.execute("UPDATE btw_templates SET file_path=?, updated_at=? WHERE id=?", (new, now_str(), tid))
+    _tpl_log(conn, f'Template "{os.path.basename(old)}" moved to {"/".join(parts) or "the top level"}')
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/templates/<int:tid>/duplicate", methods=["POST"])
+def api_template_duplicate(tid):
+    row = _tpl_get(tid)
+    if not row or not os.path.isfile(row["file_path"]):
+        return err("Template file not found", 404)
+    stem, bad = _clean_name((request.get_json(silent=True) or {}).get("name") or
+                            os.path.splitext(os.path.basename(row["file_path"]))[0] + " copy")
+    if bad:
+        return err(bad)
+    new = os.path.join(os.path.dirname(row["file_path"]), stem + ".btw")
+    if os.path.exists(new):
+        return err(f'A template called "{stem}" is already in that folder')
+    try:
+        shutil.copy2(row["file_path"], new)
+    except OSError as e:
+        return err(str(e))
+    conn = get_db()
+    nid = _tpl_register(conn, new)
+    _tpl_log(conn, f'Template "{os.path.basename(row["file_path"])}" duplicated as "{stem}.btw"')
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "id": nid})
+
+
+@app.route("/api/templates/<int:tid>/replace", methods=["POST"])
+def api_template_replace(tid):
+    row = _tpl_get(tid)
+    if not row:
+        return err("Template not found", 404)
+    f = request.files.get("file")
+    if not f or not f.filename or not f.filename.lower().endswith(".btw"):
+        return err("Choose a BarTender .btw file")
+    path, root = row["file_path"], _tpl_root()
+    if os.path.isfile(path):                              # keep the file being replaced
+        vdir = os.path.join(root, "_Previous versions")
+        stem = os.path.splitext(os.path.basename(path))[0]
+        try:
+            os.makedirs(vdir, exist_ok=True)
+            shutil.copy2(path, _unique_path(os.path.join(
+                vdir, f"{stem} (replaced {datetime.now().strftime('%Y-%m-%d %H%M%S')}).btw")))
+        except OSError as e:
+            return err(f"Couldn't keep the old version, so nothing was changed: {e}")
+    bad = _tpl_save_upload(f, path)
+    if bad:
+        return err(bad)
+    conn = get_db()
+    conn.execute("UPDATE btw_templates SET updated_at=? WHERE id=?", (now_str(), tid))
+    _tpl_stat_update(conn, path)
+    _tpl_log(conn, f'Template "{os.path.basename(path)}" replaced with a new file (the old one is kept in _Previous versions)')
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/templates/<int:tid>/remove", methods=["POST"])
+def api_template_remove(tid):
+    """Take a template out of the library by moving the file to _Removed. It can be moved back by hand."""
+    row = _tpl_get(tid)
+    if not row:
+        return err("Template not found", 404)
+    root, path = _tpl_root(), row["file_path"]
+    if os.path.isfile(path):
+        try:
+            os.makedirs(os.path.join(root, "_Removed"), exist_ok=True)
+            shutil.move(path, _unique_path(os.path.join(root, "_Removed", os.path.basename(path))))
+        except OSError as e:
+            return err(str(e))
+    conn = get_db()
+    conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (now_str(), tid))
+    _tpl_log(conn, f'Template "{os.path.basename(path)}" removed (the file is in _Removed)')
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/templates/<int:tid>/download")
+def api_template_download(tid):
+    row = _tpl_get(tid)
+    if not row or not os.path.isfile(row["file_path"]):
+        return err("Template file not found", 404)
+    return send_file(row["file_path"], as_attachment=True, download_name=os.path.basename(row["file_path"]))
+
+
+@app.route("/api/templates/<int:tid>/versions/<path:fname>")
+def api_template_version_download(tid, fname):
+    row = _tpl_get(tid)
+    root = _tpl_root()
+    vdir = os.path.join(root, "_Previous versions")
+    p = os.path.join(vdir, os.path.basename(fname))
+    stem = os.path.splitext(os.path.basename(row["file_path"]))[0] if row else None
+    if not row or not os.path.basename(fname).startswith(stem + " (replaced ") or not os.path.isfile(p):
+        return err("Version not found", 404)
+    return send_file(p, as_attachment=True, download_name=os.path.basename(p))
+
+
+@app.route("/api/templates/folders", methods=["POST"])
+def api_template_folder_create():
+    d = request.get_json(silent=True) or {}
+    parts, bad = _clean_folder(f"{d.get('parent') or ''}/{d.get('name') or ''}")
+    if bad or not parts:
+        return err(bad or "Type a folder name")
+    root = _tpl_root()
+    if not os.path.isdir(root):
+        return err("The Master Templates folder isn't reachable")
+    path = os.path.join(root, *parts)
+    if os.path.exists(path):
+        return err("That folder already exists")
+    try:
+        os.makedirs(path)
+    except OSError as e:
+        return err(str(e))
+    return jsonify({"success": True, "path": "/".join(parts)})
+
+
+@app.route("/api/templates/upload", methods=["POST"])
+def api_template_upload():
+    f = request.files.get("file")
+    if not f or not f.filename or not f.filename.lower().endswith(".btw"):
+        return err("Choose a BarTender .btw file")
+    root = _tpl_root()
+    parts, bad = _clean_folder(request.form.get("folder"))
+    if bad:
+        return err(bad)
+    stem, bad = _clean_name(os.path.basename(f.filename))
+    if bad:
+        return err(bad)
+    dest_dir = os.path.join(root, *parts)
+    dest = os.path.join(dest_dir, stem + ".btw")
+    if os.path.exists(dest):
+        return err(f'"{stem}.btw" is already in that folder. Use Replace file on it instead.')
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+    except OSError as e:
+        return err(str(e))
+    bad = _tpl_save_upload(f, dest)
+    if bad:
+        return err(bad)
+    conn = get_db()
+    nid = _tpl_register(conn, dest)
+    _tpl_log(conn, f'Template "{stem}.btw" added to {"/".join(parts) or "the top level"}')
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "id": nid})
 
 
 def sync_templates() -> dict:
@@ -2011,7 +2460,8 @@ def sync_templates() -> dict:
     if not os.path.isdir(root):
         return {"success": False, "error": f"Master Templates folder not reachable: {root}"}
     found = []
-    for dirpath, _dirs, files in os.walk(root):
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in TPL_RESERVED]      # our own backup folders aren't templates
         found += [os.path.join(dirpath, f) for f in files
                   if f.lower().endswith(".btw") and not f.startswith("~")]
     leaf = lambda p: re.split(r"[\\/]", p)[-1].lower()
@@ -2050,6 +2500,8 @@ def sync_templates() -> dict:
     if not skipped:
         for tid in missing.values():
             conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (ts, tid))
+    for path in found:                                   # size and date for sorting and the detail panel
+        _tpl_stat_update(conn, path)
     conn.commit(); conn.close()
     return {"success": True, "found": len(found), "added": added, "repointed": repointed,
             "hidden": 0 if skipped else len(missing),

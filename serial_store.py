@@ -80,7 +80,9 @@ def registry_ok(force=False):
     try:
         if not os.path.isdir(SERIAL_REGISTRY_DIR):
             raise OSError(f"folder not found: {SERIAL_REGISTRY_DIR}")
-        probe = os.path.join(SERIAL_REGISTRY_DIR, f".write_check_{os.getpid()}")
+        # One probe file per thread: threads in one process (waitress) share a pid, and a shared
+        # name let one thread delete the file under another, which then reported the registry offline.
+        probe = os.path.join(SERIAL_REGISTRY_DIR, f".write_check_{os.getpid()}_{threading.get_ident()}")
         with open(probe, "w") as fh:
             fh.write("ok")
         os.remove(probe)

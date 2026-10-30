@@ -44,5 +44,8 @@ env = dict(os.environ, JM_NO_BROWSER="1")
 if not os.path.exists(os.path.join(SITE, "demo.db")):
     subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed_demo.py"), SITE],
                    cwd=SITE, env=env, check=True)
+if not os.path.isdir(os.path.join(SITE, "Master Templates")):      # mock BarTender templates
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed_templates.py"), SITE],
+                   cwd=SITE, env=env, check=True)
 os.chdir(SITE)
 sys.exit(subprocess.call([sys.executable, "app.py"], env=env))

@@ -314,6 +314,22 @@ def verify_cdo_file(path: str, start_serial: int, expected_rows: int) -> None:
             raise ValueError(f"{name}: row {i + 2} should be {want} / {cdo_epc(want)}, found {serial!r} / {epc!r}")
 
 
+# Limits for a data sheet job, so one request can't tie the PC up writing files nobody can open.
+SHEET_MAX_LABELS = 20_000_000          # one job
+EXCEL_MAX_DATA_ROWS = 1_048_575        # Excel holds 1,048,576 rows per sheet, one of them the header
+
+
+def sheet_size_error(total_qty: int, qty_db) -> str | None:
+    """Why a data sheet of this size can't be written, or None if it can."""
+    if total_qty > SHEET_MAX_LABELS:
+        return f"A data sheet job can have at most {SHEET_MAX_LABELS:,} labels (this one has {total_qty:,})."
+    biggest = max(db_file_split(total_qty, qty_db))
+    if biggest > EXCEL_MAX_DATA_ROWS:
+        return (f"One data file would hold {biggest:,} rows, more than Excel can open ({EXCEL_MAX_DATA_ROWS:,}). "
+                "Set Qty per DB file to split it into several files.")
+    return None
+
+
 # ── Customer data sheets (which sheet belongs to which customer) ─────────────
 # Typing the customer in New job picks the matching sheet; the server refuses a sheet for
 # any other customer. Add a sheet here (and generate/verify it above) to add a customer.
@@ -367,6 +383,23 @@ def _safe_name(s: str) -> str:
     for ch in '\\/:*?"<>|':
         s = s.replace(ch, "-")
     return s.strip()
+
+
+_WIN_DEVICES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+FOLDER_NAME_MAX = 100
+
+
+def safe_folder_name(s: str) -> str:
+    """One folder name that can never be a path step: no separators, no "." / ".." / "...", no
+    trailing dots or spaces, no control characters, no Windows device names (CON, NUL, ...), and
+    not so long that the job path passes the Windows limit."""
+    s = "".join(ch for ch in _safe_name(str(s or "")) if ch >= " ")
+    s = s.rstrip(". ")[:FOLDER_NAME_MAX].rstrip(". ")
+    if not s:
+        return "_"
+    if s.split(".")[0].strip().lower() in _WIN_DEVICES:
+        s = "_" + s
+    return s
 
 
 def qc_page_estimate(n_rolls: int, write_in: bool) -> int:
