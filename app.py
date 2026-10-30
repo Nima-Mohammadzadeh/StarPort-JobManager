@@ -34,7 +34,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
-                        sheet_customer, roll_plan_seq, generate_qc_sheet, qc_html, _safe_name)
+                        sheet_customer, roll_plan_seq, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
@@ -241,10 +241,10 @@ def clean_po(po):
 def job_folder_parts(customer, label_size, po, ticket, job_number):
     """<customer>\\<label size>\\<MM.DD.YY> - <job ticket>   (job number if there is no ticket).
     A folder that already holds another job gets " - JOB-####" added (see create_job)."""
-    name   = _safe_name(f"{datetime.now():%m.%d.%y} - {ticket or job_number}")
-    parts  = [_safe_name(customer)]
+    name   = safe_folder_name(f"{datetime.now():%m.%d.%y} - {ticket or job_number}")
+    parts  = [safe_folder_name(customer)]
     if label_size:
-        parts.append(_safe_name(label_size))
+        parts.append(safe_folder_name(label_size))
     parts.append(name)
     return parts
 
@@ -259,7 +259,7 @@ def _int(v, field, required=False, minimum=1):
         return None
     try:
         n = int(float(v))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(f"{field} must be a whole number")
     if n < minimum:
         raise ValueError(f"{field} must be at least {minimum}")
@@ -359,6 +359,10 @@ def create_job(data: dict) -> tuple[dict, int]:
             return {"error": v["error"], "corrected_upc": v.get("corrected_upc")}, 400
 
     total_qty = production_qty(quantity, overage) if quantity else None
+    if data_sheet:
+        too_big = sheet_size_error(total_qty, qty_db)
+        if too_big:
+            return {"error": too_big}, 400
     template_id = data.get("template_id")
 
     # Pre-flight: if the shared job folders can't be reached, nothing is reserved,
@@ -741,20 +745,27 @@ def api_archive_list():
 
 @app.route("/api/jobs", methods=["POST"])
 def api_create_job():
-    result, code = create_job(request.get_json(silent=True) or {})
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return err("Send the job as a JSON object")
+    result, code = create_job(data)
     return jsonify(result), code
 
 
 @app.route("/api/jobs/batch", methods=["POST"])
 def api_batch_create():
-    rows = (request.get_json(silent=True) or {}).get("jobs") or []
+    body = request.get_json(silent=True)
+    rows = (body.get("jobs") if isinstance(body, dict) else None) or []
     if not isinstance(rows, list) or not rows:
         return err("No rows to create")
     if len(rows) > 100:
         return err("Create at most 100 jobs at a time")
     results = []
     for i, row in enumerate(rows):
-        row = row or {}
+        if not isinstance(row, dict):
+            results.append({"row": i, "ok": False, "job_number": None, "template": None,
+                            "error": "This row isn't a job", "duplicate_of": None, "warnings": []})
+            continue
         picked = None
         if not row.get("template_id") and not row.get("no_template"):
             m = match_templates_fresh(row.get("upc", ""), row.get("customer", ""),
