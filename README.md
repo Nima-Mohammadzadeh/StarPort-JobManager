@@ -1,4 +1,4 @@
-# Job Manager 3.3 — encoding team edition
+# Job Manager 3.4.0 — encoding team edition
 
 One host PC runs the app. Everyone else uses it in a browser at `http://<host-ip>:5050`.
 The full guide (how it works, where everything is stored, how it compares with the old

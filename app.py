@@ -43,7 +43,7 @@ from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
 
-APP_VERSION = "3.3"
+APP_VERSION = "3.4.0"
 DEFAULT_TEMPLATE_DIR = r"Z:\3 Encoding and Printing Files\Master Templates"
 STATUSES    = ["Pending", "In Progress", "On Hold", "Complete", "Cancelled"]
 JUNK_PO     = {"0", "00", "000", "na", "n/a", "none", "-", "--", "tbd", "x"}
