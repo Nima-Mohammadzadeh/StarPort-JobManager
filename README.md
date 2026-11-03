@@ -37,7 +37,14 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   (GO2, CDO, any capitalization) switches to Special and selects it; a sheet only works for its own customer.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel
   the old job first to redo it). The form warns as soon as the ticket is typed, and
-  the server refuses even if two people enter it at the same instant.
+  the server refuses even if two people enter it at the same instant. The database enforces it too
+  (a unique index on open tickets). If an older database already has two open jobs on one ticket,
+  Settings → Data lists them and the rule switches on once the extra ones are cancelled.
+- **Database rules**: the database itself refuses values the app never writes: an unknown job or
+  roll status, a quantity or labels-per-roll of 0, a start serial of 0, overage outside 0–100, and
+  a serial range that ends before it starts. Records saved before these rules existed are listed
+  in Settings → Data (and at startup), never changed or deleted, and can still be edited. Importing
+  from the old app skips any job the rules refuse and prints which ones and why.
 - **Data and backups** (Settings, first panel): lists where each kind of data lives (app
   database, serial registry, serial journal, job folders, Master Templates, config.ini), whether it
   can be reached, and whether the backups cover it, with plain warnings: no backup, backup

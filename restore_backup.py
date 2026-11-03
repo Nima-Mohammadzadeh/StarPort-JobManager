@@ -300,7 +300,9 @@ def _build_db(tmp, keep, plan):
                                 f"VALUES ({', '.join('?' * len(scols))})", [r[c] for c in scols])
             if keep:
                 job_cols = [c for c in _cols(new, "jobs") if c in _cols(cur, "jobs")]
-                for j in plan["new_jobs"] + plan["changed_jobs"]:
+                # Changed jobs first: a job cancelled since the backup must be cancelled here before a
+                # newer job that reused its ticket comes in, or the one-job-per-ticket rule refuses it.
+                for j in plan["changed_jobs"] + plan["new_jobs"]:
                     _copy_job(cur, new, j["job_number"], job_cols)
                     kept.append(j["job_number"])
                 # Activity since the backup, pointed at the right job in the restored database.

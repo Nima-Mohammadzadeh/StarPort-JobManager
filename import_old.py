@@ -162,6 +162,7 @@ def main():
 
     # ── Jobs ─────────────────────────────────────────────────────────────────
     j_added = j_skipped = r_added = n_added = 0
+    rejected = []
     max_old = 0
     for (num,) in oc.execute("SELECT job_number FROM jobs"):
         try:
@@ -178,25 +179,43 @@ def main():
             if j["job_number"] in have:
                 j_skipped += 1
                 continue
-            j_added += 1
             if dry:
+                j_added += 1
                 continue
-            cols = [c for c in new_cols if c in j]
-            new_id = nc.execute(f"INSERT INTO jobs ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
-                                [j[c] for c in cols]).lastrowid
-            if "job_rolls" in old_tables:
-                for r in oc.execute("SELECT * FROM job_rolls WHERE job_id=?", (j["id"],)):
-                    r = dict(r)
-                    rc = [c for c in roll_cols if c in r and c != "notes"]
-                    nc.execute(f"INSERT OR IGNORE INTO job_rolls (job_id, {', '.join(rc)}) "
-                               f"VALUES (?, {', '.join('?' * len(rc))})", [new_id] + [r[c] for c in rc])
-                    r_added += 1
-                    if (r.get("notes") or "").strip():
-                        nc.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
-                                   " VALUES (?,?,?,?,0,?)", (new_id, r["roll_number"], r.get("completed_by"),
-                                                            r["notes"].strip(), r.get("completed_at") or ts))
-                        n_added += 1
-    print(f"  Jobs: {j_added} added, {j_skipped} already here; {r_added} rolls, {n_added} roll notes")
+            # One job (with its rolls and notes) at a time: if the database rules refuse any part of it
+            # (e.g. a status this app doesn't know), that whole job is skipped and reported.
+            if not nc.in_transaction:
+                nc.execute("BEGIN")
+            nc.execute("SAVEPOINT import_job")
+            rolls = notes = 0
+            try:
+                cols = [c for c in new_cols if c in j]
+                new_id = nc.execute(f"INSERT INTO jobs ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                                    [j[c] for c in cols]).lastrowid
+                if "job_rolls" in old_tables:
+                    for r in oc.execute("SELECT * FROM job_rolls WHERE job_id=?", (j["id"],)):
+                        r = dict(r)
+                        rc = [c for c in roll_cols if c in r and c != "notes"]
+                        nc.execute(f"INSERT OR IGNORE INTO job_rolls (job_id, {', '.join(rc)}) "
+                                   f"VALUES (?, {', '.join('?' * len(rc))})", [new_id] + [r[c] for c in rc])
+                        rolls += 1
+                        if (r.get("notes") or "").strip():
+                            nc.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
+                                       " VALUES (?,?,?,?,0,?)", (new_id, r["roll_number"], r.get("completed_by"),
+                                                                r["notes"].strip(), r.get("completed_at") or ts))
+                            notes += 1
+            except sqlite3.IntegrityError as e:
+                nc.execute("ROLLBACK TO import_job"); nc.execute("RELEASE import_job")
+                rejected.append(f"{j['job_number']}: {e}")
+                continue
+            nc.execute("RELEASE import_job")
+            j_added += 1; r_added += rolls; n_added += notes
+    print(f"  Jobs: {j_added} added, {j_skipped} already here, {len(rejected)} skipped; "
+          f"{r_added} rolls, {n_added} roll notes")
+    for line in rejected:
+        print(f"    skipped {line}")
+    if rejected:
+        print("    (Fix those jobs in the old app or by hand, then run the import again to bring them over.)")
 
     # ── Settings (only ones not already set here) ────────────────────────────
     s_added = []

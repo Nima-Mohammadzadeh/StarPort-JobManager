@@ -62,6 +62,15 @@ def err(msg, code=400, **extra):
     return jsonify({"error": msg, **extra}), code
 
 
+@app.errorhandler(sqlite3.IntegrityError)
+def _integrity_error(e):
+    """A database rule refused a change (see RULES and TICKET_INDEX). Say so plainly, not 'server error'."""
+    text = str(e)
+    if TICKET_INDEX in text:
+        text = "That ticket already belongs to another job. Two jobs can't share a ticket."
+    return err(f"The change was refused: {text}", 409)
+
+
 def actor():
     """Name the browser sends with every request (set once per PC in Settings)."""
     try:
@@ -157,13 +166,114 @@ def _migrate_v1_baseline(cur):
     cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
 
 
+# ── Database rules ────────────────────────────────────────────────────────────
+# Values the app never writes, refused by the database itself so a bug, a script or a hand edit
+# can't store them either. Each rule becomes a pair of triggers (on insert, and on update of the
+# rule's own columns only, so an old row that breaks a rule can still have other fields edited)
+# and a query that reports rows written before the rule existed. Triggers rather than CHECK
+# constraints: SQLite can only add a CHECK by rebuilding the table, which is far riskier on a live
+# database. {r} is replaced by "NEW." in a trigger and by nothing in the report query.
+# (since, table, name, condition that must hold, columns, message)
+_ROLL_STATUSES = ("pending", "running", "paused", "complete", "verified")   # verified: old app
+RULES = [
+    (2, "jobs", "status", "{r}status IN (" + ", ".join(f"'{s}'" for s in STATUSES) + ")", ["status"],
+     "job status must be one of " + ", ".join(STATUSES)),
+    (2, "jobs", "job_type", "{r}job_type IN ('standard', 'special')", ["job_type"],
+     "job type must be standard or special"),
+    (2, "jobs", "quantity", "{r}quantity IS NULL OR {r}quantity > 0", ["quantity"],
+     "job quantity must be more than 0"),
+    (2, "jobs", "lpr", "{r}lpr IS NULL OR {r}lpr > 0", ["lpr"], "labels per roll must be more than 0"),
+    (2, "jobs", "start_serial", "{r}start_serial IS NULL OR {r}start_serial >= 1", ["start_serial"],
+     "start serial must be 1 or more"),
+    (2, "jobs", "overage", "{r}overage_pct BETWEEN 0 AND 100", ["overage_pct"],
+     "overage must be between 0 and 100"),
+    (2, "job_rolls", "status", "{r}status IN (" + ", ".join(f"'{s}'" for s in _ROLL_STATUSES) + ")",
+     ["status"], "roll status must be one of " + ", ".join(_ROLL_STATUSES)),
+    (2, "job_rolls", "quantity", "{r}quantity > 0", ["quantity"], "roll quantity must be more than 0"),
+    (2, "job_rolls", "serials", "{r}serial_start IS NULL OR {r}serial_end IS NULL OR {r}serial_end >= {r}serial_start",
+     ["serial_start", "serial_end"], "a roll's last serial can't be before its first"),
+    (2, "serial_allocations", "range", '{r}start >= 1 AND {r}"end" >= {r}start', ["start", "end"],
+     "a serial range must start at 1 or more and end at or after its start"),
+    (2, "serial_allocations", "qty", "{r}qty >= 0", ["qty"], "a serial range's quantity can't be negative"),
+    (2, "serial_allocations", "state", "{r}registry_state IN (-1, 0, 1)", ["registry_state"],
+     "registry_state must be -1, 0 or 1"),
+    (2, "sheet_serials", "range", '{r}start >= 1 AND {r}"end" >= {r}start AND {r}qty >= 0',
+     ["start", "end", "qty"], "a data sheet range must start at 1 or more and end at or after its start"),
+]
+# How to name a row in a report: the job number, plus the roll or UPC where that helps.
+_RULE_ROW_LABEL = {
+    "jobs": "job_number",
+    "job_rolls": "COALESCE((SELECT j.job_number FROM jobs j WHERE j.id = job_rolls.job_id), '?') || ' roll ' || roll_number",
+    "serial_allocations": "job_number || ' (UPC ' || upc || ')'",
+    "sheet_serials": "job_number || ' (' || sheet || ')'",
+}
+
+
+def install_rule_triggers(cur, since=None):
+    """(Re)create the triggers for every rule, or only for the rules added in migration `since`."""
+    for v, table, name, cond, cols, message in RULES:
+        if since is not None and v != since:
+            continue
+        test = cond.format(r="NEW.")
+        abort = "SELECT RAISE(ABORT, '" + f"{table}: {message}".replace("'", "''") + "')"
+        col_list = ", ".join(f'"{c}"' for c in cols)
+        for suffix, event in (("ins", "INSERT"), ("upd", f"UPDATE OF {col_list}")):
+            trig = f"chk_{table}_{name}_{suffix}"
+            cur.execute(f"DROP TRIGGER IF EXISTS {trig}")
+            cur.execute(f"CREATE TRIGGER {trig} BEFORE {event} ON {table} "
+                        f"WHEN NOT ({test}) BEGIN {abort}; END")
+
+
+def rule_violations(conn, examples=5) -> list[dict]:
+    """Rows that break a rule; they can only be from before the rule existed. Reported, never changed."""
+    out = []
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for _v, table, name, cond, _cols, message in RULES:
+        if table not in tables:
+            continue
+        where = f"NOT ({cond.format(r='')})"
+        n = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}").fetchone()[0]
+        if n:
+            ex = [r[0] for r in conn.execute(
+                f"SELECT {_RULE_ROW_LABEL[table]} FROM {table} WHERE {where} ORDER BY rowid LIMIT ?", (examples,))]
+            out.append({"table": table, "rule": name, "message": message, "count": n, "examples": ex})
+    return out
+
+
+# One job per ticket among jobs that aren't cancelled, the same test as _same_ticket(). Created at
+# start-up rather than in a migration: an existing database may already hold duplicates, and then it
+# waits (they are reported) until someone cancels the extra jobs.
+TICKET_INDEX = "ux_jobs_active_ticket"
+
+
+def ensure_ticket_index(conn) -> list[dict]:
+    """Create the one-job-per-ticket index if it can be. Returns the duplicate tickets that stop it."""
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (TICKET_INDEX,)).fetchone():
+        return []
+    active = "job_ticket IS NOT NULL AND TRIM(job_ticket) != '' AND status != 'Cancelled'"
+    dups = [{"ticket": t, "jobs": [x for x in jobs.split(",")]} for t, jobs in conn.execute(
+        f"""SELECT t, GROUP_CONCAT(job_number) FROM (
+              SELECT LOWER(TRIM(job_ticket)) t, job_number FROM jobs WHERE {active} ORDER BY id)
+            GROUP BY t HAVING COUNT(*) > 1 ORDER BY t""")]
+    if not dups:
+        conn.execute(f"CREATE UNIQUE INDEX {TICKET_INDEX} ON jobs(LOWER(TRIM(job_ticket))) WHERE {active}")
+        conn.commit()
+    return dups
+
+
+def _migrate_v2_rules(cur):
+    install_rule_triggers(cur, since=2)
+
+
 # Schema changes, oldest first. Each runs exactly once, in its own transaction, after a copy of the
 # database has been taken; the version it reaches is stored in _meta.schema_version. To change the
 # schema, ADD an entry at the end (never edit one that has shipped) and bump SCHEMA_VERSION.
+# Changing a rule above also needs a new entry, calling install_rule_triggers() again.
 MIGRATIONS = [
     (1, "tables and columns from before versioning", _migrate_v1_baseline),
+    (2, "database rules for statuses, quantities and serial ranges", _migrate_v2_rules),
 ]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _schema_version(conn) -> int:
@@ -268,6 +378,12 @@ def init_db():
     conn = get_db()
     try:
         _startup_repairs(conn)
+        for d in ensure_ticket_index(conn):
+            print(f"  [DB]   WARNING ticket {d['ticket']} is on more than one open job: {', '.join(d['jobs'])}. "
+                  "Cancel the extra ones; until then the database can't enforce one job per ticket.")
+        for v in rule_violations(conn):
+            print(f"  [DB]   WARNING {v['count']} {v['table']} row(s) break the rule: {v['message']} "
+                  f"(e.g. {', '.join(map(str, v['examples']))}). They are from before the rule; nothing was changed.")
     finally:
         conn.close()
     print(f"  [DB]   ready → {DB_PATH} (schema {SCHEMA_VERSION})")
@@ -507,6 +623,12 @@ def create_job(data: dict) -> tuple[dict, int]:
             (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
         job_id = cur.lastrowid
         conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback(); conn.close()
+        if TICKET_INDEX in str(e):          # the database caught a duplicate the check above missed
+            return {"error": f"Ticket {ticket} already has a job. Open that job instead of creating a second "
+                             "one. To redo it, cancel that job first."}, 409
+        return {"error": f"Could not reserve a job number: {e}"}, 400
     except Exception as e:
         conn.rollback(); conn.close()
         return {"error": f"Could not reserve a job number: {e}"}, 500
@@ -2922,6 +3044,17 @@ def api_data_status():
         warnings.append({"level": "warn", "text": "The serial journal folder can't be reached, so ranges are not being copied there."})
     if Z_IS_DEFAULT:
         warnings.append({"level": "warn", "text": "Job folders are being created on this PC only. Set z_drive_base in config.ini to the shared folder."})
+    conn = get_db()
+    try:
+        for d in ensure_ticket_index(conn):
+            warnings.append({"level": "warn", "text": f"Ticket {d['ticket']} is on more than one open job "
+                             f"({', '.join(d['jobs'])}). Cancel the extra ones."})
+        for v in rule_violations(conn):
+            warnings.append({"level": "warn", "text": f"{v['count']} saved record(s) break the rule '{v['message']}' "
+                             f"(e.g. {', '.join(map(str, v['examples']))}). They were saved before the rule existed; "
+                             "correct them on the job page."})
+    finally:
+        conn.close()
     return jsonify({"stores": stores, "backups": backups, "warnings": warnings, "health": health, "counts": counts})
 
 

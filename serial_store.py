@@ -385,20 +385,28 @@ def backfill_from_registry():
     if not registry_ok(force=True)[0]:
         return 0
     conn = _db()
-    added = 0
+    added, refused = 0, []
     try:
         for f in os.listdir(SERIAL_REGISTRY_DIR):
             if not f.endswith(".txt"):
                 continue
             upc = f[:-4]
             for r in R.read_records(upc):
-                cur = conn.execute('INSERT OR IGNORE INTO serial_allocations (upc, job_number, start, "end", qty, '
-                                   'note, created_at, registry_state) VALUES (?,?,?,?,?,?,?,1)',
-                                   (upc, r["job_number"], r["start"], r["end"], r["qty"], r["note"], r["timestamp"]))
-                added += cur.rowcount
+                try:
+                    cur = conn.execute('INSERT OR IGNORE INTO serial_allocations (upc, job_number, start, "end", qty, '
+                                       'note, created_at, registry_state) VALUES (?,?,?,?,?,?,?,1)',
+                                       (upc, r["job_number"], r["start"], r["end"], r["qty"], r["note"], r["timestamp"]))
+                    added += cur.rowcount
+                except sqlite3.IntegrityError:
+                    # A line the database rules refuse (e.g. a hand edit that ends before it starts).
+                    # The registry file still holds it, so its serials still count as used.
+                    refused.append(f"{upc}: {r['job_number']} {r['start']}-{r['end']}")
         conn.commit()
     finally:
         conn.close()
+    if refused:
+        print(f"  [SER] WARNING {len(refused)} registry line(s) not copied to the app database because they "
+              f"are not valid ranges: {'; '.join(refused[:5])}. Check those registry files.")
     return added
 
 
