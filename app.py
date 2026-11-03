@@ -90,11 +90,17 @@ def get_db():
     return conn
 
 
-def init_db():
-    """Create the tables this app uses. Tables left over from the old app
-    (inventory, audits, rewind, rules) are left alone — nothing reads them."""
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+def _add_col(cur, table, col, ddl):
+    """Add a column if it isn't there yet (old databases from before the column existed)."""
+    cols = [r[1] for r in cur.execute(f"PRAGMA table_info({table})")]
+    if col not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+        print(f"  [DB]   added {table}.{col}")
+
+
+def _migrate_v1_baseline(cur):
+    """Every table and column the app had before the schema was versioned. Written so it is
+    safe on a database that already has some or all of them (every existing install)."""
     cur.execute("INSERT OR IGNORE INTO _meta VALUES ('created_at', datetime('now'))")
     cur.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
@@ -117,7 +123,6 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, file_path TEXT NOT NULL,
         description TEXT, notes TEXT, thumbnail_path TEXT,
         active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
-
     cur.execute("""CREATE TABLE IF NOT EXISTS job_notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -128,38 +133,116 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, job_id INTEGER,
         kind TEXT NOT NULL, actor TEXT, message TEXT NOT NULL)""")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_activity_job ON activity(job_id)")
+    for table, col, ddl in (
+            ("jobs", "archived_at", "archived_at TEXT"),
+            ("jobs", "template_path", "template_path TEXT"),
+            ("jobs", "job_type", "job_type TEXT NOT NULL DEFAULT 'standard'"),
+            ("jobs", "priority_rank", "priority_rank INTEGER"),
+            ("jobs", "created_by", "created_by TEXT"),
+            ("jobs", "completed_at", "completed_at TEXT"),
+            ("jobs", "data_sheet", "data_sheet TEXT"),          # GO2 / CDO data sheet kind on special jobs
+            ("job_rolls", "completed_by", "completed_by TEXT"),
+            ("job_rolls", "started_at", "started_at TEXT"),
+            ("job_rolls", "started_by", "started_by TEXT"),
+            ("job_rolls", "paused_at", "paused_at TEXT"),
+            ("job_rolls", "paused_by", "paused_by TEXT"),
+            ("job_rolls", "printer", "printer TEXT"),
+            ("btw_templates", "thumbnail_path", "thumbnail_path TEXT"),
+            ("btw_templates", "file_size", "file_size INTEGER"),
+            ("btw_templates", "file_mtime", "file_mtime TEXT")):
+        _add_col(cur, table, col, ddl)
+    SS.init_schema(cur)
+    SHEETS_SEQ.init_schema(cur)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
 
-    def add_col(table, col, ddl):
-        cols = [r[1] for r in cur.execute(f"PRAGMA table_info({table})")]
-        if col not in cols:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
-            print(f"  [DB]   added {table}.{col}")
-    add_col("jobs", "archived_at", "archived_at TEXT")
-    add_col("jobs", "template_path", "template_path TEXT")
-    add_col("jobs", "job_type", "job_type TEXT NOT NULL DEFAULT 'standard'")
-    add_col("jobs", "priority_rank", "priority_rank INTEGER")
-    add_col("jobs", "created_by", "created_by TEXT")
-    add_col("jobs", "completed_at", "completed_at TEXT")
-    add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
-    # Jobs already marked Complete before this column existed: use when they were set to Complete.
+
+# Schema changes, oldest first. Each runs exactly once, in its own transaction, after a copy of the
+# database has been taken; the version it reaches is stored in _meta.schema_version. To change the
+# schema, ADD an entry at the end (never edit one that has shipped) and bump SCHEMA_VERSION.
+MIGRATIONS = [
+    (1, "tables and columns from before versioning", _migrate_v1_baseline),
+]
+SCHEMA_VERSION = 1
+
+
+def _schema_version(conn) -> int:
+    """The version stored in the database; 0 for one from before versioning. Kept in the _meta table
+    rather than PRAGMA user_version, which a database carried over from the old app may already use."""
+    row = conn.execute("SELECT value FROM _meta WHERE key='schema_version'").fetchone()
+    return int(row[0]) if row and str(row[0]).isdigit() else 0
+
+
+def _snapshot_before_migrating(conn, target: int) -> str | None:
+    """Copy the database (SQLite's online backup) before changing its schema, and check the copy.
+    Returns the path, or None for a database with no data yet. Stops if the copy can't be made."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone():
+        return None
+    path = f"{DB_PATH}.before-schema-v{target}-{datetime.now():%Y%m%d-%H%M%S}"
+    try:
+        dst = sqlite3.connect(path)
+        try:
+            conn.backup(dst)
+            ok = dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        finally:
+            dst.close()
+    except sqlite3.Error as e:
+        ok, path = False, f"{path} ({e})"
+    if not ok:
+        print(f"  [STOP] Could not make a good copy of the database before upgrading it: {path}")
+        print("         Nothing was changed. Free some disk space or fix the folder, then start again.")
+        raise SystemExit(1)
+    print(f"  [DB]   copy of the database before the upgrade: {path}")
+    return path
+
+
+def migrate_db():
+    """Bring the database up to SCHEMA_VERSION. Refuses a database written by a newer app."""
+    conn = get_db()
+    conn.isolation_level = None                 # transactions are managed explicitly below
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        current = _schema_version(conn)
+        if current > SCHEMA_VERSION:
+            print(f"  [STOP] This database was last used by a newer Job Manager (schema {current}; this "
+                  f"copy of the app understands up to {SCHEMA_VERSION}).")
+            print("         Start the newer app instead. Nothing was changed.")
+            raise SystemExit(1)
+        todo = [m for m in MIGRATIONS if m[0] > current]
+        if not todo:
+            return
+        snapshot = _snapshot_before_migrating(conn, todo[0][0])
+        for version, description, step in todo:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                if _schema_version(conn) >= version:          # another process got here first
+                    conn.execute("ROLLBACK")
+                    continue
+                step(conn.cursor())
+                conn.execute("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', ?)",
+                             (str(version),))
+                conn.execute("COMMIT")
+                print(f"  [DB]   schema {version}: {description}")
+            except Exception as e:
+                conn.execute("ROLLBACK")
+                print(f"  [STOP] Database upgrade to schema {version} ({description}) failed: {e}")
+                print(f"         It was undone; the database is still at schema {version - 1}."
+                      + (f" A copy from before the upgrade: {snapshot}" if snapshot else ""))
+                raise SystemExit(1) from e
+    finally:
+        conn.close()
+
+
+def _startup_repairs(conn):
+    """Data fixes that are safe to run every start. They stay here (not in MIGRATIONS) because rows
+    needing them can arrive at any time: an import from the old app or a restored older backup."""
+    cur = conn.cursor()
+    # Jobs marked Complete before completed_at existed: use when they were set to Complete.
     cur.execute("""UPDATE jobs SET completed_at = COALESCE(
                        (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
                           AND a.message LIKE '%set to Complete'), updated_at)
                    WHERE status = 'Complete' AND completed_at IS NULL""")
     cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
-    SS.init_schema(cur)
-    SHEETS_SEQ.init_schema(cur)
-    add_col("job_rolls", "completed_by", "completed_by TEXT")
-    add_col("job_rolls", "started_at", "started_at TEXT")
-    add_col("job_rolls", "started_by", "started_by TEXT")
-    add_col("job_rolls", "paused_at", "paused_at TEXT")
-    add_col("job_rolls", "paused_by", "paused_by TEXT")
-    add_col("job_rolls", "printer", "printer TEXT")
-    add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
-    add_col("btw_templates", "file_size", "file_size INTEGER")
-    add_col("btw_templates", "file_mtime", "file_mtime TEXT")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
     # Old per-roll notes become entries in the job's note log.
     moved = cur.execute("""INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)
         SELECT job_id, roll_number, completed_by, notes, 0, COALESCE(completed_at, created_at)
@@ -176,8 +259,18 @@ def init_db():
         ensure_rolls(conn, job)
     if todo:
         print(f"  [DB]   set up roll tracking for {len(todo)} open jobs")
-    conn.close()
-    print(f"  [DB]   ready → {DB_PATH}")
+
+
+def init_db():
+    """Upgrade the schema (see MIGRATIONS), then run the every-start repairs. Tables left over
+    from the old app (inventory, audits, rewind, rules) are left alone; nothing reads them."""
+    migrate_db()
+    conn = get_db()
+    try:
+        _startup_repairs(conn)
+    finally:
+        conn.close()
+    print(f"  [DB]   ready → {DB_PATH} (schema {SCHEMA_VERSION})")
 
 
 DEFAULT_PRINTERS = "Printer 1\nPrinter 2\nPrinter 3\nPrinter 4"

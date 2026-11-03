@@ -38,6 +38,13 @@ Job folders and Master Templates are on the share, which IT backs up. A restore 
 - It keeps your current config.ini. If the backup's differs, it is saved beside it as
   `config.ini.from-backup` (on a new PC with no config.ini, the backup's is used).
 
+## Backups from another version of the app
+
+- **Older backup:** fine. The next start upgrades its database, after saving a copy beside it
+  named `local.db.before-schema-v<N>-<date>`.
+- **Backup made by a newer version than the one installed:** the app refuses to start on it
+  ("last used by a newer Job Manager"). Install the newer app, or restore an older backup.
+
 ## Undoing a restore
 
 Close the app, copy `local.db`, the `serial_registry` folder and `config.ini` back from the

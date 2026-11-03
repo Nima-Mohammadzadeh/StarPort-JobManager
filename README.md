@@ -46,6 +46,11 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   latest backup** repeats that on demand. With no backup folder set, backups go to a `backups`
   folder next to the app; set a folder on the share for real protection (it also turns on the
   serial journal). A header warning appears whenever backups need attention.
+- **Database upgrades**: the database records its schema version (`_meta.schema_version`). When a
+  new version of the app needs a change, it first saves a checked copy next to the database
+  (`local.db.before-schema-v<N>-<date>`), then applies each change once, all or nothing. If a change
+  fails it is undone and the app stops with the copy's name. A database last used by a newer version
+  of the app is refused rather than opened by an older one.
 - **Rewind page (Android tablets)**: a separate page just for the rewind operators, at
   `http://<host-ip>:5050/rewind`. It isn't in the desktop menu; they open it by scanning
   the QR sign (Settings, Rewind page, Print QR sign) and add it to the home screen.
