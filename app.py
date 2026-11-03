@@ -199,6 +199,8 @@ RULES = [
      "registry_state must be -1, 0 or 1"),
     (2, "sheet_serials", "range", '{r}start >= 1 AND {r}"end" >= {r}start AND {r}qty >= 0',
      ["start", "end", "qty"], "a data sheet range must start at 1 or more and end at or after its start"),
+    (3, "jobs", "create_state", "{r}create_state IN ('reserving', 'ready')", ["create_state"],
+     "create_state must be reserving or ready"),
 ]
 # How to name a row in a report: the job number, plus the roll or UPC where that helps.
 _RULE_ROW_LABEL = {
@@ -265,6 +267,13 @@ def _migrate_v2_rules(cur):
     install_rule_triggers(cur, since=2)
 
 
+def _migrate_v3_create_state(cur):
+    # 'reserving' from the moment the job number is taken until the finished job is saved. Every job
+    # that already exists becomes 'ready': there is no way to tell an old half-made one apart.
+    _add_col(cur, "jobs", "create_state", "create_state TEXT NOT NULL DEFAULT 'ready'")
+    install_rule_triggers(cur, since=3)
+
+
 # Schema changes, oldest first. Each runs exactly once, in its own transaction, after a copy of the
 # database has been taken; the version it reaches is stored in _meta.schema_version. To change the
 # schema, ADD an entry at the end (never edit one that has shipped) and bump SCHEMA_VERSION.
@@ -272,8 +281,9 @@ def _migrate_v2_rules(cur):
 MIGRATIONS = [
     (1, "tables and columns from before versioning", _migrate_v1_baseline),
     (2, "database rules for statuses, quantities and serial ranges", _migrate_v2_rules),
+    (3, "mark jobs that are still being created", _migrate_v3_create_state),
 ]
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _schema_version(conn) -> int:
@@ -384,6 +394,8 @@ def init_db():
         for v in rule_violations(conn):
             print(f"  [DB]   WARNING {v['count']} {v['table']} row(s) break the rule: {v['message']} "
                   f"(e.g. {', '.join(map(str, v['examples']))}). They are from before the rule; nothing was changed.")
+        for u in unfinished_jobs(conn, min_age_minutes=0):      # nothing can be mid-creation at startup
+            print(f"  [DB]   WARNING {_unfinished_text(u)}")
     finally:
         conn.close()
     print(f"  [DB]   ready → {DB_PATH} (schema {SCHEMA_VERSION})")
@@ -483,7 +495,7 @@ def _same_ticket(conn, ticket, exclude_id=None):
     t = (ticket or "").strip().lower()
     if not t:
         return []
-    sql = ("SELECT id, job_number, status, customer FROM jobs "
+    sql = ("SELECT id, job_number, status, customer, create_state, created_at FROM jobs "
            "WHERE LOWER(TRIM(job_ticket))=? AND status!='Cancelled'")
     args = [t]
     if exclude_id:
@@ -496,6 +508,13 @@ def find_duplicate(conn, ticket, customer, title, upc, quantity):
     With a ticket: the ticket must be new. Without one: the same entry (customer, item,
     UPC, quantity) can't be repeated within 2 minutes, which catches a double submit."""
     same = _same_ticket(conn, ticket)
+    stuck_before = (datetime.now() - timedelta(minutes=UNFINISHED_AFTER_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+    stuck = [j for j in same if j["create_state"] == "reserving" and j["created_at"] <= stuck_before]
+    if stuck:
+        names = ", ".join(j["job_number"] for j in stuck)
+        return {"error": f"Ticket {ticket} is held by {names}, which was never finished being created. "
+                         f"Open {names} and set it to Cancelled (its serials stay used), then create the job again.",
+                "duplicate_of": [j["job_number"] for j in stuck], "duplicate_ids": [j["id"] for j in stuck]}
     if same:
         names = ", ".join(j["job_number"] for j in same)
         return {"error": f"Ticket {ticket} already has a job ({names}). Open that job instead of creating a second one. "
@@ -619,7 +638,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         # arrives while this one is still being built can see it and be refused.
         cur = conn.execute(
             "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
-            " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
+            " data_sheet, create_state) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, 'reserving')",
             (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
         job_id = cur.lastrowid
         conn.commit()
@@ -741,7 +760,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         conn.execute("""UPDATE jobs SET job_ticket=?, po_number=?, part_number=?, due_date=?,
             notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
             label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
-            updated_at=? WHERE id=?""",
+            updated_at=?, create_state='ready' WHERE id=?""",
             (ticket, po, part, due, notes, upc, quantity, lpr, qty_db, start_serial, overage,
              label_size, inlay, job_dir if folder_ok else None, template_path, job_type, created_by,
              now_str(), job_id))
@@ -768,20 +787,59 @@ def create_job(data: dict) -> tuple[dict, int]:
             "rolls": len(rolls), "warnings": warnings}, 201
 
 
+UNFINISHED_AFTER_MINUTES = 10      # a create that hasn't finished by then has failed or crashed
+
+
+def unfinished_jobs(conn, min_age_minutes=UNFINISHED_AFTER_MINUTES) -> list[dict]:
+    """Jobs whose creation never finished (still 'reserving' after min_age_minutes, not cancelled),
+    with any serials or data sheet numbers that were taken under their job number."""
+    cutoff = (datetime.now() - timedelta(minutes=min_age_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    out = []
+    for r in conn.execute("""SELECT id, job_number, job_ticket, customer, created_at FROM jobs
+                             WHERE create_state='reserving' AND status!='Cancelled' AND created_at <= ?
+                             ORDER BY id""", (cutoff,)):
+        u = dict(r)
+        u["serials"] = [dict(zip(("upc", "start", "end"), s)) for s in conn.execute(
+            'SELECT upc, start, "end" FROM serial_allocations WHERE job_number=? ORDER BY start', (u["job_number"],))]
+        u["sheet_serials"] = [dict(zip(("sheet", "start", "end"), s)) for s in conn.execute(
+            'SELECT sheet, start, "end" FROM sheet_serials WHERE job_number=? ORDER BY start', (u["job_number"],))]
+        out.append(u)
+    return out
+
+
+def _unfinished_text(u) -> str:
+    taken = [f"UPC {s['upc']} {s['start']:,}-{s['end']:,}" for s in u["serials"]] + \
+            [f"{s['sheet']} {s['start']:,}-{s['end']:,}" for s in u["sheet_serials"]]
+    ticket = f" (ticket {u['job_ticket']}, {u['customer']})" if u["job_ticket"] else f" ({u['customer']})"
+    return (f"{u['job_number']}{ticket} was never finished being created (started {u['created_at']}). "
+            + (f"These serials were taken for it and stay used: {'; '.join(taken)}. " if taken else
+               "No serials were taken for it. ")
+            + "Open it and set it to Cancelled to free its ticket, then create the job again.")
+
+
 def _discard_job(job_id, folder=None):
     """Undo a job that failed before any serials were taken: drop the reserved row and
     any folder this attempt created."""
+    name = f"job id {job_id}"
     try:
         c = get_db()
-        row = c.execute("SELECT job_number FROM jobs WHERE id=?", (job_id,)).fetchone()
-        c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-        # Give the number back if nothing was issued after it (no serials were taken under it).
-        if row:
-            n = int(row["job_number"].split("-")[1])
-            c.execute("UPDATE app_settings SET value=? WHERE key='job_number_last' AND value=?", (str(n - 1), str(n)))
-        c.commit(); c.close()
-    except Exception:
-        pass
+        try:
+            row = c.execute("SELECT job_number FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row:
+                name = row["job_number"]
+            c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+            # Give the number back if nothing was issued after it (no serials were taken under it).
+            if row:
+                n = int(row["job_number"].split("-")[1])
+                c.execute("UPDATE app_settings SET value=? WHERE key='job_number_last' AND value=?",
+                          (str(n - 1), str(n)))
+            c.commit()
+        finally:
+            c.close()
+    except Exception as e:
+        # The reserved row is still marked 'reserving', so unfinished_jobs() lists it (Settings → Data).
+        print(f"  [JOB]  WARNING {name} could not be undone after a failed create ({e}). "
+              "It is listed as never finished in Settings → Data; set it to Cancelled there.")
     if folder:
         shutil.rmtree(folder, ignore_errors=True)
 
@@ -3049,6 +3107,8 @@ def api_data_status():
         for d in ensure_ticket_index(conn):
             warnings.append({"level": "warn", "text": f"Ticket {d['ticket']} is on more than one open job "
                              f"({', '.join(d['jobs'])}). Cancel the extra ones."})
+        for u in unfinished_jobs(conn):
+            warnings.append({"level": "bad", "text": _unfinished_text(u)})
         for v in rule_violations(conn):
             warnings.append({"level": "warn", "text": f"{v['count']} saved record(s) break the rule '{v['message']}' "
                              f"(e.g. {', '.join(map(str, v['examples']))}). They were saved before the rule existed; "

@@ -40,6 +40,12 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   the server refuses even if two people enter it at the same instant. The database enforces it too
   (a unique index on open tickets). If an older database already has two open jobs on one ticket,
   Settings → Data lists them and the rule switches on once the extra ones are cancelled.
+- **A job that was never finished**: while a job is being created it is marked *reserving*;
+  it becomes *ready* only once everything is saved. If the PC crashes or a step fails partway,
+  the job stays marked. After 10 minutes Settings → Data lists it (and the console does at the
+  next start) with any serials it took. Those serials stay used for good. Typing its ticket
+  again says which job holds it. Set that job to Cancelled to free the ticket, then create
+  the job again.
 - **Database rules**: the database itself refuses values the app never writes: an unknown job or
   roll status, a quantity or labels-per-roll of 0, a start serial of 0, overage outside 0–100, and
   a serial range that ends before it starts. Records saved before these rules existed are listed
