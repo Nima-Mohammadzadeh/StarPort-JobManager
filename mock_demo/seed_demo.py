@@ -39,6 +39,13 @@ r = post("/api/jobs", {"job_type": "special", "customer": "Initech", "title": "S
 ids.append((r.get("job") or {}).get("id") or r.get("id"))
 
 
+# Special jobs with a customer data sheet (CDO sequential, GO2 random EPC): "Add data" works on these too.
+for cust, sheet, tk in (("CDO", "cdo_seq", "40180"), ("GO2", "go2_rand", "40181")):
+    r = post("/api/jobs", {"job_type": "special", "customer": cust, "title": f"{cust} tags", "job_ticket": tk,
+                           "data_sheet": sheet, "quantity": 1500, "lpr": 500, "label_size": '2" x 1"'})
+    ids.append((r.get("job") or {}).get("id") or r.get("id"))
+
+
 def roll(j, n, status, who, note=""):
     post(f"/api/jobs/{j}/rolls/{n}", {"status": status, "operator": who, "note": note})
 

@@ -47,7 +47,7 @@ import serial_store as SS                      # noqa: E402
 import backup                                  # noqa: E402
 from import_old import merge_registry          # noqa: E402
 
-JOB_TABLES = ("job_rolls", "job_notes")
+JOB_TABLES = ("job_additions", "job_rolls", "job_notes")      # job_additions first: rolls point at it
 
 
 class RestoreError(Exception):
@@ -123,7 +123,12 @@ def _job_snapshot(conn, job_number):
              for r in conn.execute("SELECT * FROM job_rolls WHERE job_id=? ORDER BY roll_number", (jid,))]
     notes = [(r["roll_number"], r["body"], r["created_at"])
              for r in conn.execute("SELECT * FROM job_notes WHERE job_id=? ORDER BY id", (jid,))]
-    return {"job": j, "rolls": rolls, "notes": notes}
+    try:
+        adds = [(r["seq"], r["quantity"], r["serial_start"], r["serial_end"])
+                for r in conn.execute("SELECT * FROM job_additions WHERE job_id=? ORDER BY seq", (jid,))]
+    except sqlite3.Error:
+        adds = []                               # a backup made before data could be added
+    return {"job": j, "rolls": rolls, "notes": notes, "additions": adds}
 
 
 def compare_jobs(cur, old):
@@ -274,11 +279,19 @@ def _copy_job(cur, new, job_number, job_cols):
     else:
         new_id = new.execute(f"INSERT INTO jobs ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                              [row[c] for c in cols]).lastrowid
+    add_ids = {}                                   # job_additions ids differ after the copy; rolls must follow
     for t in JOB_TABLES:
+        if not _cols(cur, t):
+            continue
         tcols = [c for c in _cols(new, t) if c in _cols(cur, t) and c not in ("id", "job_id")]
         for r in cur.execute(f"SELECT * FROM {t} WHERE job_id=?", (row["id"],)):
-            new.execute(f"INSERT INTO {t} (job_id, {', '.join(tcols)}) VALUES (?, {', '.join('?' * len(tcols))})",
-                        [new_id] + [r[c] for c in tcols])
+            vals = [r[c] for c in tcols]
+            if t == "job_rolls" and "addition_id" in tcols:
+                i = tcols.index("addition_id"); vals[i] = add_ids.get(vals[i])
+            nid = new.execute(f"INSERT INTO {t} (job_id, {', '.join(tcols)}) VALUES (?, {', '.join('?' * len(tcols))})",
+                              [new_id] + vals).lastrowid
+            if t == "job_additions":
+                add_ids[r["id"]] = nid
     return new_id
 
 
@@ -286,6 +299,7 @@ def _build_db(tmp, keep, plan):
     """Turn the backup's database (at tmp) into the one to install."""
     new = sqlite3.connect(tmp); new.row_factory = sqlite3.Row
     SS.init_schema(new)                           # very old backups may lack the serial table
+    SS.init_additions_schema(new)                 # ...or the table for data added to jobs
     cur = None
     if plan["current_readable"]:
         cur = sqlite3.connect(config.DB_PATH); cur.row_factory = sqlite3.Row

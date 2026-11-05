@@ -1132,6 +1132,20 @@ details.more p.d{margin:6px 0 0}
   <div class="m-foot"><span class="msg" id="e-msg"></span><button class="btn" onclick="closeOv('ov-edit')">Cancel</button><button class="btn primary" onclick="saveEdit(this)">Save changes</button></div>
 </div></div>
 
+<!-- Add data to an existing job -->
+<div class="ov" id="ov-add"><div class="modal">
+  <div class="m-head"><h2 id="ad-title">Add data</h2><button class="btn quiet x" onclick="closeOv('ov-add')" aria-label="Close">✕</button></div>
+  <div class="m-body">
+    <p class="sub" style="margin:0 0 12px" id="ad-intro"></p>
+    <div class="grid3">
+      <label class="f">Labels to add<span class="hint">Exactly how many more to encode</span><input class="i data" id="ad-qty" inputmode="numeric" autocomplete="off"></label>
+      <label class="f" style="grid-column:span 2">Reason<span class="hint">Optional, kept in the activity log</span><input class="i" id="ad-reason" maxlength="200" autocomplete="off"></label>
+    </div>
+    <div id="ad-preview" class="ticketnote" style="margin-top:12px" aria-live="polite"></div>
+  </div>
+  <div class="m-foot"><span class="msg" id="ad-msg" role="alert"></span><button class="btn" onclick="closeOv('ov-add')">Cancel</button><button class="btn primary" id="ad-ok" onclick="submitAddData(this)" disabled>Add data</button></div>
+</div></div>
+
 <!-- Batch -->
 <div class="ov" id="ov-batch"><div class="modal wide">
   <div class="m-head"><h2>Batch add</h2><button class="btn quiet x" onclick="closeOv('ov-batch')" aria-label="Close">✕</button></div>
@@ -1470,6 +1484,10 @@ $('#ov-job').addEventListener('mousedown', e => { if (e.target.id === 'ov-job') 
 document.addEventListener('click', e => { const m = $('#jm-more'); if (m && m.open && !m.contains(e.target)) m.open = false; });
 function renderDrawer(keepRoll) {
   const {job: j, rolls, files, total_qty, end_serial, folder_exists} = CURRENT;
+  const adds = CURRENT.additions || [], ranges = CURRENT.serial_ranges || [];
+  const addedQty = adds.reduce((a, x) => a + x.quantity, 0), baseQty = (total_qty || 0) - addedQty;
+  const canAdd = !j.archived_at && (j.upc || j.data_sheet);
+  const rangeHtml = ranges.map(r => `${ranges.length > 1 ? `<small>${esc(r.label)}</small> ` : ''}${fmt(r.start)} – ${fmt(r.end)}`).join('<br>');
   const done = rolls.filter(r => r.status === 'complete' || r.status === 'verified').length;
   const archived = !!j.archived_at;
   const next = {'Pending': ['Start job', 'In Progress'], 'In Progress': ['Mark complete', 'Complete'],
@@ -1484,9 +1502,9 @@ function renderDrawer(keepRoll) {
     </div>
     <dl class="jm-tiles">
       ${tile('Due', j.due_date ? dueHtml(j, new Date().toISOString().slice(0, 10)) : '<span class="sub">Not set</span>')}
-      ${tile(j.job_type === 'special' ? 'Quantity' : 'To encode', fmt(total_qty || j.quantity), j.overage_pct ? `<small>incl. +${j.overage_pct}% overage</small>` : '')}
+      ${tile(j.job_type === 'special' ? 'Quantity' : 'To encode', fmt(total_qty || j.quantity), (j.overage_pct ? `<small>incl. +${j.overage_pct}% overage</small>` : '') + (addedQty ? `<small>${fmt(baseQty)} + ${fmt(addedQty)} added</small>` : ''))}
       ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>` : '')}
-      ${tile('Serial range', j.start_serial ? `<span class="data" style="font-size:14px">${fmt(j.start_serial)} –<br>${fmt(j.start_serial + total_qty - 1)}</span>` : '<span class="sub">None</span>')}
+      ${tile('Serial range', ranges.length ? `<span class="data" style="font-size:14px">${rangeHtml}</span>` : '<span class="sub">None</span>')}
     </dl>
     <div class="d-actions">
       ${archived || !next ? '' : `<button class="btn primary" onclick="setStatus('${next[1]}')">${next[0]}</button>`}
@@ -1494,6 +1512,7 @@ function renderDrawer(keepRoll) {
       <button class="btn" onclick="openFolder()" ${j.folder_path ? '' : 'disabled'}>Open folder</button>
       <button class="btn" onclick="window.open('/jobs/${j.id}/roll-sheet?print=1','_blank')" ${rolls.length ? '' : 'disabled'}>Print roll sheet</button>
       <button class="btn" onclick="openEdit()">Edit</button>
+      ${canAdd ? `<button class="btn" onclick="openAddData()">Add data</button>` : ''}
       <details class="jm-more" id="jm-more"><summary class="btn" aria-label="More actions">More ▾</summary><div class="menu">
         ${archived ? '' : j.priority_rank ? `<button class="btn sm" onclick="priorityChange('remove', ${j.id})">Remove from priority (#${j.priority_rank})</button>`
                                            : `<button class="btn sm" onclick="priorityChange('add', ${j.id})">Add to priority</button>`}
@@ -1516,13 +1535,13 @@ function renderDrawer(keepRoll) {
     ${kv('Quantity', fmt(j.quantity), 'data')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
     ${kv('Labels per roll', fmt(j.lpr), 'data')}${kv('Inlay', esc(j.inlay_type || ''))}${kv('Label size', esc(j.label_size || ''))}
     ${j.data_sheet ? kv('Data sheet', esc((sheetDef(j.data_sheet) || {detail: j.data_sheet}).detail)) : ''}
-    ${j.data_sheet && j.start_serial ? kv('Serial range', `${fmt(j.start_serial)} – ${fmt(j.start_serial + total_qty - 1)}`, 'data') : ''}
+    ${j.data_sheet && ranges.length ? kv('Serial range', rangeHtml, 'data') : ''}
     ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
     ${kv('UPC', esc(j.upc || ''), 'data')}
     ${kv('Base quantity', fmt(j.quantity), 'data')}
     ${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
     ${kv('Labels per roll', fmt(j.lpr), 'data')}
-    ${kv('DB files', total_qty ? dbSplit(total_qty, j.qty_db).map(fmt).join(' + ') : '', 'data')}
+    ${kv('DB files', baseQty ? dbSplit(baseQty, j.qty_db).map(fmt).join(' + ') + adds.map(a => `; added #${a.seq}: ` + dbSplit(a.quantity, j.qty_db).map(fmt).join(' + ')).join('') : '', 'data')}
     ${kv('Inlay', esc(j.inlay_type || ''))}
     ${kv('Label size', esc(j.label_size || ''))}
   </dl></div>`;
@@ -1626,6 +1645,47 @@ async function saveEdit(btn) {
   btn.disabled = true;
   try { await api('/api/jobs/' + CURRENT.job.id, {method: 'PATCH', body}); closeOv('ov-edit'); toast('Changes saved'); openJob(CURRENT.job.id); refreshList(); }
   catch (e) { $('#e-msg').textContent = e.message; } finally { btn.disabled = false; }
+}
+
+/* ───────────────────────── add data to an existing job ───────────────────────── */
+let AD_TIMER = null, AD_OK = false;
+function openAddData() {
+  const j = CURRENT.job;
+  $('#ad-title').textContent = 'Add data to ' + (j.job_ticket || j.job_number);
+  $('#ad-intro').textContent = j.upc ? 'More labels for this job get new serials for UPC ' + j.upc + ', new rolls after the existing ones and new data files. Existing files and rolls are not changed.'
+    : 'More labels for this job get new numbers, new rolls after the existing ones and new data files. Existing files and rolls are not changed.';
+  $('#ad-qty').value = ''; $('#ad-reason').value = ''; $('#ad-msg').textContent = ''; $('#ad-preview').textContent = 'Enter how many labels to add.';
+  $('#ad-ok').disabled = true; AD_OK = false; openOv('ov-add'); setTimeout(() => $('#ad-qty').focus(), 30);
+}
+function adQty() { return parseInt(($('#ad-qty').value || '').replace(/[^\d]/g, ''), 10) || 0; }
+$('#ad-qty').addEventListener('input', () => {
+  clearTimeout(AD_TIMER); AD_OK = false; $('#ad-ok').disabled = true; $('#ad-msg').textContent = '';
+  const q = adQty(); if (!q) { $('#ad-preview').textContent = 'Enter how many labels to add.'; return; }
+  $('#ad-preview').textContent = 'Checking…';
+  AD_TIMER = setTimeout(async () => {
+    try {
+      const p = await api('/api/jobs/' + CURRENT.job.id + '/additions', {method: 'POST', body: {quantity: q, preview: true}});
+      if (adQty() !== q) return;
+      $('#ad-preview').innerHTML = `<span style="font-weight:600">${fmt(q)} labels</span> will be added. New total ${fmt(p.new_total)}.<br>` +
+        (p.serial_start ? `Serials <span class="data">${fmt(p.serial_start)} – ${fmt(p.serial_end)}</span><br>` : 'No serials for this job type.<br>') +
+        (p.rolls ? `Rolls ${p.first_roll}–${p.last_roll} (${p.rolls})<br>` : 'No rolls (this job has no labels per roll).<br>') +
+        `Files: <span class="data">${p.files.map(esc).join(', ')}</span><br><small>Serials are only taken when you confirm. Another job may take them first, and then the next free range is used.</small>`;
+      AD_OK = true; $('#ad-ok').disabled = false;
+    } catch (e) { $('#ad-preview').textContent = ''; $('#ad-msg').textContent = e.message; }
+  }, 350);
+});
+async function submitAddData(btn) {
+  const q = adQty(); if (!AD_OK || !q) return;
+  const who = await askName('Who is adding this data?', fmt(q) + ' more labels for ' + (CURRENT.job.job_ticket || CURRENT.job.job_number));
+  if (!who) return;
+  btn.disabled = true; $('#ad-msg').textContent = '';
+  try {
+    const r = await api('/api/jobs/' + CURRENT.job.id + '/additions', {method: 'POST', body: {quantity: q, reason: $('#ad-reason').value, added_by: who}});
+    closeOv('ov-add');
+    toast(`Added ${fmt(q)} labels` + (r.addition.serial_start ? `, serials ${fmt(r.addition.serial_start)}–${fmt(r.addition.serial_end)}` : '') + (r.warnings && r.warnings.length ? '. ' + r.warnings[0] : ''));
+    openJob(CURRENT.job.id, true); refreshList();
+    if (typeof WORK !== 'undefined' && WORK && WORK.job.id === CURRENT.job.id) openWork(CURRENT.job.id, true);
+  } catch (e) { $('#ad-msg').textContent = e.message; btn.disabled = false; }
 }
 
 /* ───────────────────────── modals ───────────────────────── */
@@ -2508,9 +2568,20 @@ function recSegs(before, qty, qdb) {
   }
   return segs;
 }
-function recMap(job, rolls) {
-  const m = {}; let cum = 0; const total = rolls.reduce((a, r) => a + r.quantity, 0), qdb = job.qty_db && job.qty_db < total ? job.qty_db : 0;
-  rolls.forEach(r => { m[r.roll_number] = {segs: recSegs(cum, r.quantity, qdb), multi: !!qdb}; cum += r.quantity; });
+function recMap(job, rolls, additions = []) {
+  /* The original rolls and each addition live in their own data files, so numbering starts again at 1 for each group. */
+  const seqOf = {}; additions.forEach(a => seqOf[a.id] = a.seq);
+  const groups = new Map();
+  rolls.forEach(r => { const g = r.addition_id || 0; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); });
+  const m = {};
+  groups.forEach((rs, g) => {
+    let cum = 0; const total = rs.reduce((a, r) => a + r.quantity, 0), qdb = job.qty_db && job.qty_db < total ? job.qty_db : 0;
+    const tag = g ? `ADD${seqOf[g] || ''}` : (additions.length ? 'Original' : '');
+    rs.forEach(r => {
+      const segs = recSegs(cum, r.quantity, qdb).map(sg => ({...sg, file: tag ? (qdb ? `${tag} DB ${sg.file}` : tag) : sg.file}));
+      m[r.roll_number] = {segs, multi: !!qdb || additions.length > 0}; cum += r.quantity;
+    });
+  });
   return m;
 }
 const recText = sg => `${fmt(sg.from)}–${fmt(sg.to)}`;
@@ -2523,7 +2594,7 @@ function rollRowHtml(r, noteRolls) {
   const lbl = `Roll ${r.roll_number}, records ${recText(sg)}${rec.multi ? ` in database file ${sg.file}` : ''}, ${RLABEL[st]}${r.printer ? ' on ' + r.printer : ''}${who ? ' by ' + who : ''}${noteRolls.has(r.roll_number) ? ', has notes' : ''}`;
   return `<button class="ri s-${st} ${on ? 'on' : ''}" role="option" aria-selected="${on}" data-n="${r.roll_number}" title="${esc(lbl)}" aria-label="${esc(lbl)}" onclick="openRoll(${r.roll_number})">
     <span class="rno">${r.roll_number}</span><span class="g" aria-hidden="true">${RGLYPH[st]}</span>
-    <span class="rec data">${esc(rng)}${rec.multi ? `<small>DB ${sg.file}</small>` : ''}</span><span class="who">${right}</span>
+    <span class="rec data">${esc(rng)}${rec.multi ? `<small>${typeof sg.file === 'number' ? 'DB ' + sg.file : esc(sg.file)}</small>` : ''}</span><span class="who">${right}</span>
     ${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</button>`;
 }
 function rollBatchesHtml(rolls, noteRolls) {
@@ -2546,7 +2617,7 @@ function rollBatchesHtml(rolls, noteRolls) {
 }
 function renderWork() {
   const {job: j, rolls, notes, total_qty} = WORK;
-  RECS = recMap(j, rolls);
+  RECS = recMap(j, rolls, WORK.additions || []);
   if (!rolls.some(r => r.roll_number === WORK_ROLL)) WORK_ROLL = pickDefaultRoll(rolls);
   const cnt = s => rolls.filter(r => RSTATE(r) === s).length;
   const done = cnt('done');

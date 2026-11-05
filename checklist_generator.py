@@ -1,7 +1,7 @@
 """
 Encoding Checklist Generator — single-page printable checklist saved in the job folder.
 """
-import os, math
+import os, math, json
 from html import escape as _esc
 from datetime import datetime
 
@@ -32,6 +32,16 @@ def generate_checklist_html(job_dir, job_data):
         num_rolls   = math.ceil(prod_qty / lpr) if lpr > 0 else 0
         stop_serial = (start_serial + prod_qty - 1) if (start_serial and prod_qty) else 0
         num_dbs     = math.ceil(prod_qty / qty_db) if qty_db > 0 else 0
+        # Data added after the job was made: the original block is unchanged; each addition is listed.
+        added = job_data.get("additions") or []
+        if added:
+            prod_qty += sum(int(a.get("quantity") or 0) for a in added)
+            num_rolls = int(job_data.get("roll_count") or num_rolls)
+            num_dbs += sum(len(json.loads(a["files"])) if a.get("files") else 0 for a in added)
+        added_html = "".join(
+            f'<div class="serial-cell"><div class="serial-lbl">Added #{int(a["seq"])} ({int(a["quantity"]):,})</div>'
+            f'<div class="serial-val">' + (f'{int(a["serial_start"]):,} – {int(a["serial_end"]):,}' if a.get("serial_start") else "—")
+            + '</div></div>' for a in added)
         date_str    = datetime.now().strftime("%B %d, %Y")
 
         # ── helpers ────────────────────────────────────────────────────────────
@@ -300,6 +310,7 @@ header{{
       <div class="serial-lbl">Stop Serial</div>
       <div class="serial-val">{f"{stop_serial:,}" if stop_serial else "—"}</div>
     </div>
+    {added_html}
   </div>
 
   <!-- Quantity stats -->
