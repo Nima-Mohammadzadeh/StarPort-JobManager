@@ -124,6 +124,15 @@ def init_db():
         roll_number INTEGER, author TEXT, body TEXT NOT NULL,
         important INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)""")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_notes_job ON job_notes(job_id)")
+    # More data added to a job after it was made. The job's own quantity / start serial stay as ordered.
+    cur.execute("""CREATE TABLE IF NOT EXISTS job_additions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        seq INTEGER NOT NULL, quantity INTEGER NOT NULL,
+        serial_start INTEGER, serial_end INTEGER,
+        first_roll INTEGER NOT NULL DEFAULT 0, last_roll INTEGER NOT NULL DEFAULT 0,
+        files TEXT, reason TEXT, added_by TEXT, created_at TEXT NOT NULL,
+        UNIQUE(job_id, seq))""")
     cur.execute("""CREATE TABLE IF NOT EXISTS activity (
         id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, job_id INTEGER,
         kind TEXT NOT NULL, actor TEXT, message TEXT NOT NULL)""")
@@ -155,6 +164,7 @@ def init_db():
     add_col("job_rolls", "paused_at", "paused_at TEXT")
     add_col("job_rolls", "paused_by", "paused_by TEXT")
     add_col("job_rolls", "printer", "printer TEXT")
+    add_col("job_rolls", "addition_id", "addition_id INTEGER")
     add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
     add_col("btw_templates", "file_size", "file_size INTEGER")
     add_col("btw_templates", "file_mtime", "file_mtime TEXT")
@@ -551,6 +561,29 @@ def create_job(data: dict) -> tuple[dict, int]:
             "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc or seq_alloc,
             "db_split": db_file_split(total_qty, qty_db) if upc else [],
             "rolls": len(rolls), "warnings": warnings}, 201
+
+
+def job_additions(conn, job_id) -> list:
+    return [dict(r) for r in conn.execute("SELECT * FROM job_additions WHERE job_id=? ORDER BY seq", (job_id,))]
+
+
+def job_total_qty(conn, job: dict) -> int:
+    """Labels to encode for the job: the original order (with overage) plus every addition."""
+    base = production_qty(job.get("quantity") or 0, job.get("overage_pct") or 0) if job.get("quantity") else 0
+    extra = conn.execute("SELECT COALESCE(SUM(quantity),0) FROM job_additions WHERE job_id=?", (job["id"],)).fetchone()[0]
+    return base + int(extra)
+
+
+def job_serial_ranges(conn, job: dict) -> list:
+    """Serial ranges the job holds: the original block, then one per addition (not necessarily adjacent)."""
+    out = []
+    if job.get("start_serial") and job.get("quantity"):
+        n = production_qty(job["quantity"], job.get("overage_pct") or 0)
+        out.append({"start": int(job["start_serial"]), "end": int(job["start_serial"]) + n - 1, "label": "Original"})
+    for a in job_additions(conn, job["id"]):
+        if a["serial_start"]:
+            out.append({"start": a["serial_start"], "end": a["serial_end"], "label": f"Added #{a['seq']}"})
+    return out
 
 
 def _discard_job(job_id, folder=None):

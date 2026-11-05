@@ -142,7 +142,19 @@ def _jobs_last_end(conn, upc):
         if r[0] and r[1]:
             end = int(r[0]) + production_qty(int(r[1]), float(r[2] or 0)) - 1
             best = end if best is None else max(best, end)
+    for r in _addition_rows(conn, upc):
+        best = r[2] if best is None else max(best, r[2])
     return best
+
+
+def _addition_rows(conn, upc):
+    """(job_number, start, end) for data added to jobs after they were made."""
+    try:
+        return [(r[0], int(r[1]), int(r[2])) for r in conn.execute(
+            "SELECT j.job_number, a.serial_start, a.serial_end FROM job_additions a JOIN jobs j ON j.id=a.job_id "
+            "WHERE j.upc=? AND a.serial_start IS NOT NULL", (upc,))]
+    except sqlite3.OperationalError:
+        return []
 
 
 def _journal_ranges(upc):
@@ -171,6 +183,7 @@ def _jobs_ranges(conn, upc):
         if r[1] and r[2]:
             out.append({"job_number": r[0], "start": int(r[1]),
                         "end": int(r[1]) + production_qty(int(r[2]), float(r[3] or 0)) - 1})
+    out += [{"job_number": jn, "start": a, "end": b} for jn, a, b in _addition_rows(conn, upc)]
     return out
 
 
