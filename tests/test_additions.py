@@ -345,3 +345,84 @@ def test_detail_without_additions_unchanged(jm):
     d = jm.app.app.test_client().get(f"/api/jobs/{res['job']['id']}").get_json()
     assert d["total_qty"] == 102 and d["additions"] == []
     assert d["end_serial"] == res["job"]["start_serial"] + 101
+
+
+# ── Task 5: sheets, regenerate, restore ───────────────────────────────────────
+def test_regenerate_includes_additions(jm):
+    res = jm.job(50); jid = res["job"]["id"]
+    out, _ = add(jm, jid, 250)
+    folder = res["folder_path"]
+    qc = [f for f in os.listdir(folder) if "QualityControl" in f]
+    html = "".join(open(os.path.join(folder, f), encoding="utf-8").read() for f in qc)
+    assert "(added)" in html and "incl. 250 added" in html
+    chk = [f for f in os.listdir(folder) if "heck" in f]
+    text = open(os.path.join(folder, chk[0]), encoding="utf-8").read()
+    a = out["addition"]
+    assert f"{a['serial_start']:,} – {a['serial_end']:,}" in text and "Added #1" in text
+    # original data file deleted: regenerate rebuilds only the original, keeps the added file
+    dd = os.path.join(folder, "Data")
+    orig = [f for f in os.listdir(dd) if "_ADD" not in f][0]
+    os.remove(os.path.join(dd, orig))
+    r = jm.app.app.test_client().post(f"/api/jobs/{jid}/regenerate")
+    assert r.status_code == 200 and r.get_json()["rebuilt_database"] is True
+    assert len(rows(os.path.join(dd, orig))) == 102
+    assert len([f for f in os.listdir(dd) if "_ADD1" in f]) == 1
+
+
+@pytest.fixture
+def RB(jm):
+    rb = jm.restore()
+    rb.app_is_running = lambda: False
+    return rb
+
+
+def test_restore_keeps_additions_and_never_lowers_serials(jm, RB):
+    res = jm.job(51); jid = res["job"]["id"]; upc = res["job"]["upc"]
+    zr = jm.app.make_backup(); z = os.path.join(jm.backups, zr["file"])
+    out, _ = add(jm, jid, 400)                        # work after the backup
+    a = out["addition"]
+    RB.apply_restore(z, keep=True)
+    c = jm.app.get_db()
+    ads = [dict(r) for r in c.execute("SELECT * FROM job_additions")]
+    rolls = [dict(r) for r in c.execute("SELECT roll_number, addition_id FROM job_rolls ORDER BY roll_number")]
+    c.close()
+    assert len(ads) == 1 and (ads[0]["serial_start"], ads[0]["serial_end"]) == (a["serial_start"], a["serial_end"])
+    assert {r["addition_id"] for r in rolls if r["roll_number"] > 3} == {ads[0]["id"]} and len(rolls) == 3 + 8
+    assert jm.SS.next_start(upc) == a["serial_end"] + 1
+
+
+def test_restore_dropping_new_work_still_keeps_added_serials_used(jm, RB):
+    res = jm.job(52); jid = res["job"]["id"]; upc = res["job"]["upc"]
+    zr = jm.app.make_backup(); z = os.path.join(jm.backups, zr["file"])
+    out, _ = add(jm, jid, 400)
+    end = out["addition"]["serial_end"]
+    RB.apply_restore(z, keep=False)
+    c = jm.app.get_db()
+    assert c.execute("SELECT COUNT(*) FROM job_additions").fetchone()[0] == 0
+    c.close()
+    assert jm.SS.next_start(upc) >= end + 1           # the dropped addition's serials are never reissued
+
+
+def test_restore_from_backup_without_additions_table(jm, RB):
+    import sqlite3
+    res = jm.job(53); jid = res["job"]["id"]
+    zr = jm.app.make_backup(); z = os.path.join(jm.backups, zr["file"])
+    add(jm, jid, 100)
+    # make the zip look like one made before this feature: no table, no column
+    import zipfile, tempfile, shutil
+    tmp = tempfile.mkdtemp()
+    with zipfile.ZipFile(z) as zf:
+        zf.extractall(tmp)
+    dbs = [os.path.join(tmp, f) for f in os.listdir(tmp) if f.endswith(".db")]
+    assert dbs
+    c = sqlite3.connect(dbs[0]); c.execute("DROP TABLE IF EXISTS job_additions"); c.commit(); c.close()
+    old = os.path.join(jm.backups, "old_style.zip")
+    with zipfile.ZipFile(old, "w") as zf:
+        for root, _, files in os.walk(tmp):
+            for f in files:
+                full = os.path.join(root, f); zf.write(full, os.path.relpath(full, tmp))
+    shutil.rmtree(tmp)
+    RB.apply_restore(old, keep=True, allow_unverified=True)
+    c = jm.app.get_db()
+    assert c.execute("SELECT COUNT(*) FROM job_additions").fetchone()[0] == 1       # the work since was kept
+    c.close()

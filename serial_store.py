@@ -63,6 +63,23 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS ix_serial_upc ON serial_allocations(upc)")
 
 
+def init_additions_schema(conn):
+    """Data added to a job after it was made. The job's own quantity / start serial stay as ordered;
+    each addition holds its own serial range, which the safety nets here read. Also used by the
+    restore tool, so a backup made before this existed gets the table too."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS job_additions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        seq INTEGER NOT NULL, quantity INTEGER NOT NULL,
+        serial_start INTEGER, serial_end INTEGER,
+        first_roll INTEGER NOT NULL DEFAULT 0, last_roll INTEGER NOT NULL DEFAULT 0,
+        files TEXT, reason TEXT, added_by TEXT, created_at TEXT NOT NULL,
+        UNIQUE(job_id, seq))""")
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(job_rolls)")]
+    if cols and "addition_id" not in cols:
+        conn.execute("ALTER TABLE job_rolls ADD COLUMN addition_id INTEGER")
+
+
 def set_journal_dir(path):
     _journal["dir"] = (path or "").strip()
 

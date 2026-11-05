@@ -124,15 +124,7 @@ def init_db():
         roll_number INTEGER, author TEXT, body TEXT NOT NULL,
         important INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)""")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_notes_job ON job_notes(job_id)")
-    # More data added to a job after it was made. The job's own quantity / start serial stay as ordered.
-    cur.execute("""CREATE TABLE IF NOT EXISTS job_additions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        seq INTEGER NOT NULL, quantity INTEGER NOT NULL,
-        serial_start INTEGER, serial_end INTEGER,
-        first_roll INTEGER NOT NULL DEFAULT 0, last_roll INTEGER NOT NULL DEFAULT 0,
-        files TEXT, reason TEXT, added_by TEXT, created_at TEXT NOT NULL,
-        UNIQUE(job_id, seq))""")
+    SS.init_additions_schema(cur)               # data added to a job after it was made
     cur.execute("""CREATE TABLE IF NOT EXISTS activity (
         id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, job_id INTEGER,
         kind TEXT NOT NULL, actor TEXT, message TEXT NOT NULL)""")
@@ -164,7 +156,6 @@ def init_db():
     add_col("job_rolls", "paused_at", "paused_at TEXT")
     add_col("job_rolls", "paused_by", "paused_by TEXT")
     add_col("job_rolls", "printer", "printer TEXT")
-    add_col("job_rolls", "addition_id", "addition_id INTEGER")
     add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
     add_col("btw_templates", "file_size", "file_size INTEGER")
     add_col("btw_templates", "file_mtime", "file_mtime TEXT")
@@ -740,6 +731,10 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
             return {"error": f"The addition could not be saved, so nothing was added: {e}"
                              + (f" Serials {start:,}–{end:,} stay recorded as used." if start else "")}, 500
         conn.close()
+        try:
+            warnings += [f"Checklist / QC sheet not rewritten: {m}" for m in regenerate_sheets(job_id)]
+        except Exception as e:
+            warnings.append(f"Checklist / QC sheet not rewritten: {e}")
         return {"success": True, "addition": addition, "job": saved, "rolls_added": len(rolls),
                 "files": names, "warnings": warnings}, 201
 
@@ -1632,6 +1627,24 @@ def roll_sheet(job_id):
     return Response(html, mimetype="text/html")
 
 
+def regenerate_sheets(job_id) -> list:
+    """Rewrite the checklist and QC sheet from the job as it is now, additions included.
+    Returns a list of error messages (empty when both were written)."""
+    conn = get_db()
+    try:
+        job = _load_job(conn, job_id)
+        rolls = ensure_rolls(conn, job)
+        job["po_clean"] = clean_po(job["po_number"])
+        job["additions"] = job_additions(conn, job_id)
+        job["roll_count"] = len(rolls)
+    finally:
+        conn.close()
+    out = [generate_checklist_html(job["folder_path"], job)]
+    if rolls:
+        out.append(generate_qc_sheet(job["folder_path"], job, rolls))
+    return [r["error"] for r in out if not r.get("success")]
+
+
 @app.route("/api/jobs/<int:job_id>/regenerate", methods=["POST"])
 def api_regenerate(job_id):
     """Rewrite the checklist and QC sheet from current job data. Never touches
@@ -1644,10 +1657,11 @@ def api_regenerate(job_id):
     folder = job["folder_path"]
     if not folder or not os.path.isdir(folder):
         return err("The job folder isn't reachable")
-    job["po_clean"] = clean_po(job["po_number"])
     rebuilt = False
     data_dir = os.path.join(folder, "Data")
-    has_db = os.path.isdir(data_dir) and any(f.lower().endswith((".xlsx", ".csv")) for f in os.listdir(data_dir))
+    # The original encoding database: any data file that is not an _ADD<n> file.
+    has_db = os.path.isdir(data_dir) and any(f.lower().endswith((".xlsx", ".csv")) and "_ADD" not in f
+                                             for f in os.listdir(data_dir))
     if job["upc"] and job["start_serial"] and job["quantity"] and not has_db:
         try:     # same serials as recorded for this job; never allocates new ones
             generate_db_files(folder, job["upc"], job["start_serial"],
@@ -1655,10 +1669,7 @@ def api_regenerate(job_id):
             rebuilt = True
         except Exception as e:
             return err(f"Encoding database not rebuilt: {e}", 500)
-    out = [generate_checklist_html(folder, job)]
-    if rolls:
-        out.append(generate_qc_sheet(folder, job, rolls))
-    errors = [r["error"] for r in out if not r.get("success")]
+    errors = regenerate_sheets(job_id)
     return err("; ".join(errors), 500) if errors else jsonify({"success": True, "rebuilt_database": rebuilt})
 
 

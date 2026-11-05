@@ -436,6 +436,8 @@ def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool
     """Returns (html, has_write_in_space)."""
     base  = int(job.get("quantity") or 0)
     total = production_qty(base, float(job.get("overage_pct") or 0))
+    added_qty = sum(int(a.get("quantity") or 0) for a in (job.get("additions") or []))
+    total += added_qty
     write_in = bool(rolls) and qc_page_estimate(len(rolls), True) <= QC_MAX_PAGES
     e = lambda v: escape(str(v or ""))
 
@@ -450,7 +452,7 @@ def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool
         ("Inlay Type:",      job.get("inlay_type")),
         ("Label Size:",      job.get("label_size")),
         ("Base Quantity:",   f"{base:,}"),
-        ("Total Quantity:",  f"{total:,}"),
+        ("Total Quantity:",  f"{total:,}" + (f" (incl. {added_qty:,} added)" if added_qty else "")),
         ("Labels Per Roll:", f"{int(job.get('lpr') or 0):,}"),
     ]
     info_html = "".join(
@@ -461,7 +463,7 @@ def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool
     for r in rolls:
         row = f"""
 <tr>
-  <td class="roll-number">{r['roll_number']}</td>
+  <td class="roll-number">{r['roll_number']}{' <small>(added)</small>' if r.get('addition_id') else ''}</td>
   <td class="quantity">{r['quantity']:,}</td>
   <td class="serial-range">{f"{r['serial_start']:,} - {r['serial_end']:,}" if r.get('serial_start') else ""}</td>
   <td class="epc">{e((r.get('epc_start') or '')[-5:])}</td>
