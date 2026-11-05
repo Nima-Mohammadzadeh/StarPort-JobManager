@@ -71,11 +71,12 @@ def production_qty(quantity: int, overage_pct: float) -> int:
     return int(quantity)
 
 
-def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int) -> list:
-    """Split total_qty into rolls of lpr. Returns list of dicts."""
+def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int, first_roll: int = 1) -> list:
+    """Split total_qty into rolls of lpr. Returns list of dicts. first_roll: number of the first roll
+    (data added to a job continues the job's numbering)."""
     if not (upc and start_serial and total_qty and lpr and lpr > 0):
         return []
-    rolls, cur, n, left = [], int(start_serial), 1, int(total_qty)
+    rolls, cur, n, left = [], int(start_serial), int(first_roll), int(total_qty)
     while left > 0:
         q = min(lpr, left)
         rolls.append({
@@ -90,11 +91,11 @@ def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int) -> list:
     return rolls
 
 
-def roll_plan_plain(total_qty: int, lpr: int) -> list:
+def roll_plan_plain(total_qty: int, lpr: int, first_roll: int = 1) -> list:
     """Rolls by quantity only, for special jobs without a UPC / serials."""
     if not (total_qty and lpr and lpr > 0):
         return []
-    rolls, n, left = [], 1, int(total_qty)
+    rolls, n, left = [], int(first_roll), int(total_qty)
     while left > 0:
         q = min(lpr, left)
         rolls.append({"roll_number": n, "quantity": q, "serial_start": None, "serial_end": None,
@@ -112,7 +113,7 @@ def db_file_split(total_qty: int, qty_db: int | None) -> list:
 
 # ── Encoding database files ───────────────────────────────────────────────────
 def generate_db_files(job_dir: str, upc: str, start_serial: int,
-                      total_qty: int, qty_db: int | None) -> dict:
+                      total_qty: int, qty_db: int | None, tag: str = "") -> dict:
     data_dir = os.path.join(job_dir, "Data")
     os.makedirs(data_dir, exist_ok=True)
     split   = db_file_split(total_qty, qty_db)
@@ -123,7 +124,7 @@ def generate_db_files(job_dir: str, upc: str, start_serial: int,
         for _ in range(rows):
             records.append((serial, upc, generate_epc(upc, serial)))
             serial += 1
-        suffix = f"_DB{idx}" if len(split) > 1 else ""
+        suffix = tag + (f"_DB{idx}" if len(split) > 1 else "")
         if XLSX_AVAILABLE:
             path = os.path.join(data_dir, f"{upc}{suffix}.xlsx")
             _write_xlsx(path, records, f"DB{idx}" if len(split) > 1 else "Database")
@@ -187,13 +188,35 @@ def go2_random_epcs(count: int, exclude=()) -> list:
     return out
 
 
+def read_go2_epcs(job_dir: str) -> set:
+    """Every GO2 EPC already written under <job_dir>/Data, so added data can avoid repeating one."""
+    out = set()
+    data_dir = os.path.join(job_dir, "Data")
+    if not (XLSX_AVAILABLE and os.path.isdir(data_dir)):
+        return out
+    from openpyxl import load_workbook
+    for name in os.listdir(data_dir):
+        if not name.lower().endswith(".xlsx") or name.startswith("~"):
+            continue
+        wb = load_workbook(os.path.join(data_dir, name), read_only=True)
+        try:
+            for ws in wb.worksheets:
+                for row in ws.iter_rows(values_only=True):
+                    for v in row:
+                        if isinstance(v, str) and len(v) == 24 and v.startswith(GO2_PREFIX):
+                            out.add(v.upper())
+        finally:
+            wb.close()
+    return out
+
+
 def go2_file_names(label: str, parts: int) -> list:
     base = _safe_name(label) or "GO2"
     return [f"{base}_DB{i}_Serials.xlsx" if parts > 1 else f"{base}_Serials.xlsx"
             for i in range(1, parts + 1)]
 
 
-def generate_go2_files(job_dir: str, label: str, total_qty: int, qty_db: int | None) -> dict:
+def generate_go2_files(job_dir: str, label: str, total_qty: int, qty_db: int | None, exclude=()) -> dict:
     """Write the GO2 data sheet(s) into <job_dir>/Data and verify each one."""
     if not XLSX_AVAILABLE:
         raise RuntimeError("openpyxl is needed to write the GO2 data sheet")
@@ -201,7 +224,7 @@ def generate_go2_files(job_dir: str, label: str, total_qty: int, qty_db: int | N
     data_dir = os.path.join(job_dir, "Data")
     os.makedirs(data_dir, exist_ok=True)
     split = db_file_split(total_qty, qty_db)
-    epcs = go2_random_epcs(total_qty)
+    epcs = go2_random_epcs(total_qty, exclude=exclude)
     files, pos = [], 0
     try:
         for idx, (rows, name) in enumerate(zip(split, go2_file_names(label, len(split))), start=1):
@@ -355,11 +378,11 @@ def sheet_for_customer(name):
     return next((k for k, c in DATA_SHEETS.items() if c["customer"].lower() == n), None)
 
 
-def roll_plan_seq(start_serial: int, total_qty: int, lpr: int) -> list:
+def roll_plan_seq(start_serial: int, total_qty: int, lpr: int, first_roll: int = 1) -> list:
     """Rolls for a sequential data sheet: a serial range and 8-hex EPC range per roll."""
     if not (start_serial and total_qty and lpr and lpr > 0):
         return []
-    rolls, cur, n, left = [], int(start_serial), 1, int(total_qty)
+    rolls, cur, n, left = [], int(start_serial), int(first_roll), int(total_qty)
     while left > 0:
         q = min(lpr, left)
         rolls.append({"roll_number": n, "quantity": q, "serial_start": cur, "serial_end": cur + q - 1,
