@@ -54,6 +54,13 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   Serial Magic types it in and the page jumps to that roll and shows which label it is,
   calling out the FIRST and LAST tag. The job list's search box also takes a scan.
   Lookups are read-only.
+- **Add data to a job**: if a job needs more labels after it was made, open it and choose **Add data**
+  (standard, CDO and GO2 jobs; not archived ones). The preview shows the new serial range, rolls and files
+  before anything is taken. The extra labels get new serials that are never reused (they may not sit next
+  to the original range), new rolls that continue the numbering, and new `_ADD<n>` data files; existing
+  files and rolls are never changed. A completed job reopens. The job's own quantity and start serial stay
+  as ordered; each addition is kept in the `job_additions` table, which the serial safety nets, backups
+  and the restore tool all read.
 - **Roll tracking**: pick any roll; Complete, Left in progress (with a note), Reopen.
   The app asks who did it at that moment. Nobody signs in.
 - **Tools**: roll tracker sheet, checklist, encoding database, serial lookup.

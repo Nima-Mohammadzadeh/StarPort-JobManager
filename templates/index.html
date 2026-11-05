@@ -1666,7 +1666,7 @@ $('#ad-qty').addEventListener('input', () => {
     try {
       const p = await api('/api/jobs/' + CURRENT.job.id + '/additions', {method: 'POST', body: {quantity: q, preview: true}});
       if (adQty() !== q) return;
-      $('#ad-preview').innerHTML = `<b>${fmt(q)} labels</b> will be added. New total ${fmt(p.new_total)}.<br>` +
+      $('#ad-preview').innerHTML = `<span style="font-weight:600">${fmt(q)} labels</span> will be added. New total ${fmt(p.new_total)}.<br>` +
         (p.serial_start ? `Serials <span class="data">${fmt(p.serial_start)} – ${fmt(p.serial_end)}</span><br>` : 'No serials for this job type.<br>') +
         (p.rolls ? `Rolls ${p.first_roll}–${p.last_roll} (${p.rolls})<br>` : 'No rolls (this job has no labels per roll).<br>') +
         `Files: <span class="data">${p.files.map(esc).join(', ')}</span><br><small>Serials are only taken when you confirm. Another job may take them first, and then the next free range is used.</small>`;
@@ -2578,7 +2578,7 @@ function recMap(job, rolls, additions = []) {
     let cum = 0; const total = rs.reduce((a, r) => a + r.quantity, 0), qdb = job.qty_db && job.qty_db < total ? job.qty_db : 0;
     const tag = g ? `ADD${seqOf[g] || ''}` : (additions.length ? 'Original' : '');
     rs.forEach(r => {
-      const segs = recSegs(cum, r.quantity, qdb).map(sg => ({...sg, file: [tag, qdb ? sg.file : ''].filter(Boolean).join(' DB ') || sg.file}));
+      const segs = recSegs(cum, r.quantity, qdb).map(sg => ({...sg, file: tag ? (qdb ? `${tag} DB ${sg.file}` : tag) : sg.file}));
       m[r.roll_number] = {segs, multi: !!qdb || additions.length > 0}; cum += r.quantity;
     });
   });
@@ -2594,7 +2594,7 @@ function rollRowHtml(r, noteRolls) {
   const lbl = `Roll ${r.roll_number}, records ${recText(sg)}${rec.multi ? ` in database file ${sg.file}` : ''}, ${RLABEL[st]}${r.printer ? ' on ' + r.printer : ''}${who ? ' by ' + who : ''}${noteRolls.has(r.roll_number) ? ', has notes' : ''}`;
   return `<button class="ri s-${st} ${on ? 'on' : ''}" role="option" aria-selected="${on}" data-n="${r.roll_number}" title="${esc(lbl)}" aria-label="${esc(lbl)}" onclick="openRoll(${r.roll_number})">
     <span class="rno">${r.roll_number}</span><span class="g" aria-hidden="true">${RGLYPH[st]}</span>
-    <span class="rec data">${esc(rng)}${rec.multi ? `<small>DB ${sg.file}</small>` : ''}</span><span class="who">${right}</span>
+    <span class="rec data">${esc(rng)}${rec.multi ? `<small>${typeof sg.file === 'number' ? 'DB ' + sg.file : esc(sg.file)}</small>` : ''}</span><span class="who">${right}</span>
     ${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</button>`;
 }
 function rollBatchesHtml(rolls, noteRolls) {
