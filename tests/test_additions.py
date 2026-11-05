@@ -313,3 +313,35 @@ def test_concurrent_adds_get_distinct_ranges(jm):
     nums = [r["roll_number"] for r in rolls_of(jm, jid)]
     assert nums == list(range(1, len(nums) + 1))
     assert sorted(o["addition"]["seq"] for o, _ in results) == [1, 2, 3, 4]
+
+
+# ── Task 4: API ───────────────────────────────────────────────────────────────
+def test_route_201_and_detail_lists_addition(jm):
+    res = jm.job(40); jid = res["job"]["id"]
+    cl = jm.app.app.test_client()
+    r = cl.post(f"/api/jobs/{jid}/additions", json={"quantity": 400, "reason": "reprint"}, headers={"X-Operator": "Pat"})
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()["addition"]["added_by"] == "Pat"
+    d = cl.get(f"/api/jobs/{jid}").get_json()
+    assert d["total_qty"] == 502 and len(d["additions"]) == 1 and len(d["rolls"]) == 3 + 8
+    assert [x["label"] for x in d["serial_ranges"]] == ["Original", "Added #1"]
+    assert d["end_serial"] == d["serial_ranges"][-1]["end"]
+    assert d["job"]["quantity"] == 100                           # the original order is untouched
+
+
+def test_route_preview_and_errors(jm):
+    res = jm.job(41); jid = res["job"]["id"]
+    cl = jm.app.app.test_client()
+    p = cl.post(f"/api/jobs/{jid}/additions", json={"quantity": 50, "preview": True})
+    assert p.status_code == 200 and p.get_json()["preview"] is True
+    assert cl.get(f"/api/jobs/{jid}").get_json()["additions"] == []
+    assert cl.post(f"/api/jobs/{jid}/additions", json={"quantity": 0}).status_code == 400
+    assert cl.post("/api/jobs/9999/additions", json={"quantity": 5}).status_code == 404
+    assert cl.post(f"/api/jobs/{jid}/additions", data="not json").status_code == 400
+
+
+def test_detail_without_additions_unchanged(jm):
+    res = jm.job(42)
+    d = jm.app.app.test_client().get(f"/api/jobs/{res['job']['id']}").get_json()
+    assert d["total_qty"] == 102 and d["additions"] == []
+    assert d["end_serial"] == res["job"]["start_serial"] + 101

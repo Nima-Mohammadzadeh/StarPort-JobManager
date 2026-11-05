@@ -1029,12 +1029,24 @@ def api_job_detail(job_id):
         conn.close(); return err("Job not found", 404)
     rolls = ensure_rolls(conn, job)
     notes = _notes(conn, job_id)
+    additions = job_additions(conn, job_id)
+    ranges = job_serial_ranges(conn, job)
+    total = job_total_qty(conn, job) if job["quantity"] else None
     conn.close()
-    total = production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None
     return jsonify({"job": job, "rolls": rolls, "notes": notes, "files": _list_files(job["folder_path"]),
-                    "total_qty": total,
-                    "end_serial": (job["start_serial"] + total - 1) if job["start_serial"] and total else None,
+                    "total_qty": total, "additions": additions, "serial_ranges": ranges,
+                    "end_serial": ranges[-1]["end"] if ranges else None,
                     "folder_exists": bool(job["folder_path"] and os.path.isdir(job["folder_path"]))})
+
+
+@app.route("/api/jobs/<int:job_id>/additions", methods=["POST"])
+def api_job_additions(job_id):
+    """Add more labels to a job that already exists (see add_data)."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return err("Send JSON with a quantity.")
+    body, code = add_data(job_id, data)
+    return jsonify(body), code
 
 
 @app.route("/api/jobs/<int:job_id>", methods=["PATCH"])
