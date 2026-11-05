@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Job Manager</title>
+<script>try{var t=localStorage.getItem('jm-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
 :root{
   /* Palette: cool teal-grey neutrals carry ~90% of the screen; teal means "click me / selected";
@@ -18,7 +19,7 @@
   --red:#B3322B; --red-soft:#F9E2E0; --violet:#5E48A8; --violet-soft:#ECE8F7;
   --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
   --data:Consolas,"Cascadia Mono","SFMono-Regular",Menlo,monospace;
-  --r:6px;
+  --r:6px; --on-fill:#fff; --amber-ink:#6B4207; --red-ink:#7A2626; --green-ink:#1F5A37;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
@@ -90,8 +91,8 @@ table.jobs{width:100%;border-collapse:collapse}
 .jobs tbody tr:hover{background:#E9F3F2}
 .jobs tbody tr.sel{background:var(--accent-soft)}
 .jobs td.num{text-align:right}
-.jobs .tk{font-size:16px;font-weight:700;color:#0A1417;line-height:1.2}
-.jobs td.cust{font-size:15px;font-weight:600;color:#0A1417;line-height:1.25}
+.jobs .tk{font-size:16px;font-weight:700;color:var(--ink);line-height:1.2}
+.jobs td.cust{font-size:15px;font-weight:600;color:var(--ink);line-height:1.25}
 .jobs .sub{color:var(--muted);font-size:12.5px}
 .jobs .item{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .due-late{color:var(--red);font-weight:600}
@@ -156,7 +157,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .kv dt{font-size:12px;color:var(--muted)}
 .kv dd{margin:1px 0 0;word-break:break-word}
 .path{font-family:var(--data);font-size:12.5px;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;word-break:break-all;color:var(--muted)}
-.warnbox{background:var(--amber-soft);color:#6B4207;border-radius:var(--r);padding:8px 12px;font-size:13px;margin:8px 0}
+.warnbox{background:var(--amber-soft);color:var(--amber-ink);border-radius:var(--r);padding:8px 12px;font-size:13px;margin:8px 0}
 
 /* Roll grid in drawer */
 .rolls{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
@@ -164,7 +165,7 @@ table.jobs{width:100%;border-collapse:collapse}
 .roll:hover{border-color:var(--accent)}
 .roll b{display:block;font-size:15px}
 .roll small{font-size:11px;color:var(--muted);font-family:var(--data)}
-.roll.d{background:var(--green);border-color:var(--green);color:#fff}
+.roll.d{background:var(--green);border-color:var(--green);color:var(--on-fill)}
 .roll.d small{color:#D6EEDD}
 .roll-meta{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
 .progress{height:6px;background:#D9E0E6;border-radius:3px;overflow:hidden;margin-bottom:12px}
@@ -357,7 +358,7 @@ details.more p.d{margin:6px 0 0}
 /* ── Roll tracking page ── */
 .who{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13.5px;color:var(--muted);min-height:34px}
 .who b{color:var(--ink)}
-.who.need{background:var(--amber-soft);color:#6B4207;padding:8px 12px;border-radius:var(--r)}
+.who.need{background:var(--amber-soft);color:var(--amber-ink);padding:8px 12px;border-radius:var(--r)}
 .who input{max-width:220px}
 .floor{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start}
 .floor-list{display:flex;flex-direction:column;gap:8px;position:sticky;top:72px;max-height:calc(100vh - 140px)}
@@ -387,7 +388,7 @@ details.more p.d{margin:6px 0 0}
 .w-body{padding:16px 20px 24px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:22px}
 .w-body h3{font-size:14px;margin:0 0 10px;font-weight:650}
 .imp{background:var(--amber-soft);border:1px solid #EBC983;border-radius:7px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}
-.imp b{display:block;font-size:12.5px;color:#6B4207;margin-bottom:3px}
+.imp b{display:block;font-size:12.5px;color:var(--amber-ink);margin-bottom:3px}
 .imp p{margin:4px 0 0;white-space:pre-wrap}
 .ticketnote{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:9px 12px;margin-bottom:14px;font-size:13.5px;white-space:pre-wrap}
 .ticketnote b{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
@@ -459,7 +460,7 @@ details.more p.d{margin:6px 0 0}
 .verify .vlist{margin-top:6px;display:flex;flex-direction:column;gap:3px}
 .verify .v{font-size:13px;padding:5px 8px;border-radius:5px;display:flex;flex-direction:column}
 .verify .v .data{font-size:11.5px;opacity:.8}
-.verify .v.ok{background:var(--green-soft);color:#1F5A37}.verify .v.bad{background:var(--red-soft);color:#7A2626}
+.verify .v.ok{background:var(--green-soft);color:var(--green-ink)}.verify .v.bad{background:var(--red-soft);color:var(--red-ink)}
 .btn.big{padding:11px 20px;font-size:15.5px}
 .pausebox{display:none;gap:6px;margin-top:8px;align-items:center}
 .pausebox.on{display:flex}
@@ -587,7 +588,7 @@ details.more p.d{margin:6px 0 0}
 .pg-ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pg{min-width:34px;height:34px;padding:0 8px;border:1px solid var(--line-strong);background:#fff;border-radius:7px;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
 .pg:hover:not(:disabled):not(.on){background:var(--sunk)}
-.pg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pg.on{background:var(--accent);border-color:var(--accent);color:var(--on-fill)}
 .pg:disabled{opacity:.4;cursor:default}
 .pager .gap{padding:0 2px}
 .pg-go{width:84px;padding:6px 8px}
@@ -627,7 +628,7 @@ details.more p.d{margin:6px 0 0}
 .grp-btn:hover{background:#E8F2F1}
 .grp-btn .caret{width:14px;color:var(--muted);font-size:12px}
 .grp-btn .gname{font-weight:700;font-size:13.5px}
-.grp-btn .gcount{background:var(--sc);color:#fff;border-radius:999px;padding:0 8px;font-size:12px;font-weight:650}
+.grp-btn .gcount{background:var(--sc);color:var(--on-fill);border-radius:999px;padding:0 8px;font-size:12px;font-weight:650}
 .grp-btn .gmeta{color:var(--muted);font-size:12.5px}
 .grp-btn .gbar{width:90px;height:5px;background:#D9E0E6;border-radius:3px;overflow:hidden}
 .grp-btn .gbar i{display:block;height:100%;background:var(--green)}
@@ -660,7 +661,7 @@ details.more p.d{margin:6px 0 0}
 .pc-list li.drag{opacity:.4}.pc-list li.over{box-shadow:inset 0 2px 0 var(--accent)}
 .pc-list .rk{font-weight:700;color:var(--accent);text-align:center}
 .pc-list .t{min-width:0}
-.pc-list .t b{font-size:13.5px;color:#0A1417}
+.pc-list .t b{font-size:13.5px;color:var(--ink)}
 .pc-list .t .l2{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pc-list .t .pill{font-size:10.5px;padding:0 6px;margin-left:4px;vertical-align:1px}
 .pc-list .acts{display:flex;gap:1px;opacity:.35}
@@ -668,7 +669,7 @@ details.more p.d{margin:6px 0 0}
 .pc-list .acts button{background:none;border:0;cursor:pointer;color:var(--muted);padding:2px 5px;border-radius:4px;font-size:13px}
 .pc-list .acts button:hover{background:var(--sunk);color:var(--ink)}
 .pc-empty{padding:12px;color:var(--muted);font-size:12.5px}
-.rank{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:2px}
+.rank{display:inline-block;background:var(--accent);color:var(--on-fill);border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:2px}
 .chip-special{display:inline-block;font-size:11.5px;padding:0 6px;border-radius:3px;background:var(--violet-soft);color:var(--violet);font-weight:600}
 /* job type + footer name */
 .seg.jt{width:100%}.seg.jt button{flex:1;padding:7px 8px}
@@ -717,7 +718,7 @@ details.more p.d{margin:6px 0 0}
 .dtab .st{font-weight:650;white-space:nowrap}.dtab .st.ok{color:var(--green)}.dtab .st.warn{color:var(--amber)}.dtab .st.bad{color:var(--red)}
 .dtab .sub2{color:var(--muted);font-size:12px;margin-top:2px;font-weight:400;white-space:normal}
 .dwarn{border-radius:8px;padding:9px 12px;margin:6px 0;font-size:13.5px}
-.dwarn.bad{background:var(--red-soft);color:#7A2626}.dwarn.warn{background:var(--amber-soft);color:#6B4207}.dwarn.ok{background:var(--green-soft);color:#1F5A37}
+.dwarn.bad{background:var(--red-soft);color:var(--red-ink)}.dwarn.warn{background:var(--amber-soft);color:var(--amber-ink)}.dwarn.ok{background:var(--green-soft);color:var(--green-ink)}
 .dp-bk{margin-top:12px;font-size:13.5px;line-height:1.6;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -930,6 +931,74 @@ label.f span.hint{color:var(--muted)}
 /* toasts */
 .toast{border-radius:8px;box-shadow:var(--sh-3);font-weight:500}
 @media (max-width:900px){main{padding:12px 12px 40px}header{padding:0 12px}}
+
+/* ── Dark theme (toggle in the header; choice saved in localStorage as jm-theme) ── */
+.theme-btn{width:32px;padding:0;flex:none}
+.theme-btn svg{width:17px;height:17px}
+.theme-btn .i-sun{display:none}
+:where(html[data-theme=dark]) .theme-btn .i-sun{display:block}
+:where(html[data-theme=dark]) .theme-btn .i-moon{display:none}
+html[data-theme=dark]{
+  color-scheme:dark;
+  --canvas:#0B1619; --surface:#122126; --sunk:#0F1D21; --sunk-2:#1A2C32;
+  --line:#243A41; --line-strong:#35505A; --row-line:#1C3037; --hover:#17292F;
+  --ink:#E4EEEF; --ink-2:#C3D3D5; --muted:#8FA6AB;
+  --accent:#2DB3A6; --accent-dark:#4CC9BC; --accent-soft:#12383A;
+  --blue:#6AAEEB; --blue-bright:#5B9FE0; --blue-soft:#14293D;
+  --green:#6FCB77; --green-soft:#14301B; --amber:#E8B04E; --amber-soft:#35290F;
+  --red:#F08178; --red-soft:#3A1B1A; --violet:#A895E8; --violet-soft:#241E3D;
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 1px 2px rgba(0,0,0,.35),0 2px 8px -2px rgba(0,0,0,.4);
+  --sh-3:0 2px 4px rgba(0,0,0,.3),0 12px 32px -6px rgba(0,0,0,.6);
+  --sh-pop:0 0 0 1px rgba(255,255,255,.07),0 24px 64px -12px rgba(0,0,0,.7);
+  --ring:0 0 0 3px rgba(45,179,166,.28);
+}
+html[data-theme=dark]{--on-fill:#06161A; --amber-ink:#EBC98A; --red-ink:#F5B1AB; --green-ink:#9ADBA8}
+:where(html[data-theme=dark]) .toast{background:#1E3A41;color:var(--ink);border:1px solid var(--line-strong)}
+:where(html[data-theme=dark]) ::selection{background:#1F5A57}
+:where(html[data-theme=dark]) .sidenav{background:#081114;border-right-color:#16282D}
+:where(html[data-theme=dark]) header{background:rgba(18,33,38,.86)}
+:where(html[data-theme=dark]) .btn:hover{border-color:var(--line-strong)}
+:where(html[data-theme=dark]) .btn.danger{border-color:#6B3532}
+:where(html[data-theme=dark]) .btn.primary{background:linear-gradient(180deg,#17958B,#0F766E);border-color:#0F766E;color:#fff}
+:where(html[data-theme=dark]) .btn.primary:hover{background:linear-gradient(180deg,#0F766E,#0B5A54)}
+:where(html[data-theme=dark]) input.i,:where(html[data-theme=dark]) select.i,:where(html[data-theme=dark]) textarea.i,
+:where(html[data-theme=dark]) .seg,:where(html[data-theme=dark]) .roll,:where(html[data-theme=dark]) .tlist,:where(html[data-theme=dark]) .bgrid input,
+:where(html[data-theme=dark]) .tcard,:where(html[data-theme=dark]) .panel,:where(html[data-theme=dark]) .set-nav,:where(html[data-theme=dark]) .fc,
+:where(html[data-theme=dark]) .work,:where(html[data-theme=dark]) .composer,:where(html[data-theme=dark]) .ri,:where(html[data-theme=dark]) .w-roll,
+:where(html[data-theme=dark]) .rb-body,:where(html[data-theme=dark]) .rb-body .ri,:where(html[data-theme=dark]) .rc,:where(html[data-theme=dark]) .rc-head,
+:where(html[data-theme=dark]) .floor-list,:where(html[data-theme=dark]) .pg,:where(html[data-theme=dark]) .rw-qr,:where(html[data-theme=dark]) .chip{background:var(--surface)}
+:where(html[data-theme=dark]) .seg{background:var(--sunk-2)}
+:where(html[data-theme=dark]) .rw-qr{background:#fff}
+:where(html[data-theme=dark]) .td-img img{background:#fff}
+:where(html[data-theme=dark]) input.i:hover,:where(html[data-theme=dark]) select.i:hover,:where(html[data-theme=dark]) textarea.i:hover{border-color:#47646E}
+:where(html[data-theme=dark]) input.i.bad,:where(html[data-theme=dark]) .bgrid input.bad{background:var(--red-soft)}
+:where(html[data-theme=dark]) .jobs th,:where(html[data-theme=dark]) .tl-table th,:where(html[data-theme=dark]) .feed-head,:where(html[data-theme=dark]) .pc-head,
+:where(html[data-theme=dark]) .fl-head,:where(html[data-theme=dark]) .rb-head,:where(html[data-theme=dark]) .m-foot{background:var(--sunk)}
+:where(html[data-theme=dark]) .jobs td,:where(html[data-theme=dark]) .tl-table td,:where(html[data-theme=dark]) .d-sec,:where(html[data-theme=dark]) .tlist label,
+:where(html[data-theme=dark]) .blist div,:where(html[data-theme=dark]) .composer .row,:where(html[data-theme=dark]) .note,:where(html[data-theme=dark]) .sertable td,
+:where(html[data-theme=dark]) .dtab td,:where(html[data-theme=dark]) .pc-list li,:where(html[data-theme=dark]) .trange td{border-bottom-color:var(--row-line);border-top-color:var(--row-line)}
+:where(html[data-theme=dark]) .jobs tbody tr:hover,:where(html[data-theme=dark]) .jobs tbody tr:not(.grp):not(.sel):hover,
+:where(html[data-theme=dark]) .tl-table tbody tr:hover,:where(html[data-theme=dark]) .rb-body .ri:hover,:where(html[data-theme=dark]) .rb-head:hover,
+:where(html[data-theme=dark]) .grp-btn:hover{background:var(--hover)}
+:where(html[data-theme=dark]) .jobs tr.grp td{background:linear-gradient(180deg,#14262B,#112024);border-color:var(--line)}
+:where(html[data-theme=dark]) .minibar,:where(html[data-theme=dark]) .strip i,:where(html[data-theme=dark]) .progress,:where(html[data-theme=dark]) .fc .bar,
+:where(html[data-theme=dark]) .stack-bar,:where(html[data-theme=dark]) .rb-head .rb-bar,:where(html[data-theme=dark]) .grp-btn .gbar{background:#25393F}
+:where(html[data-theme=dark]) .ov{background:rgba(0,0,0,.6)}
+:where(html[data-theme=dark]) .d-head,:where(html[data-theme=dark]) .w-head{background:linear-gradient(180deg,#152A30,#122126)}
+:where(html[data-theme=dark]) .rc-printer{background:#102428}
+:where(html[data-theme=dark]) .rb-body .ri.s-done{background:#122A1E}
+:where(html[data-theme=dark]) .rb-body .ri.s-running{background:#112638}
+:where(html[data-theme=dark]) .rb-body .ri.on{background:#12302F}
+:where(html[data-theme=dark]) .rb-body .ri .rno{background:var(--sunk-2);border-color:var(--line-strong)}
+:where(html[data-theme=dark]) .ri.s-paused,:where(html[data-theme=dark]) .fi.k-note_important,:where(html[data-theme=dark]) .note.important{background:var(--amber-soft)}
+:where(html[data-theme=dark]) .note.important{border-bottom-color:#4A3A17}
+:where(html[data-theme=dark]) .imp{border-color:#5A4720}
+:where(html[data-theme=dark]) .rstate.s-running{background:var(--blue-soft)}
+:where(html[data-theme=dark]) .trange td.epc b{background:#5A4A12;color:#FFF3C4}
+:where(html[data-theme=dark]) .st-in-progress{border-color:#2A4A68}:where(html[data-theme=dark]) .st-on-hold{border-color:#44396E}
+:where(html[data-theme=dark]) .st-pending{border-color:#5A4720}:where(html[data-theme=dark]) .st-complete{border-color:#2A5A36}:where(html[data-theme=dark]) .st-cancelled{border-color:#6B3532}
+:where(html[data-theme=dark]) .note .m .acts button{color:#7E959B}
 </style>
 </head>
 <body>
@@ -956,6 +1025,10 @@ label.f span.hint{color:var(--muted)}
     <span class="conn" id="conn">Connecting…</span>
     <span class="conn" id="serial-status" role="button" tabindex="0" title="Serial records" onclick="openSerialTool()"></span>
     <span class="conn" id="backup-status" role="button" tabindex="0" title="Backups: open Settings" onclick="showView('settings')" hidden></span>
+    <button class="btn quiet theme-btn" id="theme-btn" type="button" onclick="toggleTheme()" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+    </button>
     <button class="btn hide-sm" onclick="openBatch()">Batch add</button>
     <button class="btn primary" onclick="openNewJob()">New job</button>
   </div>
@@ -1416,6 +1489,11 @@ label.f span.hint{color:var(--muted)}
 <div id="toasts"></div>
 
 <script>
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('jm-theme', next); } catch (e) {}
+}
 /* ───────────────────────── helpers ───────────────────────── */
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
