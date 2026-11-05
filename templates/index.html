@@ -719,6 +719,217 @@ details.more p.d{margin:6px 0 0}
 .dwarn{border-radius:8px;padding:9px 12px;margin:6px 0;font-size:13.5px}
 .dwarn.bad{background:var(--red-soft);color:#7A2626}.dwarn.warn{background:var(--amber-soft);color:#6B4207}.dwarn.ok{background:var(--green-soft);color:#1F5A37}
 .dp-bk{margin-top:12px;font-size:13.5px;line-height:1.6;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Refinement layer: denser, crisper, a little depth (Linear / Stripe direction).
+   Overrides only — layout, markup and behaviour are unchanged. Delete this block
+   to get the previous look back.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{
+  --canvas:#F0F3F4; --surface:#FFFFFF; --sunk:#F6F8F9; --sunk-2:#EEF2F3;
+  --line:#E1E7E9; --line-strong:#C9D3D6; --row-line:#EDF1F2;
+  --ink:#0E1F24; --ink-2:#2B3E43; --muted:#566B70;
+  --hover:#F3F7F7;
+  --r:7px; --r-lg:10px;
+  --sh-1:0 1px 2px rgba(14,31,36,.05);
+  --sh-2:0 1px 2px rgba(14,31,36,.05),0 2px 8px -2px rgba(14,31,36,.07);
+  --sh-3:0 2px 4px rgba(14,31,36,.04),0 12px 32px -6px rgba(14,31,36,.16);
+  --sh-pop:0 0 0 1px rgba(14,31,36,.06),0 24px 64px -12px rgba(14,31,36,.32);
+  --ring:0 0 0 3px rgba(15,118,110,.18);
+}
+body{font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"cv11","ss01"}
+h1,h2,h3,.crumb{letter-spacing:-.012em}
+::selection{background:#CDEDE8}
+
+/* shell */
+.sidenav{background:#0C1D21;padding:10px 8px;border-right:1px solid #06120F}
+.brand{height:40px;font-size:15.5px;margin-bottom:6px;padding:0 10px}
+.brand svg{width:22px;height:22px}
+.sidenav nav button{height:36px;font-size:13.5px;font-weight:550;border-radius:7px;gap:11px;padding:0 10px;color:#9DB4B4}
+.sidenav nav button svg{width:18px;height:18px;opacity:.9}
+.sidenav nav button:hover{background:rgba(255,255,255,.06)}
+.sidenav nav button.on{background:rgba(94,208,194,.12);color:#fff;box-shadow:inset 0 0 0 1px rgba(94,208,194,.18)}
+.sidenav nav button.on svg{color:#5ED0C2;opacity:1}
+.sidenav nav button.on::before{left:-8px;top:9px;bottom:9px}
+.nav-sep{background:rgba(255,255,255,.08);margin:8px 6px}
+header{height:52px;padding:0 20px;background:rgba(255,255,255,.86);backdrop-filter:saturate(1.6) blur(10px);-webkit-backdrop-filter:saturate(1.6) blur(10px);border-bottom:1px solid var(--line)}
+.crumb{font-size:15px;font-weight:650}
+.conn{font-size:11.5px}
+main{padding:16px 20px 48px}
+.bar{gap:10px;margin-bottom:12px}
+
+/* controls */
+.btn{height:32px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:560;border-color:var(--line-strong);border-radius:var(--r);box-shadow:var(--sh-1);transition:background .12s,border-color .12s,box-shadow .12s}
+.btn:hover{background:var(--sunk);border-color:#B6C3C7}
+.btn:active{transform:translateY(.5px)}
+.btn.primary{background:linear-gradient(180deg,#13827A,#0F766E);border-color:#0C665F;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 1px 2px rgba(12,102,95,.35)}
+.btn.primary:hover{background:linear-gradient(180deg,#0F766E,#0B5A54);border-color:#0B5A54}
+.btn.quiet{box-shadow:none}
+.btn.sm{height:26px;padding:0 9px;font-size:12.5px}
+.btn.big{height:42px;padding:0 18px;font-size:15px}
+.btn:disabled{box-shadow:none}
+input.i,select.i,textarea.i{border-color:var(--line-strong);border-radius:var(--r);padding:6px 10px;box-shadow:inset 0 1px 1px rgba(14,31,36,.03);transition:border-color .12s,box-shadow .12s}
+input.i,select.i{height:32px}
+.search input.i,.search input{padding-left:32px}
+input.i:hover,select.i:hover,textarea.i:hover{border-color:#B6C3C7}
+input.i:focus,select.i:focus,textarea.i:focus{box-shadow:var(--ring)}
+label.f{font-size:12.5px;color:var(--ink-2);font-weight:560;gap:5px}
+label.f span.hint{color:var(--muted)}
+.seg{border-color:var(--line-strong);border-radius:var(--r);background:var(--sunk-2);padding:2px;gap:2px;box-shadow:inset 0 1px 1px rgba(14,31,36,.04);flex:none}
+.seg button{border:0;border-radius:5px;padding:4px 10px;font-weight:560;color:var(--muted)}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(14,31,36,.12),0 0 0 1px rgba(14,31,36,.06)}
+.seg.icons button.on{background:var(--surface);color:var(--ink)}
+.seg b{font-variant-numeric:tabular-nums}
+
+/* status pills: dot + text, quieter fill */
+.pill{padding:1px 8px 1px 7px;font-size:12px;font-weight:600;border-radius:999px;display:inline-flex;align-items:center;gap:5px;line-height:18px}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.d-title .pill{font-size:12.5px;padding:2px 10px 2px 9px}
+
+/* jobs table */
+.tablewrap{border-color:var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.jobs th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:650;color:var(--muted);padding:8px 10px;background:#F8FAFA}
+.jobs td{padding:7px 10px;border-bottom-color:var(--row-line)}
+.jobs .tk{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.jobs td.cust{font-size:14.5px}
+.jobs .sub{font-size:12px}
+.jobs tbody tr{transition:background .08s}
+.jobs tbody tr:not(.grp):not(.sel):hover,.tl-table tbody tr:hover{background:var(--hover)}
+.jobs tr.grp td{background:linear-gradient(180deg,#F6F9F9,#F0F4F5);border-color:var(--line)}
+.grp-btn{padding:6px 10px}
+.grp-btn .gname{font-size:13.5px;letter-spacing:-.005em}
+.grp-btn .gcount{font-size:11px;padding:1px 7px;font-weight:700}
+.minibar,.strip i,.progress,.fc .bar,.stack-bar,.rb-head .rb-bar,.grp-btn .gbar{background:#E3E9EB}
+.strip i{width:8px;height:11px;border-radius:2px}
+
+/* side cards (feed / priority) */
+.feed,.pcard{border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.feed-head,.pc-head{padding:8px 12px;background:#F8FAFA;border-radius:var(--r-lg) var(--r-lg) 0 0}
+.feed-head h2,.pc-head h2{font-size:13px}
+.fi{padding:6px 12px 6px 11px;font-size:12.5px}
+.fi .meta{font-size:11px}
+.fi.day{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:10px}
+
+/* dialogs */
+.ov{background:rgba(10,24,28,.42);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.modal{border-radius:12px;box-shadow:var(--sh-pop)}
+.m-head{padding:14px 20px}
+.m-head h2{font-size:16px}
+.m-body{padding:16px 20px}
+.m-foot{padding:12px 20px;background:#F8FAFA;border-radius:0 0 12px 12px}
+.d-head{padding:16px 22px 14px;background:linear-gradient(180deg,#FFFFFF,#FAFCFC);border-radius:12px 12px 0 0}
+.d-title h2,.d-title h2 .tk{font-size:19px}
+.jm-tiles{gap:8px;margin-top:12px}
+.tile{background:var(--surface);border-color:var(--line);border-radius:8px;padding:9px 12px;box-shadow:var(--sh-1)}
+.tile dt,.kv dt,.rc-strip dt{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:var(--muted)}
+.rc-strip .rc-rec dt{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:550}
+.tile dd{font-size:16px;letter-spacing:-.01em}
+.d-actions{gap:6px;margin-top:12px}
+.jm-body{padding:2px 22px 20px;gap:0 32px}
+.d-sec{padding:14px 0;border-bottom-color:var(--row-line)}
+.d-sec h3{font-size:13px;margin-bottom:9px}
+.kv{gap:9px 16px}
+.kv dd{margin-top:2px}
+.path{font-size:12px;background:var(--sunk);border-color:var(--line);padding:7px 10px}
+.jm-more .menu{border-color:var(--line);border-radius:9px;box-shadow:var(--sh-3)}
+.summary{background:var(--sunk);border-color:var(--line)}
+
+/* panels, settings, templates, archive */
+.panel,.tl-folders,.tl-main,.tl-detail,.set-nav{border-color:var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.panel{padding:16px 18px}
+.tl-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:650;background:#F8FAFA}
+.tl-table td{border-bottom-color:var(--row-line)}
+.tl-table .th-sort,.jobs th .th-sort{text-transform:inherit;letter-spacing:inherit;font-size:inherit}
+.tcard{border-radius:9px;box-shadow:var(--sh-1);transition:border-color .12s,box-shadow .12s}
+.tcard:hover{box-shadow:var(--sh-2)}
+.set-nav button{font-size:13.5px;padding:8px 10px}
+.pg{height:30px;min-width:30px;font-size:13px;border-color:var(--line-strong);box-shadow:var(--sh-1)}
+
+/* roll tracking */
+.floor{gap:14px}
+.floor-list{border-color:var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.fl-head{background:#F8FAFA;padding:8px}
+#floor-cards{gap:6px;padding:8px;background:var(--sunk)}
+.fc{border-color:var(--line);border-left-width:3px;border-radius:8px;box-shadow:var(--sh-1);padding:8px 10px;transition:border-color .12s,box-shadow .12s}
+.fc:hover{border-color:var(--line-strong);box-shadow:var(--sh-2)}
+.fc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,118,110,.14),var(--sh-2)}
+.fc .t b{font-size:14.5px;letter-spacing:-.01em}
+.fc .c{font-size:12.5px}
+.fc .p{font-size:12px;margin-top:6px}
+.runners,.pausers,.flag{font-size:12px}
+.work{border-color:var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.w-head{padding:12px 18px 12px;border-top-width:3px;border-radius:var(--r-lg) var(--r-lg) 0 0;background:linear-gradient(180deg,#FFFFFF,#FAFCFC)}
+.wh-title h2{font-size:18px}
+.wh-tk{font-size:14px}
+.chip{background:var(--surface);border-color:var(--line-strong);border-radius:5px;padding:1px 7px;font-size:12px;font-weight:550;box-shadow:var(--sh-1)}
+.chips{gap:5px;margin-top:7px}
+.btline{margin-top:6px;font-size:12px}
+.w-top{padding:12px 18px 0}
+.w-body2{padding:12px 18px 16px;gap:16px}
+.imp{border-radius:8px;border-color:#EDD49B;box-shadow:inset 3px 0 0 var(--amber)}
+.ticketnote{border-radius:8px;background:var(--sunk)}
+.rb-body{border-color:var(--line);border-radius:8px;box-shadow:var(--sh-1)}
+.rb-body .ri{border-bottom-color:var(--row-line);height:40px}
+.rb-body .ri:hover{background:var(--hover)}
+.rb-body .ri.on{box-shadow:inset 0 0 0 2px var(--accent);background:#F2FAF9}
+.rb-body .ri .rno{background:var(--sunk-2);border-color:var(--line-strong);border-radius:6px;font-size:13px;height:24px;min-width:24px}
+.rb-body .ri .rec{font-size:15px}
+.rb-head{background:#F8FAFA;border-color:var(--line);font-size:13.5px;padding:7px 10px}
+.rc{border-color:var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.rc-head{top:52px;padding:9px 14px;border-radius:var(--r-lg) var(--r-lg) 0 0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.rc-nav h3{font-size:20px;letter-spacing:-.02em}
+.rc-printer{background:linear-gradient(180deg,#F5FAF9,#F0F7F6);padding:9px 14px}
+.rc-printer select{min-width:240px;font-size:14.5px;height:36px}
+.rc-strip{background:var(--sunk);border-color:var(--line);border-radius:8px;padding:10px 14px}
+.rc-rec dd.big{font-size:24px;letter-spacing:-.02em}
+.rc-body{padding:12px 14px;gap:14px 18px}
+.rtabs button{font-size:13.5px;padding:6px 10px}
+.rtabs button.on{border-bottom-color:var(--accent);color:var(--ink)}
+.rc-notes .feed-list{border-color:var(--line);border-radius:8px}
+.next{border-radius:10px;box-shadow:var(--sh-2)}
+.alldone{border-radius:8px}
+.composer{border-color:var(--line-strong);border-radius:8px;box-shadow:var(--sh-1)}
+.composer:focus-within{border-color:var(--accent);box-shadow:var(--ring)}
+.verify .v{border-radius:6px}
+
+/* job dialog, second pass: one stat strip, compact key/value rows, quieter notes */
+.jm-tiles{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.35fr);gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-1);overflow:hidden}
+.jm-tiles .tile{background:none;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:none;padding:9px 14px 10px}
+.jm-tiles .tile:first-child{border-left:0}
+.jm-tiles .tile dd small{margin-top:3px}
+.jm-tiles .tile .progress{margin:7px 0 0}
+.tile-range{font-size:12.5px;line-height:1.55;letter-spacing:-.01em;display:block}
+.tile-range small{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--muted);display:block;line-height:1.3;margin-top:2px}
+.tile-range small:first-child{margin-top:0}
+@media (max-width:900px){
+  .jm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .jm-tiles .tile:nth-child(odd){border-left:0}
+  .jm-tiles .tile:nth-child(n+3){border-top:1px solid var(--line)}
+}
+.jm-col .kv{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}
+.jm-col .kv div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--row-line);min-height:30px}
+.jm-col .kv div:has(dd.wide){grid-column:1/-1}
+.jm-col .kv dt{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--muted);flex:none}
+.jm-col .kv dd{margin:0;text-align:right;font-size:13.5px;color:var(--ink);min-width:0}
+.jm-col .kv dd.num{font-variant-numeric:tabular-nums;font-weight:550}
+.jm-col .kv dd.data{font-size:13px}
+.d-sec{padding:12px 0 10px}
+.d-sec h3{margin-bottom:6px;min-height:26px}
+.d-sec.slim h3{margin:0}
+.d-sec h3 .h-sub{font-size:12.5px;font-weight:500;color:var(--muted)}
+.jm-body .jm-col:last-child .d-sec:first-child,.jm-body .jm-col:first-child>.d-sec:first-child{padding-top:14px}
+.composer textarea{min-height:38px}
+.composer .row{padding-top:6px}
+.note .m .acts button{color:#8497A0}
+@media (hover:hover){
+  .note .m .acts{opacity:0;transition:opacity .12s}
+  .note:hover .m .acts,.note:focus-within .m .acts{opacity:1}
+}
+
+/* toasts */
+.toast{border-radius:8px;box-shadow:var(--sh-3);font-weight:500}
+@media (max-width:900px){main{padding:12px 12px 40px}header{padding:0 12px}}
 </style>
 </head>
 <body>
@@ -1503,8 +1714,9 @@ function renderDrawer(keepRoll) {
     <dl class="jm-tiles">
       ${tile('Due', j.due_date ? dueHtml(j, new Date().toISOString().slice(0, 10)) : '<span class="sub">Not set</span>')}
       ${tile(j.job_type === 'special' ? 'Quantity' : 'To encode', fmt(total_qty || j.quantity), (j.overage_pct ? `<small>incl. +${j.overage_pct}% overage</small>` : '') + (addedQty ? `<small>${fmt(baseQty)} + ${fmt(addedQty)} added</small>` : ''))}
-      ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>` : '')}
-      ${tile('Serial range', ranges.length ? `<span class="data" style="font-size:14px">${rangeHtml}</span>` : '<span class="sub">None</span>')}
+      ${tile('Rolls', rolls.length ? `${done} of ${rolls.length} done` : '—', rolls.length ? `<div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div>
+        <small>${rolls.filter(isRunning).length ? rolls.filter(isRunning).length + ' in progress · ' : ''}${fmt(rolls.filter(isDone).reduce((a, r) => a + r.quantity, 0))} labels encoded</small>` : '')}
+      ${tile('Serial range', ranges.length ? `<span class="data tile-range">${rangeHtml}</span>` : '<span class="sub">None</span>')}
     </dl>
     <div class="d-actions">
       ${archived || !next ? '' : `<button class="btn primary" onclick="setStatus('${next[1]}')">${next[0]}</button>`}
@@ -1532,25 +1744,22 @@ function renderDrawer(keepRoll) {
   h += '<div class="jm-col">';
 
   h += j.job_type === 'special' ? `<div class="d-sec"><h3>Special job <span class="chip-special">${j.data_sheet ? 'No UPC, ' + esc((sheetDef(j.data_sheet) || {customer: ''}).customer) + ' data sheet' : 'No UPC, no serials'}</span></h3><dl class="kv">
-    ${kv('Quantity', fmt(j.quantity), 'data')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
-    ${kv('Labels per roll', fmt(j.lpr), 'data')}${kv('Inlay', esc(j.inlay_type || ''))}${kv('Label size', esc(j.label_size || ''))}
+    ${kv('Quantity', fmt(j.quantity), 'num')}${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
+    ${kv('Labels per roll', fmt(j.lpr), 'num')}${kv('Inlay', esc(j.inlay_type || ''))}${kv('Label size', esc(j.label_size || ''))}
     ${j.data_sheet ? kv('Data sheet', esc((sheetDef(j.data_sheet) || {detail: j.data_sheet}).detail)) : ''}
     ${j.data_sheet && ranges.length ? kv('Serial range', rangeHtml, 'data') : ''}
     ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
     ${kv('UPC', esc(j.upc || ''), 'data')}
-    ${kv('Base quantity', fmt(j.quantity), 'data')}
+    ${kv('Base quantity', fmt(j.quantity), 'num')}
     ${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
-    ${kv('Labels per roll', fmt(j.lpr), 'data')}
-    ${kv('DB files', baseQty ? dbSplit(baseQty, j.qty_db).map(fmt).join(' + ') + adds.map(a => `; added #${a.seq}: ` + dbSplit(a.quantity, j.qty_db).map(fmt).join(' + ')).join('') : '', 'data')}
+    ${kv('Labels per roll', fmt(j.lpr), 'num')}
+    ${kv('DB files', baseQty ? dbSplit(baseQty, j.qty_db).map(fmt).join(' + ') + adds.map(a => `; added #${a.seq}: ` + dbSplit(a.quantity, j.qty_db).map(fmt).join(' + ')).join('') : '', 'num wide')}
     ${kv('Inlay', esc(j.inlay_type || ''))}
     ${kv('Label size', esc(j.label_size || ''))}
   </dl></div>`;
 
   if (rolls.length) {
-    h += `<div class="d-sec"><h3>Rolls<span class="r"><button class="btn sm" onclick="trackJob(${j.id})">Open in roll tracking</button></span></h3>
-      <div class="roll-meta"><span><b style="color:var(--ink)">${done}</b> of ${rolls.length} done</span>${rolls.filter(isRunning).length ? `<span>${rolls.filter(isRunning).length} in progress</span>` : ''}
-      <span>${fmt(rolls.filter(isDone).reduce((a, r) => a + r.quantity, 0))} labels encoded</span></div>
-      <div class="progress"><i style="width:${done / rolls.length * 100}%"></i></div></div>`;
+    h += `<div class="d-sec slim"><h3>Rolls <span class="h-sub">${done} of ${rolls.length} done</span><span class="r"><button class="btn sm" onclick="trackJob(${j.id})">Open in roll tracking</button></span></h3></div>`;
   }
 
   right += `<div class="d-sec"><h3>Notes</h3>${composerHtml('d', rolls)}<div id="d-notes">${notesHtml(CURRENT.notes)}</div></div>`;
@@ -1566,7 +1775,7 @@ function renderDrawer(keepRoll) {
 
   h += `<div class="d-sec"><h3>Details</h3><dl class="kv">
     ${kv('PO #', esc(j.po_number || ''))}${kv('Part #', esc(j.part_number || ''))}${kv('Due date', esc(j.due_date || ''))}
-    ${kv('Created', esc(j.created_at))}${kv('Updated', esc(j.updated_at))}${kv('Template', j.template_path ? esc(j.template_path.split(/[\\/]/).pop()) : '')}
+    ${kv('Created', esc(j.created_at))}${kv('Updated', esc(j.updated_at))}${kv('Template', j.template_path ? esc(j.template_path.split(/[\\/]/).pop()) : '', 'wide')}
   </dl></div>`;
   h += `</div><div class="jm-col">${right}</div>`;
 
