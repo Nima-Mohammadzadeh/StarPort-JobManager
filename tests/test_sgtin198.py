@@ -191,3 +191,120 @@ def test_verify_db_file_catches_tampering(jm, tmp_path):
     with pytest.raises(ValueError) as e:
         g.verify_db_file(path, UPC, 1000, 5, "sgtin198")
     assert os.path.basename(path) in str(e.value) and "row 3" in str(e.value)
+
+
+# ── Task 3: job columns, creation rules, QC sheet tail ───────────────────────
+def make198(jm, n=1, **extra):
+    data = {"customer": "Acme", "title": f"Item {n}", "job_ticket": f"S{n}", "upc": jm.upc(n),
+            "quantity": 100, "lpr": 50, "epc_scheme": "sgtin198"}
+    data.update(extra)
+    return jm.app.create_job(data)
+
+
+def test_old_db_gets_columns(jm):
+    import sqlite3
+    old = os.path.join(jm.root, "old.db")
+    conn = sqlite3.connect(old)
+    conn.execute("""CREATE TABLE jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_number TEXT NOT NULL UNIQUE, job_ticket TEXT,
+        title TEXT NOT NULL, customer TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Pending', priority TEXT NOT NULL DEFAULT 'Medium',
+        due_date TEXT, notes TEXT, upc TEXT, quantity INTEGER, lpr INTEGER,
+        qty_db INTEGER, start_serial INTEGER, overage_pct REAL NOT NULL DEFAULT 0,
+        label_size TEXT, inlay_type TEXT, part_number TEXT, po_number TEXT,
+        folder_path TEXT, archived_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+    conn.execute("INSERT INTO jobs (job_number,title,customer,created_at,updated_at) "
+                 "VALUES ('J1','x','Acme','t','t')")
+    conn.commit(); conn.close()
+    jm.app.DB_PATH = old
+    jm.app.init_db()
+    conn = sqlite3.connect(old)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
+    row = conn.execute("SELECT epc_scheme, serial_format FROM jobs").fetchone()
+    conn.close()
+    assert {"epc_scheme", "serial_format"} <= cols
+    assert row == ("sgtin96", "number")
+
+
+def test_create_198_job(jm):
+    g = mod(jm)
+    res, code = make198(jm)
+    assert code == 201, res
+    job = res["job"]
+    assert job["epc_scheme"] == "sgtin198" and job["serial_format"] == "number"
+    conn = jm.app.get_db()
+    rolls = [dict(r) for r in conn.execute("SELECT * FROM job_rolls WHERE job_id=?", (job["id"],))]
+    conn.close()
+    assert rolls and all(len(r["epc_start"]) == 50 and len(r["epc_end"]) == 50 for r in rolls)
+    xlsx = [os.path.join(d, nm) for d, _, names in os.walk(job["folder_path"])
+            for nm in names if nm.lower().endswith(".xlsx")]
+    assert xlsx
+    for path in xlsx:
+        rows = _read_rows(path)
+        assert rows and all(len(epc) == 50 for _, _, epc in rows)
+    assert os.path.isfile(os.path.join(job["folder_path"], g.qc_file_name(job)))
+
+
+def test_default_job_unchanged(jm):
+    job = jm.job(2)["job"]
+    assert job["epc_scheme"] == "sgtin96" and job["serial_format"] == "number"
+    conn = jm.app.get_db()
+    rolls = [dict(r) for r in conn.execute("SELECT * FROM job_rolls WHERE job_id=?", (job["id"],))]
+    conn.close()
+    assert rolls and all(len(r["epc_start"]) == 24 for r in rolls)
+
+
+@pytest.mark.parametrize("extra", [
+    {"epc_scheme": "nope"},
+    {"epc_scheme": "sgtin198", "job_type": "special"},
+    {"customer": "GO2", "job_type": "special", "data_sheet": "go2_rand", "epc_scheme": "sgtin198",
+     "upc": "", "quantity": 100},
+    {"serial_format": "prefix"},
+])
+def test_scheme_refused(jm, extra):
+    upc = jm.upc(3)
+    before = jm.SS.next_start(upc)
+    conn = jm.app.get_db(); n0 = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]; conn.close()
+    res, code = make198(jm, 3, **extra) if "epc_scheme" in extra else \
+        jm.app.create_job({"customer": "Acme", "title": "t", "job_ticket": "T3", "upc": upc,
+                           "quantity": 100, "lpr": 50, **extra})
+    assert code == 400 and res.get("error"), res
+    conn = jm.app.get_db(); n1 = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]; conn.close()
+    assert n1 == n0 and jm.SS.next_start(upc) == before
+
+
+def test_activity_mentions_scheme(jm):
+    res, code = make198(jm, 4)
+    assert code == 201
+    conn = jm.app.get_db()
+    msg = conn.execute("SELECT message FROM activity WHERE kind='created' AND job_id=?",
+                       (res["job"]["id"],)).fetchone()[0]
+    conn.close()
+    assert msg.endswith(" — SGTIN-198")
+
+
+def test_tag_tail_and_qc_sheet(jm):
+    g = mod(jm)
+    epc96 = g.generate_epc(UPC, 1234567)
+    assert g.tag_tail(epc96, "sgtin96", 1234567) == epc96[-5:]
+    epc198 = g.generate_epc(UPC, 1234567, "sgtin198")
+    assert g.tag_tail(epc198, "sgtin198", 1234567) == "34567"
+    job = {"customer": "Acme", "upc": UPC, "quantity": 10, "lpr": 10, "epc_scheme": "sgtin198"}
+    rolls = [{"roll_number": 1, "quantity": 10, "serial_start": 1234567, "serial_end": 1234576,
+              "epc_start": epc198, "epc_end": g.generate_epc(UPC, 1234576, "sgtin198")}]
+    assert epc198[-5:] != "34567"
+    html = g.qc_html(job, rolls)[0]
+    assert '<td class="epc">34567</td>' in html and '<td class="epc">34576</td>' in html
+    assert f'<td class="epc">{epc198[-5:]}</td>' not in html
+    job96 = dict(job, epc_scheme="sgtin96")
+    rolls96 = [dict(rolls[0], epc_start=epc96, epc_end=g.generate_epc(UPC, 1234576))]
+    assert f'<td class="epc">{epc96[-5:]}</td>' in g.qc_html(job96, rolls96)[0]
+
+
+def test_check_scheme_choice(jm):
+    g = mod(jm)
+    assert g.check_scheme_choice(None, "", "standard", None) == ("sgtin96", "number")
+    assert g.check_scheme_choice("sgtin198", "number", "standard", None) == ("sgtin198", "number")
+    with pytest.raises(ValueError):
+        g.check_scheme_choice("sgtin198", None, "special", None)

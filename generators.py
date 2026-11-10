@@ -584,6 +584,29 @@ def qc_page_estimate(n_rolls: int, write_in: bool) -> int:
     return 1 + -(-(n_rolls - first) // later)
 
 
+def check_scheme_choice(scheme, serial_format, job_type, data_sheet):
+    """Normalise the EPC scheme / serial format a new job asked for.
+    Blank means the defaults. Anything else is only for standard jobs without a data sheet."""
+    scheme = (scheme or "").strip().lower() or "sgtin96"
+    serial_format = (serial_format or "").strip().lower() or "number"
+    if scheme not in EPC_SCHEMES:
+        raise ValueError(f"Unknown EPC scheme '{scheme}'.")
+    if serial_format not in SERIAL_FORMATS:
+        raise ValueError(f"Unknown serial format '{serial_format}'.")
+    if (scheme, serial_format) != ("sgtin96", "number") and (job_type != "standard" or data_sheet):
+        raise ValueError("SGTIN-198 and other serial formats are only for standard UPC jobs "
+                         "(not special jobs or data sheets).")
+    return scheme, serial_format
+
+
+def tag_tail(epc, scheme, serial):
+    """The short tail printed on the QC sheet: last 5 hex characters for SGTIN-96,
+    last 5 characters of the serial text for SGTIN-198."""
+    if scheme == "sgtin198" and serial is not None:
+        return format_serial(serial)[-5:]
+    return (epc or "")[-5:]
+
+
 def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool]:
     """Returns (html, has_write_in_space)."""
     base  = int(job.get("quantity") or 0)
@@ -592,6 +615,7 @@ def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool
     total += added_qty
     write_in = bool(rolls) and qc_page_estimate(len(rolls), True) <= QC_MAX_PAGES
     e = lambda v: escape(str(v or ""))
+    scheme = job.get("epc_scheme") or "sgtin96"
 
     info_items = [
         ("Customer",         job.get("customer")),
@@ -618,8 +642,8 @@ def qc_html(job: dict, rolls: list, auto_print: bool = False) -> tuple[str, bool
   <td class="roll-number">{r['roll_number']}{' <small>(added)</small>' if r.get('addition_id') else ''}</td>
   <td class="quantity">{r['quantity']:,}</td>
   <td class="serial-range">{f"{r['serial_start']:,} - {r['serial_end']:,}" if r.get('serial_start') else ""}</td>
-  <td class="epc">{e((r.get('epc_start') or '')[-5:])}</td>
-  <td class="epc">{e((r.get('epc_end') or '')[-5:])}</td>
+  <td class="epc">{e(tag_tail(r.get('epc_start'), scheme, r.get('serial_start')))}</td>
+  <td class="epc">{e(tag_tail(r.get('epc_end'), scheme, r.get('serial_end')))}</td>
 </tr>"""
         if write_in:
             row += """

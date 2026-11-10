@@ -39,7 +39,7 @@ import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
-from generators import decode_epc
+from generators import decode_epc, check_scheme_choice
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
 
@@ -141,6 +141,8 @@ def init_db():
     add_col("jobs", "priority_rank", "priority_rank INTEGER")
     add_col("jobs", "created_by", "created_by TEXT")
     add_col("jobs", "completed_at", "completed_at TEXT")
+    add_col("jobs", "epc_scheme", "epc_scheme TEXT NOT NULL DEFAULT 'sgtin96'")
+    add_col("jobs", "serial_format", "serial_format TEXT NOT NULL DEFAULT 'number'")
     add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
     # Jobs already marked Complete before this column existed: use when they were set to Complete.
     cur.execute("""UPDATE jobs SET completed_at = COALESCE(
@@ -344,6 +346,11 @@ def create_job(data: dict) -> tuple[dict, int]:
             return {"error": "Unknown data sheet."}, 400
         if job_type != "special" or customer != cfg["customer"]:
             return {"error": f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}."}, 400
+    try:
+        scheme, serial_format = check_scheme_choice(data.get("epc_scheme"), data.get("serial_format"),
+                                                    job_type, data_sheet)
+    except ValueError as e:
+        return {"error": str(e)}, 400
     if job_type == "special":
         upc = None                          # special jobs never take serials
     try:
@@ -479,8 +486,9 @@ def create_job(data: dict) -> tuple[dict, int]:
            "job_ticket": ticket, "po_number": po, "po_clean": clean_po(po),
            "part_number": part, "inlay_type": inlay, "label_size": label_size,
            "due_date": due, "upc": upc, "quantity": quantity, "lpr": lpr,
-           "qty_db": qty_db, "start_serial": start_serial, "overage_pct": overage}
-    rolls = (roll_plan(upc, start_serial, total_qty, lpr) if upc
+           "qty_db": qty_db, "start_serial": start_serial, "overage_pct": overage,
+           "epc_scheme": scheme, "serial_format": serial_format}
+    rolls = (roll_plan(upc, start_serial, total_qty, lpr, scheme=scheme, serial_format=serial_format) if upc
              else roll_plan_seq(start_serial, total_qty, lpr) if seq_alloc
              else roll_plan_plain(total_qty, lpr))
     generated = {}
@@ -489,7 +497,8 @@ def create_job(data: dict) -> tuple[dict, int]:
     if folder_ok:
         if upc:
             try:
-                generated["db_files"] = generate_db_files(job_dir, upc, start_serial, total_qty, qty_db)
+                generated["db_files"] = generate_db_files(job_dir, upc, start_serial, total_qty, qty_db,
+                                                      scheme=scheme, serial_format=serial_format)
             except Exception as e:
                 warnings.append(f"Encoding database not written: {e}")
         if data_sheet:
@@ -527,10 +536,10 @@ def create_job(data: dict) -> tuple[dict, int]:
         conn.execute("""UPDATE jobs SET job_ticket=?, po_number=?, part_number=?, due_date=?,
             notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
             label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
-            updated_at=? WHERE id=?""",
+            epc_scheme=?, serial_format=?, updated_at=? WHERE id=?""",
             (ticket, po, part, due, notes, upc, quantity, lpr, qty_db, start_serial, overage,
              label_size, inlay, job_dir if folder_ok else None, template_path, job_type, created_by,
-             now_str(), job_id))
+             scheme, serial_format, now_str(), job_id))
         _insert_rolls(conn, job_id, rolls)
         log_activity(conn, "created", job_id,
                      f"Created {job_number} for {customer}"
@@ -539,7 +548,8 @@ def create_job(data: dict) -> tuple[dict, int]:
                         else " (special, no serials)" if job_type == "special" else "")
                      + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else "")
                      + (f"; serials {alloc['start']:,}–{alloc['end']:,} ({'specified by user' if manual_start else 'automatic'})"
-                        if alloc else ""), created_by)
+                        if alloc else "")
+                     + (" — SGTIN-198" if scheme == "sgtin198" else ""), created_by)
         conn.commit()
         saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
     except Exception as e:
