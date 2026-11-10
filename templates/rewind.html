@@ -176,7 +176,7 @@ async function post(url, body) {
 }
 
 /* ── scanning: the fob reads the tag, Serial Magic Keys types it here and presses Enter ── */
-const HEX24 = v => /^(0x)?([0-9a-fA-F]{24}|[0-9a-fA-F]{50})$/.test(String(v).replace(/[\s:\-]/g, ''));
+const HEX24 = v => /^(0x)?([0-9a-fA-F]{24}|[0-9a-fA-F]{50}|[0-9a-fA-F]{52})$/.test(String(v).replace(/[\s:\-]/g, ''));
 let scanTimer = null, audio = null;
 function feedback(good) {
   try { if (navigator.vibrate) navigator.vibrate(good ? 40 : [120, 70, 120]); } catch (e) {}
@@ -204,7 +204,7 @@ async function lookup(raw, fromList) {
   const warn = r.result === 'other_job' || r.result === 'ambiguous';
   box.innerHTML = `<div class="smsg ${warn ? 'warn' : 'bad'}">${esc(r.message)}${r.note ? `<small>${esc(r.note)}</small>` : ''}
     ${r.result === 'other_job' ? `<div><button onclick="openOther()">Open that job, roll ${r.roll.roll_number}</button></div>` : ''}
-    ${r.epc && (r.epc.length === 24 || r.epc.length === 50) ? `<small class="data">${esc(r.epc)}</small>` : r.raw ? `<small>Received: <span class="data">${esc(r.raw)}</span></small>` : ''}</div>`;
+    ${r.epc && (r.epc.length === 24 || r.epc.length === 50 || r.epc.length === 52) ? `<small class="data">${esc(r.epc)}</small>` : r.raw ? `<small>Received: <span class="data">${esc(r.raw)}</span></small>` : ''}</div>`;
   S.other = r.result === 'other_job' ? r : null;
 }
 function openOther() { const r = S.other; if (!r) return; S.scan = {r, at: Date.now()}; $('#smsg').innerHTML = ''; go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); }

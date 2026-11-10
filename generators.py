@@ -587,8 +587,8 @@ def qc_page_estimate(n_rolls: int, write_in: bool) -> int:
 def check_scheme_choice(scheme, serial_format, job_type, data_sheet):
     """Normalise the EPC scheme / serial format a new job asked for.
     Blank means the defaults. Anything else is only for standard jobs without a data sheet."""
-    scheme = (scheme or "").strip().lower() or "sgtin96"
-    serial_format = (serial_format or "").strip().lower() or "number"
+    scheme = str(scheme or "").strip().lower() or "sgtin96"
+    serial_format = str(serial_format or "").strip().lower() or "number"
     if scheme not in EPC_SCHEMES:
         raise ValueError(f"Unknown EPC scheme '{scheme}'.")
     if serial_format not in SERIAL_FORMATS:

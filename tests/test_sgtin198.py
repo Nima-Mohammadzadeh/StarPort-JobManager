@@ -533,3 +533,70 @@ def test_epc_preview_errors(jm):
         r = _prev(jm, **{**ok, **bad})
         assert r.status_code == 400, bad
         assert r.get_json()["error"], bad
+
+
+# ── Fix wave: tightened tag check ────────────────────────────────────────────
+def _mk96(jm, n=2):
+    return jm.app.create_job({"customer": "Acme", "title": "N96", "job_ticket": "S96", "upc": jm.upc(n),
+                              "quantity": 100, "lpr": 50})[0]["job"]
+
+
+def _post_lookup(jm, raw, job_id=None):
+    return jm.app.app.test_client().post("/api/rewind/lookup", json={"raw": raw, "job_id": job_id})
+
+
+def test_lookup_scheme_mismatch_without_job_id(jm):
+    j198 = make198(jm, 1)[0]["job"]
+    j96 = _mk96(jm, 2)
+    r198, r96 = _job_roll(jm, j198["id"]), _job_roll(jm, j96["id"])
+    d198, d96 = jm.app.decode_epc(r198["epc_start"]), jm.app.decode_epc(r96["epc_start"])
+    tag96 = jm.app.generate_epc(d198["upc"], d198["serial"], "sgtin96")
+    res = _lk(jm, tag96)
+    assert res["result"] == "wrong_scheme", res
+    assert "SGTIN-96" in res["message"] and "SGTIN-198" in res["message"] and "S1" in res["message"]
+    tag198 = jm.app.generate_epc(d96["upc"], d96["serial"], "sgtin198")
+    res = _lk(jm, tag198)
+    assert res["result"] == "wrong_scheme", res
+    assert "S96" in res["message"]
+    assert _lk(jm, r198["epc_start"])["result"] == "found"
+    assert _lk(jm, r96["epc_start"])["result"] == "found"
+
+
+def test_lookup_oversize_198_serial_is_not_500(jm):
+    resp = _post_lookup(jm, build198(UPC, "9" * 20))
+    assert resp.status_code == 200
+    assert resp.get_json()["result"] == "invalid"
+
+
+def test_lookup_noncanonical_198_rejected(jm):
+    j = make198(jm, 1)[0]["job"]
+    d = jm.app.decode_epc(_job_roll(jm, j["id"])["epc_start"])
+    assert _lk(jm, build198(d["upc"], str(d["serial"])))["result"] == "found"
+    res = _lk(jm, build198(d["upc"], "00" + str(d["serial"])))
+    assert res["result"] == "invalid" and "isn't one of our EPCs" in res["message"], res
+    good = build198(d["upc"], str(d["serial"]))
+    bits = format(int(good, 16), "0200b")
+    dirty = format(int(bits[:-1] + "1", 2), "050X")      # non-zero padding bit
+    assert _lk(jm, dirty)["result"] == "invalid"
+
+
+def test_lookup_52_hex_tolerated(jm):
+    j = make198(jm, 1)[0]["job"]
+    epc = _job_roll(jm, j["id"])["epc_start"]
+    res = _lk(jm, epc + "00")
+    assert res["result"] == "found" and res["epc"] == epc, res
+    assert _lk(jm, epc + "01")["result"] == "invalid"
+    assert _lk(jm, "30" + "0" * 48 + "00")["result"] == "invalid"
+
+
+def test_lookup_unknown_job_id(jm):
+    j = make198(jm, 1)[0]["job"]
+    res = _lk(jm, _job_roll(jm, j["id"])["epc_start"], 99999)
+    assert res["result"] == "invalid" and res["message"] == "Job not found."
+
+
+def test_scheme_choice_non_string(jm):
+    res, code = make198(jm, 4, epc_scheme=5)
+    assert code == 400 and "Unknown EPC scheme" in res["error"], res
+    with pytest.raises(ValueError):
+        jm.app.check_scheme_choice(5, None, "standard", None)

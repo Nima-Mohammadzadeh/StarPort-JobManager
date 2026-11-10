@@ -1575,14 +1575,16 @@ def _lookup(conn, raw, job_id=None):
     if not t:
         return res("invalid", "Nothing was scanned.")
     if not re.fullmatch(r"[0-9A-F]+", t):
-        runs = re.findall(r"(?<![0-9A-F])(?:[0-9A-F]{50}|[0-9A-F]{24})(?![0-9A-F])", t)
+        runs = re.findall(r"(?<![0-9A-F])(?:[0-9A-F]{52}|[0-9A-F]{50}|[0-9A-F]{24})(?![0-9A-F])", t)
         if len(runs) != 1:
             return res("invalid", "That isn't hex. Serial Magic may be sending the tag as text or decimal. "
                                   "Set it to send the EPC as hex.")
         t = out["epc"] = runs[0]
         out["note"] = "Extra text around the tag was ignored. Clear the prefix and suffix in Serial Magic Keys settings."
+    if len(t) == 52 and t.startswith("36") and t.endswith("00"):
+        t = out["epc"] = t[:50]      # some readers return whole 16-bit words: the EPC plus a zero byte
     if len(t) not in (24, 50):
-        return res("invalid", f"That is {len(t)} characters; an EPC is 24 (SGTIN-96) or 50 (SGTIN-198). "
+        return res("invalid", f"That is {len(t)} characters; an EPC is 24 (SGTIN-96) or 50 or 52 (SGTIN-198). "
                               "Check that Serial Magic sends the full EPC.")
     if t.startswith("E2"):
         return res("tid", "That looks like a TID (it starts with E2), not an EPC. Set the reader to report the EPC.")
@@ -1591,7 +1593,9 @@ def _lookup(conn, raw, job_id=None):
         return res("invalid", "That isn't one of our EPCs (they start with 30 or 36).")
     if job_id:
         jr = conn.execute("SELECT epc_scheme FROM jobs WHERE id=?", (job_id,)).fetchone()
-        jscheme = (jr["epc_scheme"] if jr else None) or "sgtin96"
+        if not jr:
+            return res("invalid", "Job not found.")
+        jscheme = jr["epc_scheme"] or "sgtin96"
         if jscheme != scheme:
             return res("wrong_scheme", f"This tag is {scheme_label(scheme)} but this job uses {scheme_label(jscheme)}.")
     try:
@@ -1601,6 +1605,10 @@ def _lookup(conn, raw, job_id=None):
     if d["serial"] is None:
         return res("invalid", "That serial isn't one of ours (it isn't a number).")
     upc, serial = d["upc"], d["serial"]
+    if serial > SS.MAX_SERIAL:
+        return res("invalid", "That serial is too large to be one of ours.")
+    if generate_epc(upc, serial, scheme) != t:
+        return res("invalid", "That isn't one of our EPCs.")
     owners = [dict(o) for o in conn.execute(
         """SELECT r.*, j.job_number, j.job_ticket, j.customer, j.title, j.upc, j.archived_at, j.epc_scheme
            FROM job_rolls r JOIN jobs j ON j.id=r.job_id
@@ -1619,6 +1627,12 @@ def _lookup(conn, raw, job_id=None):
         if job and job["upc"] and job["upc"] != upc:
             return res("wrong_product", f"Wrong product: this tag is for UPC {upc}; this job is UPC {job['upc']}.")
     else:
+        if owners:
+            o = owners[0]
+            oscheme = o.get("epc_scheme") or "sgtin96"
+            if oscheme != scheme:
+                return res("wrong_scheme", f"This tag is {scheme_label(scheme)} but job "
+                                           f"{o['job_ticket'] or o['job_number']} uses {scheme_label(oscheme)}.")
         if len(owners) == 1:
             return res("found", "", roll=_roll_detail(conn, owners[0], serial))
         if len(owners) > 1:

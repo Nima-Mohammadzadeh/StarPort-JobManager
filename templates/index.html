@@ -3133,16 +3133,19 @@ function epcParts(hex) {
   return {prefix: bits.slice(0, 58), serial: BigInt('0b' + bits.slice(58))};
 }
 function verifyEpc() {
-  const inp = $('#verify-in'); const raw = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw) return;
+  const inp = $('#verify-in'); const raw0 = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw0) return;
   const {job: j, rolls} = WORK, r = rolls.find(x => x.roll_number === WORK_ROLL);
   let ok = false, msg, go = null;
   const want = j.epc_scheme === 'sgtin198' ? 50 : 24;
-  if (!/^([0-9A-F]{24}|[0-9A-F]{50})$/.test(raw)) msg = 'Not an EPC: needs 24 characters (SGTIN-96) or 50 (SGTIN-198), 0–9 and A–F.';
+  let raw = raw0;
+  if (raw.length === 52 && raw.startsWith('36') && raw.endsWith('00')) raw = raw.slice(0, 50);   // reader returned whole 16-bit words
+  if (!/^([0-9A-F]{24}|[0-9A-F]{50})$/.test(raw)) msg = 'Not an EPC: needs 24 characters (SGTIN-96) or 50 or 52 (SGTIN-198), 0–9 and A–F.';
   else if (raw.length !== want) msg = `This job uses ${j.epc_scheme === 'sgtin198' ? 'SGTIN-198' : 'SGTIN-96'}: its tags are ${want} characters, not ${raw.length}.`;
   else {
     const got = epcParts(raw), exp = epcParts(r.epc_start), s = got.serial;
     const fmtS = x => Number(x).toLocaleString();
-    if (s === null) msg = got.prefix !== exp.prefix ? `Wrong product: this tag is not encoded for UPC ${j.upc}.` : `The serial on this tag (${got.text}) is not a number from this job.`;
+    if (got.text !== undefined && s !== null && got.text !== String(s)) msg = `The serial on this tag (${got.text}) is not a number from this job.`;
+    else if (s === null) msg = got.prefix !== exp.prefix ? `Wrong product: this tag is not encoded for UPC ${j.upc}.` : `The serial on this tag (${got.text}) is not a number from this job.`;
     else if (got.prefix !== exp.prefix) msg = `Wrong product: this tag is not encoded for UPC ${j.upc}.`;
     else if (s >= BigInt(r.serial_start) && s <= BigInt(r.serial_end)) {
       ok = true; msg = `Belongs to roll ${r.roll_number}: serial ${fmtS(s)}, label ${fmtS(s - BigInt(r.serial_start) + 1n)} of ${fmt(r.quantity)}.`;
