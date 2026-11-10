@@ -308,3 +308,110 @@ def test_check_scheme_choice(jm):
     assert g.check_scheme_choice("sgtin198", "number", "standard", None) == ("sgtin198", "number")
     with pytest.raises(ValueError):
         g.check_scheme_choice("sgtin198", None, "special", None)
+
+
+# ── Task 4: added data, rebuilt files and Tools follow the job's scheme ──────
+def _rows(path):
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True)
+    try:
+        return list(wb.active.iter_rows(min_row=2, values_only=True))
+    finally:
+        wb.close()
+
+
+def _data_files(job_dir):
+    d = os.path.join(job_dir, "Data")
+    return sorted(f for f in os.listdir(d) if f.endswith((".xlsx", ".csv")))
+
+
+def _add(jm, job_id, qty=1000, **kw):
+    return jm.app.add_data(job_id, {"quantity": qty, "reason": "short run", "added_by": "Sam", **kw})
+
+
+def _rolls(jm, job_id):
+    c = jm.app.get_db()
+    try:
+        return [dict(r) for r in c.execute("SELECT * FROM job_rolls WHERE job_id=? ORDER BY roll_number", (job_id,))]
+    finally:
+        c.close()
+
+
+def test_addition_to_198_job(jm):
+    g = mod(jm)
+    res, code = make198(jm, 20)
+    assert code == 201, res
+    job = res["job"]
+    before = _rolls(jm, job["id"])
+    out, code = _add(jm, job["id"], 1000)
+    assert code == 201, out
+    a = out["addition"]
+    after = _rolls(jm, job["id"])
+    assert after[:len(before)] == before
+    new = [r for r in after if r["addition_id"] == a["id"]]
+    assert new and all(len(r["epc_start"]) == 50 and len(r["epc_end"]) == 50 for r in new)
+    d = g.decode_epc(new[0]["epc_start"])
+    assert d["scheme"] == "sgtin198" and d["serial"] == a["serial_start"]
+    assert g.decode_epc(new[-1]["epc_end"])["serial"] == a["serial_end"]
+    added = [n for n in _data_files(res["folder_path"]) if "_ADD1" in n]
+    got = _rows(os.path.join(res["folder_path"], "Data", added[0]))
+    assert len(got) == 1000 and got[0][0] == a["serial_start"] and got[-1][0] == a["serial_end"]
+    assert all(len(r[2]) == 50 for r in got)
+    assert g.decode_epc(got[0][2])["scheme"] == "sgtin198"
+
+
+def test_addition_preview_198(jm):
+    r96 = jm.job(21)
+    r198, _ = make198(jm, 22)
+    p96, c1 = _add(jm, r96["job"]["id"], 700, preview=True)
+    p198, c2 = _add(jm, r198["job"]["id"], 700, preview=True)
+    assert c1 == c2 == 200 and p198["preview"] is True
+    assert len(p198["files"]) == len(p96["files"])
+    assert [f.split(".")[-1] for f in p198["files"]] == [f.split(".")[-1] for f in p96["files"]]
+    assert all("_ADD1" in f for f in p198["files"])
+    c = jm.app.get_db()
+    assert c.execute("SELECT COUNT(*) FROM job_additions WHERE job_id=?", (r198["job"]["id"],)).fetchone()[0] == 0
+    c.close()
+
+
+def test_ensure_rolls_198(jm):
+    res, _ = make198(jm, 23)
+    jid = res["job"]["id"]
+    c = jm.app.get_db()
+    c.execute("DELETE FROM job_rolls WHERE job_id=?", (jid,)); c.commit()
+    job = jm.app._load_job(c, jid)
+    rolls = jm.app.ensure_rolls(c, job); c.close()
+    assert rolls and all(len(r["epc_start"]) == 50 and len(r["epc_end"]) == 50 for r in rolls)
+    assert mod(jm).decode_epc(rolls[0]["epc_start"])["serial"] == job["start_serial"]
+
+
+def test_regenerate_198_files(jm, monkeypatch):
+    import subprocess
+    g = mod(jm)
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
+    res, _ = make198(jm, 24)
+    job = res["job"]
+    ddir = os.path.join(res["folder_path"], "Data")
+    for f in _data_files(res["folder_path"]):
+        os.remove(os.path.join(ddir, f))
+    r = jm.app.app.test_client().post(f"/api/jobs/{job['id']}/regenerate")
+    assert r.status_code == 200 and r.get_json()["rebuilt_database"] is True
+    files = _data_files(res["folder_path"])
+    assert files
+    got = [row for f in files for row in _rows(os.path.join(ddir, f))]
+    assert len(got) == job["quantity"] and got[0][0] == job["start_serial"]
+    assert all(len(row[2]) == 50 and row[2] == g.generate_epc(job["upc"], row[0], "sgtin198") for row in got)
+
+
+def test_tools_job_mode_198(jm):
+    import io
+    res, _ = make198(jm, 25)
+    job = res["job"]
+    r = jm.app.app.test_client().post("/api/tools/database", json={"mode": "job", "job_id": job["id"]})
+    assert r.status_code == 200
+    from openpyxl import load_workbook
+    data = r.data
+    wb = load_workbook(io.BytesIO(data), read_only=True)
+    first = list(wb.active.iter_rows(min_row=2, max_row=2, values_only=True))[0]
+    wb.close()
+    assert first[0] == job["start_serial"] and len(first[2]) == 50

@@ -688,14 +688,14 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
         if not lpr:
             rolls = []
         elif kind == "standard":
-            rolls = roll_plan(job["upc"], start, qty, lpr, first_roll)
+            rolls = roll_plan(job["upc"], start, qty, lpr, first_roll, scheme=job["epc_scheme"] or "sgtin96", serial_format=job["serial_format"] or "number")
         elif kind == CDO_SHEET:
             rolls = roll_plan_seq(start, qty, lpr, first_roll)
         else:
             rolls = roll_plan_plain(qty, lpr, first_roll)
         try:
             if kind == "standard":
-                gen = generate_db_files(folder, job["upc"], start, qty, qty_db, tag=tag)
+                gen = generate_db_files(folder, job["upc"], start, qty, qty_db, tag=tag, scheme=job["epc_scheme"] or "sgtin96", serial_format=job["serial_format"] or "number")
             elif kind == CDO_SHEET:
                 gen = generate_cdo_files(folder, label, start, qty, qty_db)
             else:
@@ -784,7 +784,8 @@ def ensure_rolls(conn, job: dict) -> list:
         return rows
     total = production_qty(job.get("quantity") or 0, job.get("overage_pct") or 0)
     if job.get("upc"):
-        plan = roll_plan(job["upc"], job.get("start_serial"), total, job.get("lpr") or 0)
+        plan = roll_plan(job["upc"], job.get("start_serial"), total, job.get("lpr") or 0,
+                         scheme=job.get("epc_scheme") or "sgtin96", serial_format=job.get("serial_format") or "number")
     else:
         plan = roll_plan_plain(total, job.get("lpr") or 0)
     if not plan:
@@ -1675,7 +1676,8 @@ def api_regenerate(job_id):
     if job["upc"] and job["start_serial"] and job["quantity"] and not has_db:
         try:     # same serials as recorded for this job; never allocates new ones
             generate_db_files(folder, job["upc"], job["start_serial"],
-                              production_qty(job["quantity"], job["overage_pct"] or 0), job["qty_db"])
+                              production_qty(job["quantity"], job["overage_pct"] or 0), job["qty_db"],
+                              scheme=job["epc_scheme"] or "sgtin96", serial_format=job["serial_format"] or "number")
             rebuilt = True
         except Exception as e:
             return err(f"Encoding database not rebuilt: {e}", 500)
@@ -3320,7 +3322,9 @@ def tool_database():
             upc, start = job["upc"], job["start_serial"]
             total = production_qty(job["quantity"], job["overage_pct"] or 0)
             qty_db, label = job["qty_db"], job["job_number"]
+            scheme, serial_format = job["epc_scheme"] or "sgtin96", job["serial_format"] or "number"
         else:
+            scheme, serial_format = "sgtin96", "number"      # custom mode has no job
             upc = (data.get("upc") or "").strip()
             v = validate_upc(upc)
             if not v["valid"]:
@@ -3347,7 +3351,7 @@ def tool_database():
             log_activity(conn, "serials", None, f"Tools: {total:,} serials {start:,}–{a['end']:,} for UPC {upc} "
                                                  f"recorded as {label} — {reason}", who)
             conn.commit(); conn.close()
-        info = generate_db_files(tmp, upc, start, total, qty_db)
+        info = generate_db_files(tmp, upc, start, total, qty_db, scheme=scheme, serial_format=serial_format)
         files = info["files"]
         if len(files) == 1:
             buf = io.BytesIO(open(files[0], "rb").read())
