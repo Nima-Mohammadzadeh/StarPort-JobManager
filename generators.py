@@ -21,7 +21,27 @@ except ImportError:          # pragma: no cover
 
 
 # ── EPC ───────────────────────────────────────────────────────────────────────
-def generate_epc(upc: str, serial: int) -> str:
+SERIAL_FORMATS = ("number",)
+_SGTIN198_SERIAL_BITS = 140
+_SGTIN198_MAX_CHARS = 20
+
+
+def format_serial(serial: int, serial_format: str = "number") -> str:
+    """Serial number → the text that is written into an SGTIN-198 tag."""
+    if serial_format not in SERIAL_FORMATS:
+        raise ValueError(f"Unknown serial format: {serial_format!r}")
+    n = int(serial)
+    if n < 0:
+        raise ValueError("Serial cannot be negative")
+    text = str(n)
+    if len(text) > _SGTIN198_MAX_CHARS:
+        raise ValueError(f"Serial is longer than {_SGTIN198_MAX_CHARS} characters")
+    if not text.isascii():
+        raise ValueError("Serial must be 7-bit ASCII")
+    return text
+
+
+def _encode_sgtin96(upc: str, serial: int, serial_format: str = "number") -> str:
     """12-digit UPC + serial → 24-char hex SGTIN-96 (filter 1, partition 5)."""
     company = int("0" + upc[:6])
     item    = int(upc[6:11])
@@ -32,12 +52,85 @@ def generate_epc(upc: str, serial: int) -> str:
     return format(int(bits, 2), "024X")
 
 
-def decode_epc(epc_hex: str) -> dict:
-    bits = format(int(epc_hex, 16), "096b")
+def _encode_sgtin198(upc: str, serial: int, serial_format: str = "number") -> str:
+    """12-digit UPC + serial → 50-char hex SGTIN-198 (filter 1, partition 5, 7-bit ASCII serial)."""
+    text = format_serial(serial, serial_format)
+    bits = ("00110110" + "001" + "101"
+            + format(int("0" + upc[:6]), "024b")
+            + format(int(upc[6:11]),     "020b"))
+    ser = "".join(format(ord(c), "07b") for c in text).ljust(_SGTIN198_SERIAL_BITS, "0")
+    bits += ser + "00"
+    return format(int(bits, 2), "050X")
+
+
+def _upc_from_bits(bits: str) -> str:
     company = str(int(bits[14:38], 2)).zfill(7)
     item    = str(int(bits[38:58], 2)).zfill(5)
     upc11   = company[1:] + item
-    return {"upc": upc11 + str(upc_check_digit(upc11)), "serial": int(bits[58:], 2)}
+    return upc11 + str(upc_check_digit(upc11))
+
+
+def _decode_sgtin96(epc_hex: str) -> dict:
+    bits = format(int(epc_hex, 16), "096b")
+    if bits[11:14] != "101":
+        raise ValueError("Unsupported SGTIN partition")
+    serial = int(bits[58:], 2)
+    return {"scheme": "sgtin96", "upc": _upc_from_bits(bits), "serial": serial, "serial_text": str(serial)}
+
+
+def _decode_sgtin198(epc_hex: str) -> dict:
+    bits = format(int(epc_hex, 16), "0200b")[:198]
+    if bits[11:14] != "101":
+        raise ValueError("Unsupported SGTIN partition")
+    chars = []
+    for i in range(58, 198, 7):
+        code = int(bits[i:i + 7], 2)
+        if code == 0:
+            break
+        chars.append(chr(code))
+    text = "".join(chars)
+    serial = int(text) if text.isascii() and text.isdigit() else None
+    return {"scheme": "sgtin198", "upc": _upc_from_bits(bits), "serial": serial, "serial_text": text}
+
+
+EPC_SCHEMES = {
+    "sgtin96":  {"label": "SGTIN-96",  "hex_len": 24, "header": 0x30,
+                 "encode": _encode_sgtin96,  "decode": _decode_sgtin96},
+    "sgtin198": {"label": "SGTIN-198", "hex_len": 50, "header": 0x36,
+                 "encode": _encode_sgtin198, "decode": _decode_sgtin198},
+}
+
+
+def scheme_label(scheme: str) -> str:
+    try:
+        return EPC_SCHEMES[scheme]["label"]
+    except KeyError:
+        raise ValueError(f"Unknown EPC scheme: {scheme!r}") from None
+
+
+def generate_epc(upc: str, serial: int, scheme: str = "sgtin96", serial_format: str = "number") -> str:
+    """12-digit UPC + serial → upper-case hex EPC in the given scheme."""
+    if scheme not in EPC_SCHEMES:
+        raise ValueError(f"Unknown EPC scheme: {scheme!r}")
+    return EPC_SCHEMES[scheme]["encode"](upc, serial, serial_format)
+
+
+def epc_scheme_of(epc_hex: str):
+    """Scheme key for an EPC hex string (by header byte and length), or None."""
+    t = (epc_hex or "").strip()
+    for key, sc in EPC_SCHEMES.items():
+        if len(t) == sc["hex_len"] and t[:2].upper() == format(sc["header"], "02X"):
+            return key
+    return None
+
+
+def decode_epc(epc_hex: str) -> dict:
+    """EPC hex → {scheme, upc, serial, serial_text}. serial is None for a non-numeric SGTIN-198 serial."""
+    t = (epc_hex or "").strip()
+    scheme = epc_scheme_of(t)
+    if scheme is None:
+        raise ValueError("Not a supported EPC (unknown header or wrong length)")
+    return EPC_SCHEMES[scheme]["decode"](t)
 
 
 def upc_check_digit(first11: str) -> int:
