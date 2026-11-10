@@ -1,4 +1,5 @@
 """SGTIN-198 encoder, scheme table and SGTIN-96 regression tests."""
+import os
 import sys
 
 import pytest
@@ -130,3 +131,63 @@ def test_scheme_helpers(jm):
     assert g.epc_scheme_of(g.generate_epc(UPC, 1, "sgtin198")) == "sgtin198"
     assert g.epc_scheme_of("3A" + "0" * 22) is None
     assert g.epc_scheme_of("30" + "0" * 48) is None
+
+
+def _read_rows(path):
+    if path.endswith(".xlsx"):
+        from openpyxl import load_workbook
+        wb = load_workbook(path)
+        try:
+            return [tuple(r) for r in wb.active.iter_rows(min_row=2, values_only=True)]
+        finally:
+            wb.close()
+    import csv
+    with open(path, newline="", encoding="utf-8") as fh:
+        return [(int(a), b, c) for a, b, c in list(csv.reader(fh))[1:]]
+
+
+def test_roll_plan_198(jm):
+    g = mod(jm)
+    rolls = g.roll_plan(UPC, 1000, 120, 50, scheme="sgtin198")
+    assert len(rolls) == 3
+    assert rolls[0]["epc_start"] == g.generate_epc(UPC, 1000, "sgtin198")
+    assert rolls[0]["epc_end"] == g.generate_epc(UPC, 1049, "sgtin198")
+    assert all(len(r["epc_start"]) == 50 and len(r["epc_end"]) == 50 for r in rolls)
+
+
+def test_db_files_198(jm, tmp_path):
+    g = mod(jm)
+    res = g.generate_db_files(str(tmp_path), UPC, 1000, 2500, 1000, scheme="sgtin198")
+    assert res["file_count"] == 3
+    serials = []
+    for p in res["files"]:
+        for serial, upc, epc in _read_rows(p):
+            assert isinstance(epc, str) and len(epc) == 50
+            assert g.decode_epc(epc)["serial"] == serial
+            serials.append(serial)
+    assert serials == list(range(1000, 3500))
+
+
+def test_db_files_96_unchanged(jm, tmp_path):
+    g = mod(jm)
+    res = g.generate_db_files(str(tmp_path), UPC, 1000, 2500, 1000)
+    n = 1000
+    for p in res["files"]:
+        for serial, upc, epc in _read_rows(p):
+            assert serial == n and len(epc) == 24 and epc == g.generate_epc(UPC, n)
+            n += 1
+    assert n == 3500
+
+
+def test_verify_db_file_catches_tampering(jm, tmp_path):
+    g = mod(jm)
+    res = g.generate_db_files(str(tmp_path), UPC, 1000, 5, None, scheme="sgtin198")
+    path = res["files"][0]
+    g.verify_db_file(path, UPC, 1000, 5, "sgtin198")
+    from openpyxl import load_workbook
+    wb = load_workbook(path)
+    wb.active.cell(row=3, column=3, value=g.generate_epc(UPC, 9999, "sgtin198"))
+    wb.save(path)
+    with pytest.raises(ValueError) as e:
+        g.verify_db_file(path, UPC, 1000, 5, "sgtin198")
+    assert os.path.basename(path) in str(e.value) and "row 3" in str(e.value)

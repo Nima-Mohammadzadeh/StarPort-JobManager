@@ -164,7 +164,8 @@ def production_qty(quantity: int, overage_pct: float) -> int:
     return int(quantity)
 
 
-def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int, first_roll: int = 1) -> list:
+def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int, first_roll: int = 1,
+              scheme: str = "sgtin96", serial_format: str = "number") -> list:
     """Split total_qty into rolls of lpr. Returns list of dicts. first_roll: number of the first roll
     (data added to a job continues the job's numbering)."""
     if not (upc and start_serial and total_qty and lpr and lpr > 0):
@@ -177,8 +178,8 @@ def roll_plan(upc: str, start_serial: int, total_qty: int, lpr: int, first_roll:
             "quantity":     q,
             "serial_start": cur,
             "serial_end":   cur + q - 1,
-            "epc_start":    generate_epc(upc, cur),
-            "epc_end":      generate_epc(upc, cur + q - 1),
+            "epc_start":    generate_epc(upc, cur, scheme, serial_format),
+            "epc_end":      generate_epc(upc, cur + q - 1, scheme, serial_format),
         })
         cur += q; left -= q; n += 1
     return rolls
@@ -206,28 +207,84 @@ def db_file_split(total_qty: int, qty_db: int | None) -> list:
 
 # ── Encoding database files ───────────────────────────────────────────────────
 def generate_db_files(job_dir: str, upc: str, start_serial: int,
-                      total_qty: int, qty_db: int | None, tag: str = "") -> dict:
+                      total_qty: int, qty_db: int | None, tag: str = "",
+                      scheme: str = "sgtin96", serial_format: str = "number") -> dict:
     data_dir = os.path.join(job_dir, "Data")
     os.makedirs(data_dir, exist_ok=True)
     split   = db_file_split(total_qty, qty_db)
     serial  = int(start_serial)
     files   = []
-    for idx, rows in enumerate(split, start=1):
-        records = []
-        for _ in range(rows):
-            records.append((serial, upc, generate_epc(upc, serial)))
-            serial += 1
-        suffix = tag + (f"_DB{idx}" if len(split) > 1 else "")
-        if XLSX_AVAILABLE:
-            path = os.path.join(data_dir, f"{upc}{suffix}.xlsx")
-            _write_xlsx(path, records, f"DB{idx}" if len(split) > 1 else "Database")
-        else:
-            path = os.path.join(data_dir, f"{upc}{suffix}.csv")
-            with open(path, "w", newline="", encoding="utf-8") as fh:
-                w = csv.writer(fh); w.writerow(["Serial #", "UPC", "EPC"]); w.writerows(records)
-        files.append(path)
+    try:
+        for idx, rows in enumerate(split, start=1):
+            first = serial
+            records = []
+            for _ in range(rows):
+                records.append((serial, upc, generate_epc(upc, serial, scheme, serial_format)))
+                serial += 1
+            suffix = tag + (f"_DB{idx}" if len(split) > 1 else "")
+            if XLSX_AVAILABLE:
+                path = os.path.join(data_dir, f"{upc}{suffix}.xlsx")
+                files.append(path)
+                _write_xlsx(path, records, f"DB{idx}" if len(split) > 1 else "Database")
+            else:
+                path = os.path.join(data_dir, f"{upc}{suffix}.csv")
+                files.append(path)
+                with open(path, "w", newline="", encoding="utf-8") as fh:
+                    w = csv.writer(fh); w.writerow(["Serial #", "UPC", "EPC"]); w.writerows(records)
+            verify_db_file(path, upc, first, rows, scheme, serial_format)
+    except Exception:
+        for p in files:
+            try: os.remove(p)
+            except OSError: pass
+        raise
     return {"files": files, "file_count": len(files), "split": split,
             "start_serial": int(start_serial), "end_serial": serial - 1}
+
+
+def verify_db_file(path: str, upc: str, first_serial: int, rows: int, scheme: str,
+                   serial_format: str = "number") -> None:
+    """Re-read a written data file (.xlsx or .csv) and check every row. Raises ValueError naming file and row."""
+    name = os.path.basename(path)
+    if path.lower().endswith(".xlsx"):
+        from openpyxl import load_workbook
+        wb = load_workbook(path, read_only=True)
+        try:
+            data = [tuple(r[:3]) for r in wb.active.iter_rows(min_row=2, values_only=True)]
+            data = [r for r in data if any(v is not None for v in r)]
+        finally:
+            wb.close()
+        from_xlsx = True
+    else:
+        with open(path, newline="", encoding="utf-8") as fh:
+            data = [tuple(r[:3]) for r in list(csv.reader(fh))[1:]]
+        from_xlsx = False
+    if len(data) != rows:
+        raise ValueError(f"{name}: expected {rows} rows, found {len(data)}")
+    for i, row in enumerate(data):
+        r = i + 2                      # sheet row (header is row 1)
+        if len(row) != 3:
+            raise ValueError(f"{name} row {r}: expected 3 columns")
+        ser, u, epc = row
+        want = int(first_serial) + i
+        try:
+            ser_ok = int(ser) == want and (not from_xlsx or isinstance(ser, int))
+        except (TypeError, ValueError):
+            ser_ok = False
+        if not ser_ok:
+            raise ValueError(f"{name} row {r}: Serial # is {ser!r}, expected {want}")
+        if str(u) != upc:
+            raise ValueError(f"{name} row {r}: UPC is {u!r}, expected {upc}")
+        if not isinstance(epc, str):
+            raise ValueError(f"{name} row {r}: EPC is not stored as text ({epc!r})")
+        if epc != generate_epc(upc, want, scheme, serial_format):
+            raise ValueError(f"{name} row {r}: EPC {epc} does not match serial {want}")
+        try:
+            d = decode_epc(epc)
+        except ValueError as e:
+            raise ValueError(f"{name} row {r}: EPC does not decode ({e})") from None
+        if d["scheme"] != scheme or d["upc"] != upc or d["serial"] != want:
+            raise ValueError(f"{name} row {r}: EPC decodes to {d['scheme']}/{d['upc']}/{d['serial']}, "
+                             f"expected {scheme}/{upc}/{want}")
 
 
 def _write_xlsx(path, records, sheet_title):
@@ -236,7 +293,8 @@ def _write_xlsx(path, records, sheet_title):
     ws.title = sheet_title
     thin   = Side(style="thin", color="CBD5E0")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    for col, (head, width) in enumerate(zip(["Serial #", "UPC", "EPC"], [14, 16, 28]), start=1):
+    epc_width = 56 if records and len(records[0][2]) > 24 else 28
+    for col, (head, width) in enumerate(zip(["Serial #", "UPC", "EPC"], [14, 16, epc_width]), start=1):
         c = ws.cell(row=1, column=col, value=head)
         c.font = Font(bold=True, color="FFFFFF"); c.border = border
         c.fill = PatternFill("solid", fgColor="1F4E79")
@@ -246,7 +304,8 @@ def _write_xlsx(path, records, sheet_title):
     for r, (serial, upc, epc) in enumerate(records, start=2):
         ws.cell(row=r, column=1, value=serial)
         ws.cell(row=r, column=2, value=upc)
-        ws.cell(row=r, column=3, value=epc).font = mono
+        cell = ws.cell(row=r, column=3, value=str(epc))
+        cell.data_type = "s"; cell.number_format = "@"; cell.font = mono
     ws.freeze_panes = "A2"
     wb.save(path)
 
