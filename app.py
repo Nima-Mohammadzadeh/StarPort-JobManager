@@ -39,7 +39,7 @@ import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
-from generators import decode_epc, check_scheme_choice
+from generators import decode_epc, check_scheme_choice, epc_scheme_of, scheme_label
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
 
@@ -1496,7 +1496,7 @@ h1{{font-size:44pt;margin:.1in 0 0}}p.s{{font-size:18pt;margin:.05in 0 .25in;col
 
 _REWIND_FIELDS = """j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.job_type, j.upc, j.label_size,
     j.inlay_type, j.quantity, j.lpr, j.overage_pct, j.due_date, j.part_number, j.po_number, j.created_at,
-    j.updated_at, j.priority_rank"""
+    j.updated_at, j.priority_rank, j.epc_scheme"""
 
 
 @app.route("/api/rewind/jobs")
@@ -1540,7 +1540,8 @@ def api_rewind_job(job_id):
     conn.close()
     keep = ("roll_number", "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
             "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by")
-    return jsonify({"job": job, "rolls": [{k: r.get(k) for k in keep} for r in rolls], "notes": notes,
+    scheme = job.get("epc_scheme") or "sgtin96"
+    return jsonify({"job": job, "rolls": [{**{k: r.get(k) for k in keep}, "epc_scheme": scheme} for r in rolls], "notes": notes,
                     "total_qty": production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None})
 
 
@@ -1556,6 +1557,7 @@ def _roll_detail(conn, o, serial=None):
                                "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
                                "started_by", "started_at", "paused_by", "paused_at", "completed_by", "completed_at")}
     d["rolls_total"] = total
+    d["epc_scheme"] = o.get("epc_scheme") or "sgtin96"
     if serial is not None and o.get("serial_start"):
         d.update(serial=serial, label_no=serial - o["serial_start"] + 1,
                  position="first" if serial == o["serial_start"] else "last" if serial == o["serial_end"] else "middle")
@@ -1573,22 +1575,34 @@ def _lookup(conn, raw, job_id=None):
     if not t:
         return res("invalid", "Nothing was scanned.")
     if not re.fullmatch(r"[0-9A-F]+", t):
-        runs = re.findall(r"(?<![0-9A-F])[0-9A-F]{24}(?![0-9A-F])", t)
+        runs = re.findall(r"(?<![0-9A-F])(?:[0-9A-F]{50}|[0-9A-F]{24})(?![0-9A-F])", t)
         if len(runs) != 1:
             return res("invalid", "That isn't hex. Serial Magic may be sending the tag as text or decimal. "
                                   "Set it to send the EPC as hex.")
         t = out["epc"] = runs[0]
         out["note"] = "Extra text around the tag was ignored. Clear the prefix and suffix in Serial Magic Keys settings."
-    if len(t) != 24:
-        return res("invalid", f"That is {len(t)} characters; an EPC is 24. Check that Serial Magic sends the full EPC.")
+    if len(t) not in (24, 50):
+        return res("invalid", f"That is {len(t)} characters; an EPC is 24 (SGTIN-96) or 50 (SGTIN-198). "
+                              "Check that Serial Magic sends the full EPC.")
     if t.startswith("E2"):
         return res("tid", "That looks like a TID (it starts with E2), not an EPC. Set the reader to report the EPC.")
-    if not t.startswith("30") or format(int(t, 16), "096b")[11:14] != "101":
-        return res("invalid", "That isn't one of our EPCs (they start with 30).")
-    d = decode_epc(t)
+    scheme = epc_scheme_of(t)
+    if scheme is None:
+        return res("invalid", "That isn't one of our EPCs (they start with 30 or 36).")
+    if job_id:
+        jr = conn.execute("SELECT epc_scheme FROM jobs WHERE id=?", (job_id,)).fetchone()
+        jscheme = (jr["epc_scheme"] if jr else None) or "sgtin96"
+        if jscheme != scheme:
+            return res("wrong_scheme", f"This tag is {scheme_label(scheme)} but this job uses {scheme_label(jscheme)}.")
+    try:
+        d = decode_epc(t)
+    except ValueError:
+        return res("invalid", "That isn't one of our EPCs (they start with 30 or 36).")
+    if d["serial"] is None:
+        return res("invalid", "That serial isn't one of ours (it isn't a number).")
     upc, serial = d["upc"], d["serial"]
     owners = [dict(o) for o in conn.execute(
-        """SELECT r.*, j.job_number, j.job_ticket, j.customer, j.title, j.upc, j.archived_at
+        """SELECT r.*, j.job_number, j.job_ticket, j.customer, j.title, j.upc, j.archived_at, j.epc_scheme
            FROM job_rolls r JOIN jobs j ON j.id=r.job_id
            WHERE j.upc=? AND r.serial_start<=? AND r.serial_end>=?
            ORDER BY (j.archived_at IS NULL) DESC, j.id DESC""", (upc, serial, serial))]

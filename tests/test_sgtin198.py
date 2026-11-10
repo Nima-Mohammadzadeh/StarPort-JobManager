@@ -415,3 +415,92 @@ def test_tools_job_mode_198(jm):
     first = list(wb.active.iter_rows(min_row=2, max_row=2, values_only=True))[0]
     wb.close()
     assert first[0] == job["start_serial"] and len(first[2]) == 50
+
+
+# ── Task 5: tag lookup ───────────────────────────────────────────────────────
+def _lk(jm, raw, job_id=None):
+    conn = jm.app.get_db()
+    try:
+        return jm.app._lookup(conn, raw, job_id)
+    finally:
+        conn.close()
+
+
+def _job_roll(jm, job_id):
+    conn = jm.app.get_db()
+    try:
+        return dict(conn.execute("SELECT * FROM job_rolls WHERE job_id=? ORDER BY roll_number", (job_id,)).fetchone())
+    finally:
+        conn.close()
+
+
+def test_lookup_198_found(jm):
+    r = make198(jm)[0]["job"]
+    roll = _job_roll(jm, r["id"])
+    assert len(roll["epc_start"]) == 50
+    res = _lk(jm, roll["epc_start"])
+    assert res["result"] == "found", res
+    assert res["roll"]["roll_number"] == 1 and res["roll"]["position"] == "first"
+    assert res["roll"]["epc_scheme"] == "sgtin198"
+    assert _lk(jm, roll["epc_start"], r["id"])["result"] == "found"
+
+
+def test_lookup_formats(jm):
+    r = make198(jm)[0]["job"]
+    epc = _job_roll(jm, r["id"])["epc_start"]
+    variants = [epc.lower(), " ".join(epc[i:i + 4] for i in range(0, 50, 4)),
+                ":".join(epc[i:i + 2] for i in range(0, 50, 2)), "0x" + epc, "0X" + epc.lower()]
+    for v in variants:
+        assert _lk(jm, v)["result"] == "found", v
+    assert _lk(jm, "EPC=" + epc + "\r")["result"] == "found"
+
+
+def test_lookup_wrong_length_names_scheme(jm):
+    j198 = make198(jm, 1)[0]["job"]
+    j96 = jm.app.create_job({"customer": "Acme", "title": "N96", "job_ticket": "S96", "upc": jm.upc(2),
+                             "quantity": 100, "lpr": 50})[0]["job"]
+    e198 = _job_roll(jm, j198["id"])["epc_start"]
+    e96 = _job_roll(jm, j96["id"])["epc_start"]
+    res = _lk(jm, e96, j198["id"])
+    assert res["result"] == "wrong_scheme"
+    assert "SGTIN-96" in res["message"] and "SGTIN-198" in res["message"]
+    res = _lk(jm, e198, j96["id"])
+    assert res["result"] == "wrong_scheme"
+    assert "SGTIN-96" in res["message"] and "SGTIN-198" in res["message"]
+    assert _lk(jm, e96, j96["id"])["result"] == "found"
+
+
+def test_lookup_unknown_header_and_length(jm):
+    res = _lk(jm, "3A" + "0" * 48)
+    assert res["result"] == "invalid" and "30 or 36" in res["message"]
+    res = _lk(jm, "30" + "0" * 30)
+    assert res["result"] == "invalid" and "24" in res["message"] and "50" in res["message"]
+    assert _lk(jm, "36" + "0" * 22)["result"] == "invalid"
+
+
+def test_lookup_198_non_numeric_serial(jm):
+    res = _lk(jm, build198(UPC, "AB12"))
+    assert res["result"] == "invalid" and "isn't a number" in res["message"]
+
+
+def test_lookup_bad_partition_invalid(jm):
+    bits = format(int(build198(UPC, "1"), 16), "0200b")
+    bad = format(int(bits[:11] + "000" + bits[14:], 2), "050X")
+    assert _lk(jm, bad)["result"] == "invalid"
+
+
+def test_lookup_text_around_198_tag(jm):
+    r = make198(jm)[0]["job"]
+    epc = _job_roll(jm, r["id"])["epc_start"]
+    res = _lk(jm, "zz" + epc + "!!")
+    assert res["result"] == "found" and res["note"]
+
+
+def test_rewind_job_payload_has_scheme(jm):
+    r = make198(jm)[0]["job"]
+    c = jm.app.app.test_client()
+    data = c.get(f"/api/rewind/jobs/{r['id']}").get_json()
+    assert data["job"]["epc_scheme"] == "sgtin198"
+    assert all(x["epc_scheme"] == "sgtin198" for x in data["rolls"])
+    jobs = c.get("/api/rewind/jobs").get_json()["jobs"]
+    assert any(j["id"] == r["id"] and j["epc_scheme"] == "sgtin198" for j in jobs)
