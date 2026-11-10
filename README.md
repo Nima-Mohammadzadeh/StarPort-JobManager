@@ -22,6 +22,9 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
   reorder, and a recent activity feed.
 - **New job**: Standard (UPC + serials) or **Special** (no UPC, nothing outside the
   normal process gets serials). Folder: `Customer\Label size\MM.DD.YY - <ticket>`.
+- **SGTIN-198** (Advanced option on New job): the EPC is 50 hex characters and the serial can be up to 20
+  characters, plain number format only for now. It is fixed when the job is created and is for standard jobs
+  only. SGTIN-96 stays the default.
 - **GO2 data sheet** (customer GO2 only): typing the customer as GO2 (any capitalization) switches
   New job to Special and selects the **random EPC** data sheet: `E2004` + 19 random hex digits, all
   unique, written into the job's Data folder (split by Qty per DB file if set). Values only, never

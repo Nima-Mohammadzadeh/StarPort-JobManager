@@ -9,9 +9,10 @@ description: Test and review Job Manager's encoding workflow (roll tracking, job
 
 Job Manager runs on one host PC and the encoding team uses it in a browser. It tracks RFID label
 jobs: a job has a UPC, a quantity and labels per roll, and gets a **serial range** that is split
-into **rolls**. Operators encode tags roll by roll, scan a tag (EPC, 24 hex chars) to check it
+into **rolls**. Operators encode tags roll by roll, scan a tag (EPC, 24 hex chars for SGTIN-96 or 50 hex for SGTIN-198) to check it
 belongs to the roll, and mark rolls Complete or Left in progress. Nobody signs in; the app asks
 "who did this" at the moment of the action.
+The seeded demo includes an SGTIN-198 job (ticket 40190, Globex Sportswear).
 
 What matters to the people using it:
 - Operators work fast, often on tablets or a shared desktop, with a scanner that types into the
