@@ -504,3 +504,32 @@ def test_rewind_job_payload_has_scheme(jm):
     assert all(x["epc_scheme"] == "sgtin198" for x in data["rolls"])
     jobs = c.get("/api/rewind/jobs").get_json()["jobs"]
     assert any(j["id"] == r["id"] and j["epc_scheme"] == "sgtin198" for j in jobs)
+
+
+def _prev(jm, **q):
+    return jm.app.app.test_client().get("/api/epc-preview", query_string=q)
+
+
+def test_epc_preview_198(jm):
+    g = mod(jm)
+    r = _prev(jm, upc=UPC, scheme="sgtin198", start=100, qty=50)
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["scheme"] == "sgtin198" and d["label"] == "SGTIN-198"
+    assert d["first"] == g.generate_epc(UPC, 100, "sgtin198")
+    assert d["last"] == g.generate_epc(UPC, 149, "sgtin198")
+    assert len(d["first"]) == 50
+    d96 = _prev(jm, upc=UPC, scheme="sgtin96", start=1, qty=1).get_json()
+    assert d96["first"] == d96["last"] == g.generate_epc(UPC, 1)
+
+
+def test_epc_preview_errors(jm):
+    import serial_store
+    ok = dict(upc=UPC, scheme="sgtin198", start=1, qty=10)
+    assert _prev(jm, **ok).status_code == 200
+    for bad in ({"upc": "123"}, {"upc": "012345678906"}, {"scheme": "sgtin999"},
+                {"qty": 0}, {"start": 0}, {"start": serial_store.MAX_SERIAL},
+                {"start": serial_store.MAX_SERIAL + 1}, {"qty": "abc"}):
+        r = _prev(jm, **{**ok, **bad})
+        assert r.status_code == 400, bad
+        assert r.get_json()["error"], bad

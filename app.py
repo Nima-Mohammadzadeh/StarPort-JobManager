@@ -39,7 +39,7 @@ import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
-from generators import decode_epc, check_scheme_choice, epc_scheme_of, scheme_label
+from generators import decode_epc, check_scheme_choice, epc_scheme_of, scheme_label, generate_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
 
@@ -1903,6 +1903,28 @@ def api_upc_range(upc):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify(SS.range_conflicts(upc, start, qty))
+
+
+@app.route("/api/epc-preview")
+def api_epc_preview():
+    """First and last EPC a job would get: ?upc=&scheme=&start=&qty="""
+    upc = (request.args.get("upc") or "").strip()
+    v = validate_upc(upc)
+    if not v["valid"]:
+        return jsonify({"error": v.get("error") or "Invalid UPC"}), 400
+    scheme = (request.args.get("scheme") or "").strip().lower() or "sgtin96"
+    try:
+        label = scheme_label(scheme)
+        start = _int(request.args.get("start"), "Start serial", required=True)
+        qty = _int(request.args.get("qty"), "Quantity", required=True)
+        last = start + qty - 1
+        if last > SS.MAX_SERIAL or len(str(last)) > 20:
+            raise ValueError(f"Serials must stay at or below {SS.MAX_SERIAL:,}.")
+        first_epc = generate_epc(upc, start, scheme)
+        last_epc = generate_epc(upc, last, scheme)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"scheme": scheme, "label": label, "first": first_epc, "last": last_epc})
 
 
 @app.route("/api/upc/<upc>")

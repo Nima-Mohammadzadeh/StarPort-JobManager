@@ -91,6 +91,13 @@ note(ids[2], "Waiting on new artwork approval.", "Dana", imp=True)
 status(ids[3], "In Progress")
 for n in (1, 2, 3):
     roll(ids[3], n, "complete", "Priya")
+
+# An SGTIN-198 job (Advanced option in the New job form): 50-hex EPCs, serial tail = last 5 digits of the serial.
+r = post("/api/jobs", {"customer": "Globex Sportswear", "title": "Jacket tag SGTIN-198", "job_ticket": "40190",
+                       "upc": "036000291452", "quantity": 1200, "lpr": 400, "label_size": '2" x 3"', "inlay_type": "Monza R6",
+                       "due_date": "11/12/26", "epc_scheme": "sgtin198"})
+j198 = (r.get("job") or {}).get("id") or r.get("id")
+status(j198, "In Progress"); roll(j198, 1, "complete", "Sam"); roll(j198, 2, "running", "Priya")
 # Bulk jobs so grouping, folding and scrolling can be judged with a realistic pile.
 import datetime
 import random

@@ -155,7 +155,10 @@ const stc = s => 'st-' + String(s || '').toLowerCase().replace(/\s+/g, '-');
 const rstate = r => (r.status === 'complete' || r.status === 'verified') ? 'done' : (r.status === 'running' || r.status === 'paused') ? 'running' : 'pending';
 const RLAB = {done: 'Done', running: 'In progress', pending: 'Not started'};
 const parse = ts => new Date(String(ts).replace(' ', 'T'));
-const epcHtml = e => e ? esc(e.slice(0, -5)) + '<b>' + esc(e.slice(-5)) + '</b>' : '';
+/* SGTIN-96: the last 5 hex characters are the serial tail. SGTIN-198: the EPC is shown whole and the tail is the last 5 characters of the serial. */
+const epcTail = (epc, scheme, serial) => scheme === 'sgtin198' ? {head: epc || '', tail: String(serial == null ? '' : serial).slice(-5)}
+  : {head: (epc || '').slice(0, -5), tail: (epc || '').slice(-5)};
+const epcHtml = (e, scheme, serial) => { if (!e) return ''; const t = epcTail(e, scheme, serial); return scheme === 'sgtin198' ? esc(t.head) : esc(t.head) + '<b>' + esc(t.tail) + '</b>'; };
 
 const S = {scan: null, sound: localStorage.getItem('rw_sound') !== '0', tab: 'open', counts: {}, jobs: [], openCount: 0, q: '', now: null, d: null, rf: 'all', stamp: null, updated: null, offline: false, loaded: false};
 
@@ -173,7 +176,7 @@ async function post(url, body) {
 }
 
 /* ── scanning: the fob reads the tag, Serial Magic Keys types it here and presses Enter ── */
-const HEX24 = v => /^(0x)?[0-9a-fA-F]{24}$/.test(String(v).replace(/[\s:\-]/g, ''));
+const HEX24 = v => /^(0x)?([0-9a-fA-F]{24}|[0-9a-fA-F]{50})$/.test(String(v).replace(/[\s:\-]/g, ''));
 let scanTimer = null, audio = null;
 function feedback(good) {
   try { if (navigator.vibrate) navigator.vibrate(good ? 40 : [120, 70, 120]); } catch (e) {}
@@ -201,7 +204,7 @@ async function lookup(raw, fromList) {
   const warn = r.result === 'other_job' || r.result === 'ambiguous';
   box.innerHTML = `<div class="smsg ${warn ? 'warn' : 'bad'}">${esc(r.message)}${r.note ? `<small>${esc(r.note)}</small>` : ''}
     ${r.result === 'other_job' ? `<div><button onclick="openOther()">Open that job, roll ${r.roll.roll_number}</button></div>` : ''}
-    ${r.epc && r.epc.length === 24 ? `<small class="data">${esc(r.epc)}</small>` : r.raw ? `<small>Received: <span class="data">${esc(r.raw)}</span></small>` : ''}</div>`;
+    ${r.epc && (r.epc.length === 24 || r.epc.length === 50) ? `<small class="data">${esc(r.epc)}</small>` : r.raw ? `<small>Received: <span class="data">${esc(r.raw)}</span></small>` : ''}</div>`;
   S.other = r.result === 'other_job' ? r : null;
 }
 function openOther() { const r = S.other; if (!r) return; S.scan = {r, at: Date.now()}; $('#smsg').innerHTML = ''; go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); }
@@ -311,7 +314,7 @@ function drawJob() {
   const {job: j, rolls, notes, total_qty} = S.d;
   $('#title').textContent = j.job_ticket || j.job_number; $('#sub').textContent = j.customer;
   const cnt = k => rolls.filter(r => rstate(r) === k).length;
-  const chips = [j.upc && `<span class="data">${esc(j.upc)}</span>`, j.label_size && `<span>${esc(j.label_size)}</span>`, j.inlay_type && `<span>${esc(j.inlay_type)}</span>`,
+  const chips = [j.upc && `<span class="data">${esc(j.upc)}</span>`, j.upc && j.epc_scheme === 'sgtin198' && '<span>SGTIN-198</span>', j.label_size && `<span>${esc(j.label_size)}</span>`, j.inlay_type && `<span>${esc(j.inlay_type)}</span>`,
     total_qty && `<span>${fmt(total_qty)} labels</span>`, j.lpr && `<span>${fmt(j.lpr)} per roll</span>`, rolls.length && `<span>${rolls.length} rolls</span>`,
     j.part_number && `<span>Part ${esc(j.part_number)}</span>`, j.po_number && `<span>PO ${esc(j.po_number)}</span>`, j.due_date && `<span>Due ${esc(j.due_date)}</span>`,
     j.job_type === 'special' && '<span>Special job: no serials</span>'].filter(Boolean).join('');
@@ -331,7 +334,7 @@ function drawJob() {
         <span class="n">${r.roll_number}</span>
         <span class="body">
           <span class="r1"><span class="q">${fmt(r.quantity)} labels${noteRolls.has(r.roll_number) ? '<span class="dot" title="Has notes"></span>' : ''}</span><span class="rs ${st}">${RLAB[st]}</span></span>
-          ${r.serial_start ? `<span class="r2"><span>Start <b>${esc(r.epc_start.slice(-5))}</b></span><span>End <b>${esc(r.epc_end.slice(-5))}</b></span></span>` : '<span class="r2" style="color:var(--muted)">No serials</span>'}
+          ${r.serial_start ? `<span class="r2"><span>Start <b>${esc(epcTail(r.epc_start, r.epc_scheme, r.serial_start).tail)}</b></span><span>End <b>${esc(epcTail(r.epc_end, r.epc_scheme, r.serial_end).tail)}</b></span></span>` : '<span class="r2" style="color:var(--muted)">No serials</span>'}
           <span class="r3"><span class="sr">${r.serial_start ? fmt(r.serial_start) + ' – ' + fmt(r.serial_end) : ''}</span><span class="who">${esc([who[0], who[1]].filter(Boolean).join(' · '))}</span></span>
         </span>
       </button>`; }).join('') : '<div class="empty">No rolls in this group.</div>';
@@ -350,14 +353,14 @@ function drawRoll(n) {
   const hit = sc ? `<div class="hit">
       <div class="hb">Label ${fmt(sc.roll.label_no)} <small>of ${fmt(r.quantity)} on roll ${r.roll_number}</small></div>
       ${sc.roll.position !== 'middle' ? `<div class="pos">${sc.roll.position === 'first' ? 'FIRST TAG of this roll: matches the sheet' : 'LAST TAG of this roll: matches the sheet'}</div>` : ''}
-      <div class="e">${epcHtml(sc.epc)}</div>
+      <div class="e">${epcHtml(sc.epc, sc.roll.epc_scheme || r.epc_scheme, sc.roll.serial)}</div>
       <div class="sm">Serial ${fmt(sc.roll.serial)} · scanned ${new Date(S.scan.at).toTimeString().slice(0, 8)}${sc.result === 'other_job' ? ' · opened from a different job' : ''}</div>
       ${sc.note ? `<div class="sm">${esc(sc.note)}</div>` : ''}</div>` : '';
   $('#rview').innerHTML = `${hit}${nav}
     <div class="rbig"><div style="display:flex;align-items:center;gap:10px"><div class="lab">${fmt(r.quantity)} <small>labels</small></div><span class="rs ${st}" style="margin-left:auto;font-size:15px">${RLAB[st]}</span></div>
       <div style="color:var(--muted);font-size:14.5px;margin-top:4px">${who}</div>
-      ${r.serial_start ? `<div class="kv"><div class="k">First tag (matches the sheet)</div><div class="tail">${esc(r.epc_start.slice(-5))}</div><div class="v">${epcHtml(r.epc_start)}</div></div>
-      <div class="kv"><div class="k">Last tag (matches the sheet)</div><div class="tail">${esc(r.epc_end.slice(-5))}</div><div class="v">${epcHtml(r.epc_end)}</div></div>
+      ${r.serial_start ? `<div class="kv"><div class="k">First tag ${r.epc_scheme === 'sgtin198' ? '(serial tail)' : '(matches the sheet)'}</div><div class="tail">${esc(epcTail(r.epc_start, r.epc_scheme, r.serial_start).tail)}</div><div class="v">${epcHtml(r.epc_start, r.epc_scheme, r.serial_start)}</div></div>
+      <div class="kv"><div class="k">Last tag ${r.epc_scheme === 'sgtin198' ? '(serial tail)' : '(matches the sheet)'}</div><div class="tail">${esc(epcTail(r.epc_end, r.epc_scheme, r.serial_end).tail)}</div><div class="v">${epcHtml(r.epc_end, r.epc_scheme, r.serial_end)}</div></div>
       <div class="kv"><div class="k">Serial range</div><div class="v ser">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</div></div>`
       : '<div class="kv"><div class="v" style="font-family:var(--sans);font-size:16px">Special job: no serials or tag data for this roll.</div></div>'}
       <div class="kv"><div class="k">Position in the job</div><div class="v" style="font-family:var(--sans);font-size:17px">Labels ${fmt(before + 1)} – ${fmt(before + r.quantity)} of ${fmt(total)}</div></div></div>

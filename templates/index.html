@@ -1367,6 +1367,18 @@ html[data-theme=dark]{--on-fill:#06161A; --amber-ink:#EBC98A; --red-ink:#F5B1AB;
         <label class="f">Start serial<input class="i data" id="n-start" inputmode="numeric" autocomplete="off" placeholder="e.g. 26,004,500,001">
           <span class="hint" id="n-start-hint"></span></label>
       </div>
+      <details id="n-adv" class="more">
+        <summary>Advanced</summary>
+        <div class="stack" style="margin-top:8px">
+          <label class="f">EPC encoding
+            <select class="i" id="n-scheme">
+              <option value="sgtin96" selected>SGTIN-96 (default)</option>
+              <option value="sgtin198">SGTIN-198</option>
+            </select>
+            <span class="hint" id="n-scheme-hint">24 hex characters, serial up to 274,877,906,943.</span></label>
+          <div class="f" id="n-sfmt-wrap" hidden>Serial format: Number<span class="hint">Serials are whole numbers, as with SGTIN-96.</span></div>
+        </div>
+      </details>
       </div>
       <div id="n-go2" class="stack" hidden>
         <label class="f">Customer data sheet
@@ -1828,6 +1840,7 @@ function renderDrawer(keepRoll) {
     ${j.data_sheet && ranges.length ? kv('Serial range', rangeHtml, 'data') : ''}
     ${kv('Created by', esc(j.created_by || ''))}</dl></div>` : `<div class="d-sec"><h3>Encoding</h3><dl class="kv">
     ${kv('UPC', esc(j.upc || ''), 'data')}
+    ${kv('EPC encoding', esc(j.epc_scheme === 'sgtin198' ? 'SGTIN-198' : 'SGTIN-96'))}
     ${kv('Base quantity', fmt(j.quantity), 'num')}
     ${kv('Overage', j.overage_pct ? '+' + j.overage_pct + '%' : 'None')}
     ${kv('Labels per roll', fmt(j.lpr), 'num')}
@@ -2042,6 +2055,27 @@ N('start').addEventListener('input', () => {
   startHint(); updateSummary(); checkRange();
 });
 let N_TYPE = 'standard';
+const schemeVal = () => (N_TYPE === 'standard' && N('scheme').value === 'sgtin198') ? 'sgtin198' : 'sgtin96';
+function schemeChanged() {
+  const is198 = N('scheme').value === 'sgtin198';
+  $('#n-sfmt-wrap').hidden = !is198;
+  $('#n-scheme-hint').textContent = is198 ? '50 hex characters. The serial is stored as text, up to 20 characters.' : '24 hex characters, serial up to 274,877,906,943.';
+  updateSummary();
+}
+N('scheme').addEventListener('change', schemeChanged);
+let N_PREV = {key: '', data: null}, N_PREV_ASKED = '';
+function epcPreviewRow(total) {
+  if (schemeVal() !== 'sgtin198' || !N_UPC_INFO || !N_UPC_INFO.valid || !total) return null;
+  const custom = startValue() && !startProblem(), from = custom ? startValue() : N_UPC_INFO.next_start;
+  const key = `${N('upc').value.trim()}|${from}|${total}`;
+  if (N_PREV.key === key && N_PREV.data) return N_PREV.data;
+  if (N_PREV_ASKED !== key) {
+    N_PREV_ASKED = key;
+    api(`/api/epc-preview?upc=${encodeURIComponent(N('upc').value.trim())}&scheme=sgtin198&start=${from}&qty=${total}`)
+      .then(d => { N_PREV = {key, data: d}; updateSummary(); }).catch(() => { N_PREV = {key, data: {error: true}}; updateSummary(); });
+  }
+  return null;
+}
 function setJobType(t) {
   N_TYPE = t;
   document.querySelectorAll('#n-type button').forEach(b => { const on = b.dataset.t === t; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
@@ -2100,6 +2134,7 @@ function openNewJob() {
   ['ticket', 'due', 'customer', 'title', 'size', 'inlay', 'part', 'po', 'notes', 'upc', 'qty', 'lpr', 'qtydb', 'tq', 'start'].forEach(k => N(k).value = '');
   fillSheetOptions(); N('sheet').value = ''; N_SHEET_AUTO = ''; N_AUTO_SPECIAL = false;
   N('ov').value = META.settings.default_overage_pct && +META.settings.default_overage_pct ? META.settings.default_overage_pct : '';
+  N('scheme').value = 'sgtin96'; $('#n-adv').open = false; $('#n-sfmt-wrap').hidden = true; schemeChanged();
   N_TEMPLATE = null; N_UPC_INFO = null; N_TMANUAL = false; N_MATCH = null; N_LAST_UPC = ''; N_START_UPC = ''; setSerialMode(''); $('#n-msg').textContent = ''; $('#n-upc-msg').textContent = ''; N('upc').classList.remove('bad');
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
   renderTemplateMatch();
@@ -2116,6 +2151,11 @@ function updateSummary() {
     rows.push([custom ? 'Serials (your start)' : 'Serials (estimated)', `${fmt(from)} – ${fmt(from + total - 1)}`]);
     if (custom && from > N_UPC_INFO.next_start) rows.push(['Skipped', fmt(from - N_UPC_INFO.next_start)]);
     if (custom && from < N_UPC_INFO.next_start) rows.push(['Fills', 'an unused gap before the last serial']);
+  }
+  if (schemeVal() === 'sgtin198') {
+    const pv = epcPreviewRow(total);
+    rows.push(['EPC encoding', 'SGTIN-198']);
+    if (pv && !pv.error) rows.push(['First EPC', `<span class="data" style="font-size:11px;word-break:break-all">${esc(pv.first)}</span>`], ['Last EPC', `<span class="data" style="font-size:11px;word-break:break-all">${esc(pv.last)}</span>`]);
   }
   if (qty && lpr) { const full = Math.floor(total / lpr), rest = total % lpr; rows.push(['Rolls', `${full + (rest ? 1 : 0)}` + (rest ? ` (last roll ${fmt(rest)})` : '')]); }
   let spill = '';
@@ -2257,6 +2297,7 @@ async function submitNewJob(allowDup = false, offline = null) {
     lpr: N('lpr').value, qty_db: N('qtydb').value, template_id: N_TEMPLATE,
     start_serial: startValue() || '', serial_mode: body_mode(),
     data_sheet: N_TYPE === 'special' ? N('sheet').value : '',
+    epc_scheme: schemeVal(), serial_format: 'number',
   };
   const msg = $('#n-msg'); msg.textContent = '';
   if (N_TICKET_DUP) return msg.textContent = `Ticket ${body.job_ticket.trim()} already has ${N_TICKET_DUP[0].job_number}. A ticket can only have one job.`, N('ticket').focus();
@@ -2993,7 +3034,8 @@ function rollPanelHtml() {
   const st = RSTATE(r), idx = rolls.indexOf(r);
   const prev = rolls[idx - 1], next = rolls[idx + 1];
   const t = s => s ? esc(s.slice(5, 16).replace('-', '/')) : '';
-  const epc = e => `${esc(e.slice(0, -5))}<b>${esc(e.slice(-5))}</b>`;
+  const is198 = j.epc_scheme === 'sgtin198';
+  const epc = (e, serial) => { const t = epcTail(e, j.epc_scheme, serial); return is198 ? esc(t.head) : `${esc(t.head)}<b>${esc(t.tail)}</b>`; };
   const lastAt = r.paused_at || r.started_at, lastBy = r.paused_by || r.started_by;
   const timeline = st === 'running' && lastAt ? `In progress since ${t(lastAt)}${lastBy ? ' by ' + esc(lastBy) : ''}`
     : st === 'done' ? `Done ${t(r.completed_at)}${r.completed_by ? ' by ' + esc(r.completed_by) : ''}` : 'Not started';
@@ -3034,11 +3076,12 @@ function rollPanelHtml() {
         </dl>
         ${r.serial_start ? `<table class="trange"><caption class="sr">Tag range for roll ${r.roll_number}</caption><tbody>
           <tr><th scope="row">Serials</th><td class="data">${fmt(r.serial_start)} – ${fmt(r.serial_end)}</td><td>${cp(r.serial_start + '-' + r.serial_end, 'serial range')}</td></tr>
-          <tr><th scope="row">First EPC</th><td class="data epc">${epc(r.epc_start)}</td><td>${cp(r.epc_start, 'first EPC')}</td></tr>
-          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr></tbody></table>
+          <tr><th scope="row">First EPC</th><td class="data epc">${epc(r.epc_start, r.serial_start)}</td><td>${cp(r.epc_start, 'first EPC')}</td></tr>
+          <tr><th scope="row">Last EPC</th><td class="data epc">${epc(r.epc_end, r.serial_end)}</td><td>${cp(r.epc_end, 'last EPC')}</td></tr>
+          ${is198 ? `<tr><th scope="row">Serial tail</th><td class="data"><b>${esc(epcTail(r.epc_start, j.epc_scheme, r.serial_start).tail)}</b> – <b>${esc(epcTail(r.epc_end, j.epc_scheme, r.serial_end).tail)}</b></td><td></td></tr>` : ''}</tbody></table>
         ${!j.upc ? `<div class="ticketnote" style="margin:0"><span class="chip-special">Data sheet</span> Serials and EPCs for this roll come from the customer's data sheet. The tag check is for UPC jobs.</div>` : `<div class="verify">
           <label class="f">Check a tag<span class="hint">Scan or type an EPC. It's checked against this roll.</span>
-            <input class="i data" id="verify-in" placeholder="24-character EPC" autocomplete="off" spellcheck="false"
+            <input class="i data" id="verify-in" placeholder="${is198 ? '50' : '24'}-character EPC" autocomplete="off" spellcheck="false"
               onkeydown="if(event.key==='Enter'){event.preventDefault();verifyEpc()}"></label>
           <div class="vlist" role="status" aria-live="polite">${checks.slice(-3).reverse().map(c => `<div class="v ${c.ok ? 'ok' : 'bad'}"><span class="data">${esc(c.epc)}</span>${c.ok ? '✓ ' : '✗ '}${esc(c.msg)}${c.go ? ` <button class="btn sm" onclick="openRoll(${c.go})">Go to roll ${c.go}</button>` : ''}</div>`).join('')}</div>
         </div>`}` : `<div class="ticketnote" style="margin:0"><span class="chip-special">Special job</span> No UPC, so no serials are given out and there is no tag to check.</div>`}
@@ -3076,7 +3119,16 @@ async function rollAction(status, confirmText) {
 }
 
 /* EPC check: decode the tag and compare with this roll's product prefix and serial range. */
+/* SGTIN-96 keeps the last 5 hex characters as the tail; SGTIN-198 shows the whole EPC and the last 5 characters of the serial. */
+const epcTail = (epc, scheme, serial) => scheme === 'sgtin198' ? {head: epc || '', tail: String(serial == null ? '' : serial).slice(-5)}
+  : {head: (epc || '').slice(0, -5), tail: (epc || '').slice(-5)};
 function epcParts(hex) {
+  if (hex.length === 50) {   // SGTIN-198: 200 bits; product = first 58 bits, then 140 bits of 7-bit characters
+    const bits = BigInt('0x' + hex).toString(2).padStart(200, '0');
+    let txt = '';
+    for (let i = 58; i + 7 <= 198; i += 7) { const c = parseInt(bits.slice(i, i + 7), 2); if (!c) break; txt += String.fromCharCode(c); }
+    return {prefix: bits.slice(0, 58), serial: /^\d+$/.test(txt) ? BigInt(txt) : null, text: txt};
+  }
   const bits = BigInt('0x' + hex).toString(2).padStart(96, '0');
   return {prefix: bits.slice(0, 58), serial: BigInt('0b' + bits.slice(58))};
 }
@@ -3084,11 +3136,14 @@ function verifyEpc() {
   const inp = $('#verify-in'); const raw = inp.value.replace(/\s+/g, '').toUpperCase(); if (!raw) return;
   const {job: j, rolls} = WORK, r = rolls.find(x => x.roll_number === WORK_ROLL);
   let ok = false, msg, go = null;
-  if (!/^[0-9A-F]{24}$/.test(raw)) msg = 'Not an EPC: needs 24 characters, 0–9 and A–F.';
+  const want = j.epc_scheme === 'sgtin198' ? 50 : 24;
+  if (!/^([0-9A-F]{24}|[0-9A-F]{50})$/.test(raw)) msg = 'Not an EPC: needs 24 characters (SGTIN-96) or 50 (SGTIN-198), 0–9 and A–F.';
+  else if (raw.length !== want) msg = `This job uses ${j.epc_scheme === 'sgtin198' ? 'SGTIN-198' : 'SGTIN-96'}: its tags are ${want} characters, not ${raw.length}.`;
   else {
     const got = epcParts(raw), exp = epcParts(r.epc_start), s = got.serial;
     const fmtS = x => Number(x).toLocaleString();
-    if (got.prefix !== exp.prefix) msg = `Wrong product: this tag is not encoded for UPC ${j.upc}.`;
+    if (s === null) msg = got.prefix !== exp.prefix ? `Wrong product: this tag is not encoded for UPC ${j.upc}.` : `The serial on this tag (${got.text}) is not a number from this job.`;
+    else if (got.prefix !== exp.prefix) msg = `Wrong product: this tag is not encoded for UPC ${j.upc}.`;
     else if (s >= BigInt(r.serial_start) && s <= BigInt(r.serial_end)) {
       ok = true; msg = `Belongs to roll ${r.roll_number}: serial ${fmtS(s)}, label ${fmtS(s - BigInt(r.serial_start) + 1n)} of ${fmt(r.quantity)}.`;
     } else {
