@@ -35,6 +35,7 @@ from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
+import migrations as MIG
 import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
@@ -89,94 +90,41 @@ def get_db():
 
 
 def init_db():
-    """Create the tables this app uses. Tables left over from the old app
-    (inventory, audits, rewind, rules) are left alone — nothing reads them."""
+    """Bring the database up to the version this app needs (see migrations.py). Each step runs once."""
     with DB.connect() as conn:
-        cur = conn.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        cur.execute("INSERT OR IGNORE INTO _meta VALUES ('created_at', datetime('now'))")
-        cur.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_number TEXT NOT NULL UNIQUE, job_ticket TEXT,
-        title TEXT NOT NULL, customer TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'Pending', priority TEXT NOT NULL DEFAULT 'Medium',
-        due_date TEXT, notes TEXT, upc TEXT, quantity INTEGER, lpr INTEGER,
-        qty_db INTEGER, start_serial INTEGER, overage_pct REAL NOT NULL DEFAULT 0,
-        label_size TEXT, inlay_type TEXT, part_number TEXT, po_number TEXT,
-        folder_path TEXT, archived_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
-        cur.execute("""CREATE TABLE IF NOT EXISTS job_rolls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        roll_number INTEGER NOT NULL, quantity INTEGER NOT NULL,
-        serial_start INTEGER, serial_end INTEGER, epc_start TEXT, epc_end TEXT,
-        status TEXT NOT NULL DEFAULT 'pending', completed_at TEXT, tag_printed_at TEXT,
-        notes TEXT, created_at TEXT NOT NULL, UNIQUE(job_id, roll_number))""")
-        cur.execute("""CREATE TABLE IF NOT EXISTS btw_templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, file_path TEXT NOT NULL,
-        description TEXT, notes TEXT, thumbnail_path TEXT,
-        active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+        MIG.run(conn, DB_PATH, after={1: repair_data})
+        v = MIG.version(conn)
+    print(f"  [DB]   ready (version {v}) → {DB_PATH}")
 
-        cur.execute("""CREATE TABLE IF NOT EXISTS job_notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        roll_number INTEGER, author TEXT, body TEXT NOT NULL,
-        important INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_notes_job ON job_notes(job_id)")
-        SS.init_additions_schema(cur)               # data added to a job after it was made
-        cur.execute("""CREATE TABLE IF NOT EXISTS activity (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, job_id INTEGER,
-        kind TEXT NOT NULL, actor TEXT, message TEXT NOT NULL)""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_activity_job ON activity(job_id)")
 
-        def add_col(table, col, ddl):
-            cols = [r[1] for r in cur.execute(f"PRAGMA table_info({table})")]
-            if col not in cols:
-                cur.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
-                print(f"  [DB]   added {table}.{col}")
-        add_col("jobs", "archived_at", "archived_at TEXT")
-        add_col("jobs", "template_path", "template_path TEXT")
-        add_col("jobs", "job_type", "job_type TEXT NOT NULL DEFAULT 'standard'")
-        add_col("jobs", "priority_rank", "priority_rank INTEGER")
-        add_col("jobs", "created_by", "created_by TEXT")
-        add_col("jobs", "completed_at", "completed_at TEXT")
-        add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
-        # Jobs already marked Complete before this column existed: use when they were set to Complete.
-        cur.execute("""UPDATE jobs SET completed_at = COALESCE(
+def repair_data(conn):
+    """Tidy records that came from before the app worked the way it does now. Safe to repeat.
+    Runs once, when a database from before versions is brought to version 1, and at the end of
+    import_old.py (which brings in jobs in the old shape). It does not run at every start."""
+    # Jobs marked Complete before completed_at existed: use when they were set to Complete.
+    conn.execute("""UPDATE jobs SET completed_at = COALESCE(
                        (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
                           AND a.message LIKE '%set to Complete'), updated_at)
                    WHERE status = 'Complete' AND completed_at IS NULL""")
-        cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
-        SS.init_schema(cur)
-        SHEETS_SEQ.init_schema(cur)
-        add_col("job_rolls", "completed_by", "completed_by TEXT")
-        add_col("job_rolls", "started_at", "started_at TEXT")
-        add_col("job_rolls", "started_by", "started_by TEXT")
-        add_col("job_rolls", "paused_at", "paused_at TEXT")
-        add_col("job_rolls", "paused_by", "paused_by TEXT")
-        add_col("job_rolls", "printer", "printer TEXT")
-        add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
-        add_col("btw_templates", "file_size", "file_size INTEGER")
-        add_col("btw_templates", "file_mtime", "file_mtime TEXT")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
-        # Old per-roll notes become entries in the job's note log.
-        moved = cur.execute("""INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)
+    conn.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
+    # Old per-roll notes become entries in the job's note log.
+    moved = conn.execute("""INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)
         SELECT job_id, roll_number, completed_by, notes, 0, COALESCE(completed_at, created_at)
         FROM job_rolls WHERE notes IS NOT NULL AND TRIM(notes) != ''""").rowcount
-        if moved:
-            cur.execute("UPDATE job_rolls SET notes=NULL WHERE notes IS NOT NULL")
-            print(f"  [DB]   moved {moved} roll notes into the job note log")
-        conn.commit()
-        # Give open jobs a digital roll tracker if they were created before it existed.
-        todo = [dict(r) for r in cur.execute("""SELECT * FROM jobs j WHERE archived_at IS NULL
+    if moved:
+        conn.execute("UPDATE job_rolls SET notes=NULL WHERE notes IS NOT NULL")
+        print(f"  [DB]   moved {moved} roll notes into the job note log")
+    # Give open jobs a digital roll tracker if they were created before it existed.
+    todo = [dict(r) for r in conn.execute("""SELECT * FROM jobs j WHERE archived_at IS NULL
         AND upc IS NOT NULL AND upc != '' AND start_serial IS NOT NULL AND lpr > 0
         AND quantity > 0 AND NOT EXISTS (SELECT 1 FROM job_rolls r WHERE r.job_id = j.id)""")]
-        for job in todo:
-            ensure_rolls(conn, job)
-        if todo:
-            print(f"  [DB]   set up roll tracking for {len(todo)} open jobs")
-    print(f"  [DB]   ready → {DB_PATH}")
+    for job in todo:
+        plan = roll_plan(job["upc"], job["start_serial"],
+                         production_qty(job["quantity"] or 0, job["overage_pct"] or 0), job["lpr"] or 0)
+        if plan:
+            _insert_rolls(conn, job["id"], plan)
+    if todo:
+        print(f"  [DB]   set up roll tracking for {len(todo)} open jobs")
 
 
 DEFAULT_PRINTERS = "Printer 1\nPrinter 2\nPrinter 3\nPrinter 4"
@@ -3342,7 +3290,13 @@ def _lan_ips():
 
 if __name__ == "__main__":
     validate_and_prepare()
-    init_db()
+    try:
+        init_db()
+    except MIG.SchemaError as e:
+        print("-" * 64)
+        print(f"  [STOP] {e}")
+        print("=" * 64)
+        raise SystemExit(1)
     serial_startup()
     init_backup_state()
     start_backup_scheduler()
