@@ -13,7 +13,7 @@ def make(jm, n, **kw):
 
 
 def mirror(jm, upc):
-    c = jm.SS._db()
+    c = jm.db.open()
     try:
         return [dict(r) for r in c.execute("SELECT * FROM serial_allocations WHERE upc=? ORDER BY start", (upc,))]
     finally:

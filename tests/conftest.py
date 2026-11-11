@@ -10,7 +10,7 @@ import importlib
 import pytest
 
 SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP_MODULES = ("config", "serial_registry", "serial_store", "sheet_serials", "generators", "checklist_generator",
+APP_MODULES = ("config", "db", "serial_registry", "serial_store", "sheet_serials", "generators", "checklist_generator",
                "lists", "app", "backup", "restore_backup", "import_old")
 
 
@@ -36,6 +36,7 @@ class JM:
         sys.path.insert(0, self.root)
         try:
             self.config = importlib.import_module("config")
+            self.db = importlib.import_module("db")
             self.app = importlib.import_module("app")
             self.SS = importlib.import_module("serial_store")
             self.R = importlib.import_module("serial_registry")

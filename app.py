@@ -35,6 +35,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+import db as DB
 import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
@@ -83,11 +84,9 @@ def job_label(job):
 # Database
 # ══════════════════════════════════════════════════════════════════════════════
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=15)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    """A plain connection the caller must close. App code uses `with DB.connect() as conn:`
+    instead; this name is kept for the tests, the demo sandbox and import_old.py."""
+    return DB.open()
 
 
 def init_db():

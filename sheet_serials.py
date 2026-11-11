@@ -17,13 +17,13 @@ leaves a gap in the series but can never create a duplicate.
 """
 import os
 import csv
-import sqlite3
 import threading
 from datetime import datetime
 
+import db as DB
 import serial_registry as R
 import serial_store as SS
-from config import DB_PATH, SERIAL_REGISTRY_DIR
+from config import SERIAL_REGISTRY_DIR
 
 # sheet → first number and largest number it can ever reach.
 #   cdo_seq: 3768662565…3768677564 was the sample sheet CDO sent (already used), so the
@@ -37,13 +37,6 @@ _lock = threading.Lock()
 
 class SheetSerialError(Exception):
     pass
-
-
-def _db():
-    c = sqlite3.connect(DB_PATH, timeout=15)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    return c
 
 
 def _now():
@@ -115,7 +108,7 @@ def _journal_last_end(sheet):
 
 def last_end(sheet, conn=None):
     own = conn is None
-    conn = conn or _db()
+    conn = conn or DB.open()
     try:
         return _max_end([_db_last_end(conn, sheet), _log_last_end(sheet), _journal_last_end(sheet)])
     finally:
@@ -169,7 +162,7 @@ def reserve(sheet, job_number, qty, who=None, note="base"):
     with _lock:
         lock_path = R._acquire_file_lock(f"sheet_{sheet}")
         try:
-            conn = _db()
+            conn = DB.open()
             try:
                 conn.execute("BEGIN IMMEDIATE")
                 start = cfg["first"]
@@ -203,9 +196,9 @@ def void(alloc, reason):
     sheet, start = alloc["sheet"], alloc["start"]
     note = f"VOID: {reason}"[:200].replace("|", "/")
     try:
-        conn = _db()
-        conn.execute("UPDATE sheet_serials SET note=? WHERE sheet=? AND start=?", (note, sheet, start))
-        conn.commit(); conn.close()
+        with DB.connect() as conn:
+            conn.execute("UPDATE sheet_serials SET note=? WHERE sheet=? AND start=?", (note, sheet, start))
+            conn.commit()
     except Exception:
         pass
     ts = _now()
@@ -217,7 +210,7 @@ def void(alloc, reason):
 
 
 def history(sheet):
-    conn = _db()
+    conn = DB.open()
     try:
         return [dict(r) for r in conn.execute(
             'SELECT job_number, start, "end", qty, note, created_by, created_at FROM sheet_serials '
