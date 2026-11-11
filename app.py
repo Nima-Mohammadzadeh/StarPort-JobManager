@@ -14,10 +14,10 @@ roll tags, analytics, template rules) was removed on purpose.
 """
 import os
 import re
+import sys
 import json
 import time
 import shutil
-import sqlite3
 import zipfile
 import tempfile
 import threading
@@ -25,6 +25,7 @@ import subprocess
 import io
 from html import escape
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from flask import Flask, jsonify, render_template, request, send_file, abort, Response
 
@@ -35,6 +36,9 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+import db as DB
+from job_build import Build, Stop, refuse
+import migrations as MIG
 import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
@@ -83,102 +87,61 @@ def job_label(job):
 # Database
 # ══════════════════════════════════════════════════════════════════════════════
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=15)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    """A plain connection the caller must close. App code uses `with DB.connect() as conn:`
+    instead; this name is kept for the tests, the demo sandbox and import_old.py."""
+    return DB.open()
 
 
-def init_db():
-    """Create the tables this app uses. Tables left over from the old app
-    (inventory, audits, rewind, rules) are left alone — nothing reads them."""
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    cur.execute("INSERT OR IGNORE INTO _meta VALUES ('created_at', datetime('now'))")
-    cur.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    cur.execute("""CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_number TEXT NOT NULL UNIQUE, job_ticket TEXT,
-        title TEXT NOT NULL, customer TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'Pending', priority TEXT NOT NULL DEFAULT 'Medium',
-        due_date TEXT, notes TEXT, upc TEXT, quantity INTEGER, lpr INTEGER,
-        qty_db INTEGER, start_serial INTEGER, overage_pct REAL NOT NULL DEFAULT 0,
-        label_size TEXT, inlay_type TEXT, part_number TEXT, po_number TEXT,
-        folder_path TEXT, archived_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS job_rolls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        roll_number INTEGER NOT NULL, quantity INTEGER NOT NULL,
-        serial_start INTEGER, serial_end INTEGER, epc_start TEXT, epc_end TEXT,
-        status TEXT NOT NULL DEFAULT 'pending', completed_at TEXT, tag_printed_at TEXT,
-        notes TEXT, created_at TEXT NOT NULL, UNIQUE(job_id, roll_number))""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS btw_templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, file_path TEXT NOT NULL,
-        description TEXT, notes TEXT, thumbnail_path TEXT,
-        active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+def init_db(create=False):
+    """Bring the database up to the version this app needs (see migrations.py). Each step runs once.
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS job_notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        roll_number INTEGER, author TEXT, body TEXT NOT NULL,
-        important INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)""")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_notes_job ON job_notes(job_id)")
-    SS.init_additions_schema(cur)               # data added to a job after it was made
-    cur.execute("""CREATE TABLE IF NOT EXISTS activity (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, job_id INTEGER,
-        kind TEXT NOT NULL, actor TEXT, message TEXT NOT NULL)""")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_activity_job ON activity(job_id)")
+    The app never makes a database by itself: if none is found it stops, so a copy started from
+    the wrong folder can't quietly begin a second, empty database (and hand out serials again).
+    create=True is for a new install made on purpose (python app.py --create-database), the
+    import tool, the demo sandbox and the tests."""
+    if not create and not DB.exists():
+        raise MIG.DatabaseMissing(
+            f"No database was found at {DB_PATH}\n"
+            "         Job Manager does not create one by itself.\n"
+            "         Updating the app?   This folder does not hold your data. Copy the new files over the\n"
+            "                             existing Job Manager folder (keep local.db, serial_registry and\n"
+            "                             config.ini), or set 'database' in config.ini to the existing file.\n"
+            "         Lost the database?  Restore the latest backup: see RESTORE.md.\n"
+            "         New install?        Run new_install.bat once, then run.bat.")
+    with DB.connect() as conn:
+        MIG.run(conn, DB_PATH, after={1: repair_data})
+        v = MIG.version(conn)
+    print(f"  [DB]   ready (version {v}) → {DB_PATH}")
 
-    def add_col(table, col, ddl):
-        cols = [r[1] for r in cur.execute(f"PRAGMA table_info({table})")]
-        if col not in cols:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
-            print(f"  [DB]   added {table}.{col}")
-    add_col("jobs", "archived_at", "archived_at TEXT")
-    add_col("jobs", "template_path", "template_path TEXT")
-    add_col("jobs", "job_type", "job_type TEXT NOT NULL DEFAULT 'standard'")
-    add_col("jobs", "priority_rank", "priority_rank INTEGER")
-    add_col("jobs", "created_by", "created_by TEXT")
-    add_col("jobs", "completed_at", "completed_at TEXT")
-    add_col("jobs", "data_sheet", "data_sheet TEXT")      # GO2 data sheet kind on special jobs
-    # Jobs already marked Complete before this column existed: use when they were set to Complete.
-    cur.execute("""UPDATE jobs SET completed_at = COALESCE(
+
+def repair_data(conn):
+    """Tidy records that came from before the app worked the way it does now. Safe to repeat.
+    Runs once, when a database from before versions is brought to version 1, and at the end of
+    import_old.py (which brings in jobs in the old shape). It does not run at every start."""
+    # Jobs marked Complete before completed_at existed: use when they were set to Complete.
+    conn.execute("""UPDATE jobs SET completed_at = COALESCE(
                        (SELECT MAX(ts) FROM activity a WHERE a.job_id = jobs.id AND a.kind = 'status'
                           AND a.message LIKE '%set to Complete'), updated_at)
                    WHERE status = 'Complete' AND completed_at IS NULL""")
-    cur.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
-    SS.init_schema(cur)
-    SHEETS_SEQ.init_schema(cur)
-    add_col("job_rolls", "completed_by", "completed_by TEXT")
-    add_col("job_rolls", "started_at", "started_at TEXT")
-    add_col("job_rolls", "started_by", "started_by TEXT")
-    add_col("job_rolls", "paused_at", "paused_at TEXT")
-    add_col("job_rolls", "paused_by", "paused_by TEXT")
-    add_col("job_rolls", "printer", "printer TEXT")
-    add_col("btw_templates", "thumbnail_path", "thumbnail_path TEXT")
-    add_col("btw_templates", "file_size", "file_size INTEGER")
-    add_col("btw_templates", "file_mtime", "file_mtime TEXT")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_ticket ON jobs(job_ticket)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_jobs_archived ON jobs(archived_at)")
+    conn.execute("UPDATE jobs SET job_type='special' WHERE (upc IS NULL OR upc='') AND job_type='standard'")
     # Old per-roll notes become entries in the job's note log.
-    moved = cur.execute("""INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)
+    moved = conn.execute("""INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)
         SELECT job_id, roll_number, completed_by, notes, 0, COALESCE(completed_at, created_at)
         FROM job_rolls WHERE notes IS NOT NULL AND TRIM(notes) != ''""").rowcount
     if moved:
-        cur.execute("UPDATE job_rolls SET notes=NULL WHERE notes IS NOT NULL")
+        conn.execute("UPDATE job_rolls SET notes=NULL WHERE notes IS NOT NULL")
         print(f"  [DB]   moved {moved} roll notes into the job note log")
-    conn.commit()
     # Give open jobs a digital roll tracker if they were created before it existed.
-    todo = [dict(r) for r in cur.execute("""SELECT * FROM jobs j WHERE archived_at IS NULL
+    todo = [dict(r) for r in conn.execute("""SELECT * FROM jobs j WHERE archived_at IS NULL
         AND upc IS NOT NULL AND upc != '' AND start_serial IS NOT NULL AND lpr > 0
         AND quantity > 0 AND NOT EXISTS (SELECT 1 FROM job_rolls r WHERE r.job_id = j.id)""")]
     for job in todo:
-        ensure_rolls(conn, job)
+        plan = roll_plan(job["upc"], job["start_serial"],
+                         production_qty(job["quantity"] or 0, job["overage_pct"] or 0), job["lpr"] or 0)
+        if plan:
+            _insert_rolls(conn, job["id"], plan)
     if todo:
         print(f"  [DB]   set up roll tracking for {len(todo)} open jobs")
-    conn.close()
-    print(f"  [DB]   ready → {DB_PATH}")
 
 
 DEFAULT_PRINTERS = "Printer 1\nPrinter 2\nPrinter 3\nPrinter 4"
@@ -195,16 +158,14 @@ def clean_printers(raw) -> str:
 
 
 def get_setting(key, default=""):
-    conn = get_db()
-    row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
-    conn.close()
+    with DB.connect() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
     return row["value"] if row else default
 
 
 def get_settings() -> dict:
-    conn = get_db()
-    s = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
-    conn.close()
+    with DB.connect() as conn:
+        s = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM app_settings")}
     return {
         "btw_template_dir":      s.get("btw_template_dir") or DEFAULT_TEMPLATE_DIR,
         "default_overage_pct":   s.get("default_overage_pct", "0"),
@@ -307,9 +268,8 @@ def find_duplicate(conn, ticket, customer, title, upc, quantity):
 
 @app.route("/api/ticket-check")
 def api_ticket_check():
-    conn = get_db()
-    jobs = _same_ticket(conn, request.args.get("ticket", ""))
-    conn.close()
+    with DB.connect() as conn:
+        jobs = _same_ticket(conn, request.args.get("ticket", ""))
     return jsonify({"exists": bool(jobs), "jobs": jobs})
 
 
@@ -322,236 +282,300 @@ def create_job(data: dict) -> tuple[dict, int]:
                 (if quantity and labels per roll are given) rolls tracked by quantity.
                 No UPC serials are given out. Optional data_sheet (see DATA_SHEETS in generators.py):
                 "go2_rand" (customer GO2 only) random EPC sheet; "cdo_seq" (customer CDO only)
-                sequential serial + 8-hex EPC sheet, numbers from sheet_serials.py."""
-    g = lambda k: (str(data.get(k) or "")).strip() or None
-    customer, title, ticket = g("customer"), g("title"), g("job_ticket")
-    upc, label_size, inlay  = g("upc"), g("label_size"), g("inlay_type")
-    part, po, notes, due    = g("part_number"), g("po_number"), g("notes"), g("due_date")
-    created_by = (g("created_by") or actor() or "")[:40] or None
-    job_type = (g("job_type") or ("standard" if upc else "special")).lower()
-    if job_type not in ("standard", "special"):
-        return {"error": "Job type must be standard or special"}, 400
+                sequential serial + 8-hex EPC sheet, numbers from sheet_serials.py.
 
-    if not customer: return {"error": "Customer is required"}, 400
-    customer = sheet_customer(customer) or customer     # go2 / Go2 / cdo / Cdo are one customer each (folders, grouping)
-    if not title:    return {"error": "Item / title is required"}, 400
-    if job_type == "standard" and not upc:
-        return {"error": "A standard job needs a UPC. Choose Special for jobs without one."}, 400
-    data_sheet = g("data_sheet")
-    if data_sheet:
-        cfg = DATA_SHEETS.get(data_sheet)
-        if not cfg:
-            return {"error": "Unknown data sheet."}, 400
-        if job_type != "special" or customer != cfg["customer"]:
-            return {"error": f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}."}, 400
-    if job_type == "special":
-        upc = None                          # special jobs never take serials
+    The work is a list of steps. Each step that takes something (job number, folder, numbers)
+    tells the Build how to put it back, so a failure anywhere is undone in one place (job_build.py)."""
+    build = Build()
     try:
-        quantity = _int(data.get("quantity"), "Quantity", required=(job_type == "standard" or bool(data_sheet)))
-        lpr      = _int(data.get("lpr"), "Labels per roll")
-        qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
-        start_override = _int(data.get("start_serial"), "Start serial") if upc else None
-        offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
-        overage  = float(data.get("overage_pct") or 0)
-        if not 0 <= overage <= 100:
+        s = _read_new_job(data)                 # checks only; takes nothing
+        _check_before_taking_anything(s)
+        _reserve_job_number(build, s)
+        _make_job_folder(build, s)              # BEFORE any serials are taken
+        _take_new_job_numbers(build, s)
+        s.rolls = _roll_plan(s.kind, s.upc, s.start_serial, s.total_qty, s.lpr)
+        _write_new_job_files(build, s)
+        _copy_job_template(build, s)
+        return _save_new_job(build, s)
+    except Stop as stop:
+        return stop.answer
+    except Exception:
+        build.rollback("job creation failed unexpectedly")
+        raise
+
+
+def _read_new_job(data) -> SimpleNamespace:
+    """Read and check what was entered. Raises a refusal; nothing has been taken yet."""
+    g = lambda k: (str(data.get(k) or "")).strip() or None
+    s = SimpleNamespace(
+        customer=g("customer"), title=g("title"), ticket=g("job_ticket"),
+        upc=g("upc"), label_size=g("label_size"), inlay=g("inlay_type"),
+        part=g("part_number"), po=g("po_number"), notes=g("notes"), due=g("due_date"))
+    s.created_by = (g("created_by") or actor() or "")[:40] or None
+    s.job_type = (g("job_type") or ("standard" if s.upc else "special")).lower()
+    if s.job_type not in ("standard", "special"):
+        raise refuse("Job type must be standard or special", 400)
+
+    if not s.customer:
+        raise refuse("Customer is required", 400)
+    s.customer = sheet_customer(s.customer) or s.customer     # go2 / Go2 / cdo / Cdo are one customer each (folders, grouping)
+    if not s.title:
+        raise refuse("Item / title is required", 400)
+    if s.job_type == "standard" and not s.upc:
+        raise refuse("A standard job needs a UPC. Choose Special for jobs without one.", 400)
+    s.data_sheet = g("data_sheet")
+    if s.data_sheet:
+        cfg = DATA_SHEETS.get(s.data_sheet)
+        if not cfg:
+            raise refuse("Unknown data sheet.", 400)
+        if s.job_type != "special" or s.customer != cfg["customer"]:
+            raise refuse(f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}.", 400)
+    if s.job_type == "special":
+        s.upc = None                        # special jobs never take serials
+    upc, data_sheet = s.upc, s.data_sheet
+    try:
+        s.quantity = _int(data.get("quantity"), "Quantity", required=(s.job_type == "standard" or bool(data_sheet)))
+        s.lpr      = _int(data.get("lpr"), "Labels per roll")
+        s.qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
+        s.start_override = _int(data.get("start_serial"), "Start serial") if upc else None
+        s.offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
+        s.overage  = float(data.get("overage_pct") or 0)
+        if not 0 <= s.overage <= 100:
             raise ValueError("Overage must be between 0 and 100")
     except ValueError as e:
-        return {"error": str(e)}, 400
+        raise refuse(str(e), 400)
     if upc:
         v = validate_upc(upc)
         if not v["valid"]:
-            return {"error": v["error"], "corrected_upc": v.get("corrected_upc")}, 400
+            raise refuse(v["error"], 400, corrected_upc=v.get("corrected_upc"))
     # How the serials are chosen. The form always says; callers that don't (batch, scripts) get the
     # old behaviour: automatic unless a start serial is given.
     serial_mode = (g("serial_mode") or "").lower() or None
     if serial_mode not in (None, "auto", "manual"):
-        return {"error": "Serial mode must be auto or manual"}, 400
-    if upc and serial_mode == "manual" and not start_override:
-        return {"error": "You chose to specify the start serial. Enter it, or choose Automatic."}, 400
-    if upc and serial_mode == "auto" and start_override:
-        return {"error": "Automatic serials were chosen, but a start serial was also given. Remove one."}, 400
-    manual_start = bool(upc and start_override)
+        raise refuse("Serial mode must be auto or manual", 400)
+    if upc and serial_mode == "manual" and not s.start_override:
+        raise refuse("You chose to specify the start serial. Enter it, or choose Automatic.", 400)
+    if upc and serial_mode == "auto" and s.start_override:
+        raise refuse("Automatic serials were chosen, but a start serial was also given. Remove one.", 400)
+    s.manual_start = bool(upc and s.start_override)
 
-    total_qty = production_qty(quantity, overage) if quantity else None
+    s.total_qty = production_qty(s.quantity, s.overage) if s.quantity else None
     if data_sheet:
-        too_big = sheet_size_error(total_qty, qty_db)
+        too_big = sheet_size_error(s.total_qty, s.qty_db)
         if too_big:
-            return {"error": too_big}, 400
-    template_id = data.get("template_id")
+            raise refuse(too_big, 400)
+    s.template_id = data.get("template_id")
+    s.kind = "standard" if upc else data_sheet          # what gets encoded: "standard", a data sheet, or None
+    return s
 
-    # Pre-flight: if the shared job folders can't be reached, nothing is reserved,
-    # allocated or written. (A job without its folder and files helps no one.)
+
+def _check_before_taking_anything(s):
+    """Pre-flight: if the shared job folders can't be reached, nothing is reserved,
+    allocated or written. (A job without its folder and files helps no one.)"""
     if not os.path.isdir(Z_DRIVE_BASE):
-        return {"error": f"The job folders aren't reachable from the host PC ({Z_DRIVE_BASE}). "
-                         "Nothing was created. Check that the drive or share is connected."}, 503
-    if upc:
-        nxt = SS.next_start(upc)
-        if start_override:
+        raise refuse(f"The job folders aren't reachable from the host PC ({Z_DRIVE_BASE}). "
+                     "Nothing was created. Check that the drive or share is connected.", 503)
+    if s.upc:
+        nxt = SS.next_start(s.upc)
+        if s.start_override:
             # A start the person typed may sit anywhere, as long as none of its range was used before.
-            rc = SS.range_conflicts(upc, start_override, total_qty)
+            rc = SS.range_conflicts(s.upc, s.start_override, s.total_qty)
             if not rc["ok"]:
-                return {"error": str(R.SerialOverlap(rc["start"], rc["end"], rc["conflicts"])),
-                        "conflicts": rc["conflicts"], "next_start": nxt}, 400
-        if (start_override or offline_start or nxt) + total_qty - 1 > SS.MAX_SERIAL:
-            return {"error": "That range runs past the largest serial an EPC can hold."}, 400
+                raise refuse(str(R.SerialOverlap(rc["start"], rc["end"], rc["conflicts"])), 400,
+                             conflicts=rc["conflicts"], next_start=nxt)
+        if (s.start_override or s.offline_start or nxt) + s.total_qty - 1 > SS.MAX_SERIAL:
+            raise refuse("That range runs past the largest serial an EPC can hold.", 400)
 
-    # 1 ── reserve the job number (short lock) ─────────────────────────────────
-    conn = get_db()
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        # No duplicate jobs. Checked inside the same lock that reserves the job number, so
-        # two people entering the same ticket at the same moment can't both get through.
-        dup = find_duplicate(conn, ticket, customer, title, upc, quantity)
-        if dup:
-            conn.rollback(); conn.close()
-            return dup, 409
-        job_number = next_job_number(conn)
-        ts = now_str()
-        # The ticket, UPC and quantity go in with the reservation so a second request that
-        # arrives while this one is still being built can see it and be refused.
-        cur = conn.execute(
-            "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
-            " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
-            (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
-        job_id = cur.lastrowid
-        conn.commit()
-    except Exception as e:
-        conn.rollback(); conn.close()
-        return {"error": f"Could not reserve a job number: {e}"}, 500
-    conn.close()
 
-    # 2 ── folders, BEFORE any serials are taken ────────────────────────────────
-    job_dir = os.path.join(Z_DRIVE_BASE, *job_folder_parts(customer, label_size, po, ticket, job_number))
+def _reserve_job_number(build, s):
+    """Reserve the job number (short lock). Undo: drop the row and give the number back."""
+    with DB.connect() as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            # No duplicate jobs. Checked inside the same lock that reserves the job number, so
+            # two people entering the same ticket at the same moment can't both get through.
+            dup = find_duplicate(conn, s.ticket, s.customer, s.title, s.upc, s.quantity)
+            if dup:
+                conn.rollback()
+                raise Stop(dup, 409)
+            job_number = next_job_number(conn)
+            ts = now_str()
+            # The ticket, UPC and quantity go in with the reservation so a second request that
+            # arrives while this one is still being built can see it and be refused.
+            cur = conn.execute(
+                "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
+                " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
+                (job_number, s.ticket, s.title, s.customer, s.upc, s.quantity, ts, ts, s.data_sheet))
+            job_id = cur.lastrowid
+            conn.commit()
+        except Stop:
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise refuse(f"Could not reserve a job number: {e}", 500)
+    s.job_number, s.job_id = job_number, job_id
+    build.took("job number", undo=lambda why: _discard_job(job_id))
+
+
+def _make_job_folder(build, s):
+    """<customer>\\<label size>\\<date> - <ticket>\\{Data,Print,Proof}. Undo: remove it, if this job made it."""
+    job_dir = os.path.join(Z_DRIVE_BASE, *job_folder_parts(s.customer, s.label_size, s.po, s.ticket, s.job_number))
     try:
         if os.path.isdir(job_dir) and os.listdir(job_dir):
-            job_dir = f"{job_dir} - {job_number}"       # never mix two jobs in one folder
+            job_dir = f"{job_dir} - {s.job_number}"       # never mix two jobs in one folder
     except OSError:
         pass
-    created_new = not os.path.exists(job_dir)
-    warnings, folder_ok = [], False
+    s.job_dir = job_dir
+    if not os.path.exists(job_dir):
+        build.took("folder", undo=lambda why: shutil.rmtree(job_dir, ignore_errors=True))
     try:
         for sub in ("", "Data", "Print", "Proof"):
             os.makedirs(os.path.join(job_dir, sub), exist_ok=True)
-        folder_ok = True
     except Exception as e:
-        _discard_job(job_id, job_dir if created_new else None)
-        return {"error": f"The job folder couldn't be created, so nothing was created: {e}"}, 500
+        raise build.stop(f"The job folder couldn't be created, so nothing was created: {e}", 500)
 
-    # 3 ── serials (standard jobs only), recorded in registry + database + journal ─
-    alloc = None
-    if upc:
-        note = f"+{overage:g}%" if overage > 0 else "base"
-        if manual_start:
-            note += f"; start serial specified by {created_by or 'operator'}"
+
+def _reserve_numbers(build, kind, upc, job_number, qty, note, who, **serial_opts):
+    """Take the numbers this kind of job encodes (new job and added data both come through here).
+    Returns the allocation (it has "start"), or None when the kind takes none. Errors are passed up
+    so each caller can word them.
+
+    standard   UPC serials: recorded in registry + database + journal, never given back. From here on
+               the job number and folder stay too, because the serials are recorded under them.
+    CDO sheet  the customer's running series. Undo marks the numbers VOID (a gap, never a repeat)."""
+    if kind == "standard":
+        alloc = SS.reserve(upc, job_number, qty, note, who=who, **serial_opts)
+        build.took("serials")
+        build.keep()
+        return alloc
+    if kind == CDO_SHEET:
+        alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, qty, who=who, note=note)
+        build.took("sheet numbers", undo=lambda why: SHEETS_SEQ.void(alloc, why))
+        return alloc
+    return None
+
+
+def _roll_plan(kind, upc, start, qty, lpr, first_roll=1):
+    if kind == "standard":
+        return roll_plan(upc, start, qty, lpr, first_roll)
+    if kind == CDO_SHEET:
+        return roll_plan_seq(start, qty, lpr, first_roll)
+    return roll_plan_plain(qty, lpr, first_roll)
+
+
+def _generate_data_files(kind, folder, upc, label, start, qty, qty_db, **opts):
+    """Write the data the encoders load: the UPC encoding database, or the customer's data sheet."""
+    if kind == "standard":
+        return generate_db_files(folder, upc, start, qty, qty_db, **opts)
+    if kind == CDO_SHEET:
+        return generate_cdo_files(folder, label, start, qty, qty_db)
+    return generate_go2_files(folder, label, qty, qty_db, **opts)
+
+
+def _take_new_job_numbers(build, s):
+    s.alloc = s.seq_alloc = None
+    base = f"+{s.overage:g}%" if s.overage > 0 else "base"
+    if s.kind == "standard":
+        note = base + (f"; start serial specified by {s.created_by or 'operator'}" if s.manual_start else "")
         try:
-            alloc = SS.reserve(upc, job_number, total_qty, note, min_start=None if manual_start else start_override,
-                               exact_start=start_override if manual_start else None,
-                               who=created_by, offline_start=offline_start)
+            s.alloc = _reserve_numbers(build, "standard", s.upc, s.job_number, s.total_qty, note, s.created_by,
+                                       min_start=None if s.manual_start else s.start_override,
+                                       exact_start=s.start_override if s.manual_start else None,
+                                       offline_start=s.offline_start)
         except SS.SerialsOffline as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"{e} Nothing was created.", "serial_offline": True, **e.info}, 423
+            raise build.stop(f"{e} Nothing was created.", 423, serial_offline=True, **e.info)
         except ValueError as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": str(e)}, 400
+            raise build.stop(str(e), 400)
         except Exception as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"Serial allocation failed, job not created: {e}"}, 500
-        if alloc["offline"]:
-            warnings.append("Created while the serial registry was offline. The range is saved in the app "
-                            "database and will be written to the registry when it is back.")
-        if not alloc["journaled"] and SS.journal_path():
-            warnings.append("The serial journal (backup folder) couldn't be written. The range is still "
-                            "saved in the registry and the app database.")
-    seq_alloc = None
-    if data_sheet == CDO_SHEET:
+            raise build.stop(f"Serial allocation failed, job not created: {e}", 500)
+        if s.alloc["offline"]:
+            build.warn("Created while the serial registry was offline. The range is saved in the app "
+                       "database and will be written to the registry when it is back.")
+        if not s.alloc["journaled"] and SS.journal_path():
+            build.warn("The serial journal (backup folder) couldn't be written. The range is still "
+                       "saved in the registry and the app database.")
+    elif s.kind == CDO_SHEET:
         try:
-            seq_alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, total_qty, who=created_by,
-                                           note=f"+{overage:g}%" if overage > 0 else "base")
+            s.seq_alloc = _reserve_numbers(build, CDO_SHEET, None, s.job_number, s.total_qty, base, s.created_by)
         except SHEETS_SEQ.SheetSerialError as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"{e} Nothing was created."}, 400
+            raise build.stop(f"{e} Nothing was created.", 400)
         except Exception as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"CDO serial allocation failed, job not created: {e}"}, 500
-    start_serial = alloc["start"] if alloc else (seq_alloc["start"] if seq_alloc else None)
+            raise build.stop(f"CDO serial allocation failed, job not created: {e}", 500)
+    s.start_serial = s.alloc["start"] if s.alloc else (s.seq_alloc["start"] if s.seq_alloc else None)
 
-    job = {"job_number": job_number, "customer": customer, "title": title,
-           "job_ticket": ticket, "po_number": po, "po_clean": clean_po(po),
-           "part_number": part, "inlay_type": inlay, "label_size": label_size,
-           "due_date": due, "upc": upc, "quantity": quantity, "lpr": lpr,
-           "qty_db": qty_db, "start_serial": start_serial, "overage_pct": overage}
-    rolls = (roll_plan(upc, start_serial, total_qty, lpr) if upc
-             else roll_plan_seq(start_serial, total_qty, lpr) if seq_alloc
-             else roll_plan_plain(total_qty, lpr))
-    generated = {}
 
-    # 4 ── files ────────────────────────────────────────────────────────────────
-    if folder_ok:
-        if upc:
-            try:
-                generated["db_files"] = generate_db_files(job_dir, upc, start_serial, total_qty, qty_db)
-            except Exception as e:
-                warnings.append(f"Encoding database not written: {e}")
-        if data_sheet:
-            label = DATA_SHEETS[data_sheet]["customer"]
-            try:
-                if seq_alloc:
-                    generated["cdo"] = generate_cdo_files(job_dir, ticket or job_number, seq_alloc["start"],
-                                                          total_qty, qty_db)
-                else:
-                    generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
-            except Exception as e:
-                # Nothing is half-written (the generator removes its own files). Any sequential
-                # numbers already taken stay used (marked VOID), so they can never repeat.
-                if seq_alloc:
-                    SHEETS_SEQ.void(seq_alloc, f"sheet not written for {job_number}")
-                _discard_job(job_id, job_dir if created_new else None)
-                return {"error": f"The {label} data sheet could not be written, "
-                                 f"so nothing was created: {e}"}, 500
-        r = generate_checklist_html(job_dir, job)
-        if not r.get("success"): warnings.append(f"Checklist not written: {r.get('error')}")
-        if rolls:
-            r = generate_qc_sheet(job_dir, job, rolls)
-            if not r.get("success"): warnings.append(f"QC sheet not written: {r.get('error')}")
+def _write_new_job_files(build, s):
+    """Data files, checklist and QC sheet. A data sheet that can't be written abandons the job;
+    the rest are reported as warnings."""
+    job = {"job_number": s.job_number, "customer": s.customer, "title": s.title,
+           "job_ticket": s.ticket, "po_number": s.po, "po_clean": clean_po(s.po),
+           "part_number": s.part, "inlay_type": s.inlay, "label_size": s.label_size,
+           "due_date": s.due, "upc": s.upc, "quantity": s.quantity, "lpr": s.lpr,
+           "qty_db": s.qty_db, "start_serial": s.start_serial, "overage_pct": s.overage}
+    if s.kind == "standard":
+        try:
+            _generate_data_files("standard", s.job_dir, s.upc, None, s.start_serial, s.total_qty, s.qty_db)
+        except Exception as e:
+            build.warn(f"Encoding database not written: {e}")
+    elif s.kind:
+        try:
+            _generate_data_files(s.kind, s.job_dir, None, s.ticket or s.job_number, s.start_serial, s.total_qty, s.qty_db)
+        except Exception as e:
+            # Nothing is half-written (the generator removes its own files). Any sequential
+            # numbers already taken stay used (marked VOID), so they can never repeat.
+            raise build.stop(f"The {DATA_SHEETS[s.kind]['customer']} data sheet could not be written, "
+                             f"so nothing was created: {e}", 500, because=f"sheet not written for {s.job_number}")
+    r = generate_checklist_html(s.job_dir, job)
+    if not r.get("success"):
+        build.warn(f"Checklist not written: {r.get('error')}")
+    if s.rolls:
+        r = generate_qc_sheet(s.job_dir, job, s.rolls)
+        if not r.get("success"):
+            build.warn(f"QC sheet not written: {r.get('error')}")
 
-    # 5 ── template ─────────────────────────────────────────────────────────────
-    template_path = None
-    if folder_ok and template_id:
-        res = copy_template(int(template_id), job_dir, job_number)
-        if res.get("error"): warnings.append(f"Template not copied: {res['error']}")
-        template_path = res.get("dest_path")
 
-    # 6 ── save everything ──────────────────────────────────────────────────────
-    conn = get_db()
-    try:
-        conn.execute("""UPDATE jobs SET job_ticket=?, po_number=?, part_number=?, due_date=?,
-            notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
-            label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
-            updated_at=? WHERE id=?""",
-            (ticket, po, part, due, notes, upc, quantity, lpr, qty_db, start_serial, overage,
-             label_size, inlay, job_dir if folder_ok else None, template_path, job_type, created_by,
-             now_str(), job_id))
-        _insert_rolls(conn, job_id, rolls)
-        log_activity(conn, "created", job_id,
-                     f"Created {job_number} for {customer}"
-                     + (f", ticket {ticket}" if ticket else "")
-                     + (f" (special, {DATA_SHEETS[data_sheet]['customer']} data sheet)" if data_sheet
-                        else " (special, no serials)" if job_type == "special" else "")
-                     + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else "")
-                     + (f"; serials {alloc['start']:,}–{alloc['end']:,} ({'specified by user' if manual_start else 'automatic'})"
-                        if alloc else ""), created_by)
-        conn.commit()
-        saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
-    except Exception as e:
-        conn.rollback(); conn.close()
-        return {"error": f"Files were created but the job record could not be saved: {e}. "
-                         f"Serials {start_serial} onward are recorded under {job_number}."}, 500
-    conn.close()
+def _copy_job_template(build, s):
+    s.template_path = None
+    if s.template_id:
+        res = copy_template(int(s.template_id), s.job_dir, s.job_number)
+        if res.get("error"):
+            build.warn(f"Template not copied: {res['error']}")
+        s.template_path = res.get("dest_path")
 
-    return {"success": True, "job": saved, "job_number": job_number,
-            "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc or seq_alloc,
-            "db_split": db_file_split(total_qty, qty_db) if upc else [],
-            "rolls": len(rolls), "warnings": warnings}, 201
+
+def _save_new_job(build, s):
+    # From here nothing is undone: the folder and files exist and any numbers are recorded under
+    # this job number, so the reserved row has to stay even if filling it in fails.
+    build.keep()
+    with DB.connect() as conn:
+        try:
+            conn.execute("""UPDATE jobs SET job_ticket=?, po_number=?, part_number=?, due_date=?,
+                notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
+                label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
+                updated_at=? WHERE id=?""",
+                (s.ticket, s.po, s.part, s.due, s.notes, s.upc, s.quantity, s.lpr, s.qty_db, s.start_serial, s.overage,
+                 s.label_size, s.inlay, s.job_dir, s.template_path, s.job_type, s.created_by,
+                 now_str(), s.job_id))
+            _insert_rolls(conn, s.job_id, s.rolls)
+            log_activity(conn, "created", s.job_id,
+                         f"Created {s.job_number} for {s.customer}"
+                         + (f", ticket {s.ticket}" if s.ticket else "")
+                         + (f" (special, {DATA_SHEETS[s.data_sheet]['customer']} data sheet)" if s.data_sheet
+                            else " (special, no serials)" if s.job_type == "special" else "")
+                         + (f" — {s.total_qty:,} labels in {len(s.rolls)} rolls" if s.rolls else "")
+                         + (f"; serials {s.alloc['start']:,}–{s.alloc['end']:,} ({'specified by user' if s.manual_start else 'automatic'})"
+                            if s.alloc else ""), s.created_by)
+            conn.commit()
+            saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (s.job_id,)).fetchone())
+        except Exception as e:
+            conn.rollback()
+            raise refuse(f"Files were created but the job record could not be saved: {e}. "
+                         f"Serials {s.start_serial} onward are recorded under {s.job_number}.", 500)
+
+    return {"success": True, "job": saved, "job_number": s.job_number,
+            "folder_path": s.job_dir, "serial_alloc": s.alloc or s.seq_alloc,
+            "db_split": db_file_split(s.total_qty, s.qty_db) if s.upc else [],
+            "rolls": len(s.rolls), "warnings": build.warnings}, 201
 
 
 def job_additions(conn, job_id) -> list:
@@ -596,116 +620,140 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
     serial range (not necessarily next to the original), new rolls that continue the job's
     numbering, and new data files named _ADD<n>. Serials, once taken, are never released.
     data: quantity, reason, added_by, preview (True = report what would happen, reserve nothing),
-    offline_start / offline_confirm (registry unreachable, same as a new job)."""
-    data = data or {}
-    try:
-        qty = _int(data.get("quantity"), "Quantity", required=True)
-    except ValueError as e:
-        return {"error": str(e)}, 400
-    if qty > MAX_ADDITION:
-        return {"error": f"Add at most {MAX_ADDITION:,} labels at a time."}, 400
-    reason = (str(data.get("reason") or "")).strip()[:200] or None
-    who = ((str(data.get("added_by") or "")).strip() or actor() or "")[:40] or None
-    preview = bool(data.get("preview"))
-    try:
-        offline_start = _int(data.get("offline_start"), "Start serial") if data.get("offline_confirm") else None
-    except ValueError as e:
-        return {"error": str(e)}, 400
+    offline_start / offline_confirm (registry unreachable, same as a new job).
 
-    with _add_lock(job_id):
-        conn = get_db()
+    Same shape as create_job: a list of steps, undone in one place if a later one fails."""
+    build = Build()
+    try:
+        a = _read_addition(data or {})          # checks only; takes nothing
+        with _add_lock(job_id):
+            _load_job_for_addition(a, job_id)
+            if a.preview:
+                return _preview_addition(a), 200
+            _take_addition_numbers(build, a)
+            _write_addition_files(build, a)
+            _save_addition(build, a)
+            return _finish_addition(build, a)
+    except Stop as stop:
+        return stop.answer
+    except Exception:
+        build.rollback("addition failed unexpectedly")
+        raise
+
+
+def _read_addition(data) -> SimpleNamespace:
+    a = SimpleNamespace()
+    try:
+        a.qty = _int(data.get("quantity"), "Quantity", required=True)
+    except ValueError as e:
+        raise refuse(str(e), 400)
+    if a.qty > MAX_ADDITION:
+        raise refuse(f"Add at most {MAX_ADDITION:,} labels at a time.", 400)
+    a.reason = (str(data.get("reason") or "")).strip()[:200] or None
+    a.who = ((str(data.get("added_by") or "")).strip() or actor() or "")[:40] or None
+    a.preview = bool(data.get("preview"))
+    try:
+        a.offline_start = _int(data.get("offline_start"), "Start serial") if data.get("offline_confirm") else None
+    except ValueError as e:
+        raise refuse(str(e), 400)
+    return a
+
+
+def _load_job_for_addition(a, job_id):
+    """The job as it is now, and where the addition continues from (addition number, next roll)."""
+    with DB.connect() as conn:
         job = _load_job(conn, job_id)
         if not job:
-            conn.close(); return {"error": "Job not found"}, 404
+            raise refuse("Job not found", 404)
         if job["archived_at"]:
-            conn.close(); return {"error": "This job is archived. Move it back to jobs before adding data."}, 409
-        kind = "standard" if job["upc"] else job["data_sheet"] if job["data_sheet"] in DATA_SHEETS else None
-        if not kind:
-            conn.close(); return {"error": "This job has no encoded data (no UPC, no data sheet), so there is nothing to add to."}, 400
-        folder = job["folder_path"]
-        if not folder or not os.path.isdir(folder):
-            conn.close()
-            return {"error": "The job folder isn't reachable from the host PC. Nothing was added."}, 503
-        seq = (conn.execute("SELECT COALESCE(MAX(seq),0) FROM job_additions WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
-        first_roll = (conn.execute("SELECT COALESCE(MAX(roll_number),0) FROM job_rolls WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
-        total_before = job_total_qty(conn, job)
-        lpr, qty_db, tag = job["lpr"] or 0, job["qty_db"], f"_ADD{seq}"
-        label = f"{job['job_ticket'] or job['job_number']}{tag}"
-        conn.close()
-        n_rolls = -(-qty // lpr) if lpr > 0 else 0
-        n_files = len(db_file_split(qty, qty_db))
-        suffix = lambda i: f"_DB{i}" if n_files > 1 else ""
+            raise refuse("This job is archived. Move it back to jobs before adding data.", 409)
+        a.kind = "standard" if job["upc"] else job["data_sheet"] if job["data_sheet"] in DATA_SHEETS else None
+        if not a.kind:
+            raise refuse("This job has no encoded data (no UPC, no data sheet), so there is nothing to add to.", 400)
+        a.folder = job["folder_path"]
+        if not a.folder or not os.path.isdir(a.folder):
+            raise refuse("The job folder isn't reachable from the host PC. Nothing was added.", 503)
+        a.seq = (conn.execute("SELECT COALESCE(MAX(seq),0) FROM job_additions WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
+        a.first_roll = (conn.execute("SELECT COALESCE(MAX(roll_number),0) FROM job_rolls WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
+        a.total_before = job_total_qty(conn, job)
+    a.job, a.job_id = job, job_id
+    a.lpr, a.qty_db, a.tag = job["lpr"] or 0, job["qty_db"], f"_ADD{a.seq}"
+    a.label = f"{job['job_ticket'] or job['job_number']}{a.tag}"
 
-        if preview:
-            out = {"preview": True, "quantity": qty, "new_total": total_before + qty, "seq": seq,
-                   "first_roll": first_roll if n_rolls else None,
-                   "last_roll": first_roll + n_rolls - 1 if n_rolls else None, "rolls": n_rolls}
-            if kind == "standard":
-                nxt = SS.next_start(job["upc"])
-                out.update(serial_start=nxt, serial_end=nxt + qty - 1,
-                           files=[f"{job['upc']}{tag}{suffix(i)}.xlsx" for i in range(1, n_files + 1)])
-                if nxt + qty - 1 > SS.MAX_SERIAL:
-                    return {"error": "That range runs past the largest serial an EPC can hold."}, 400
-            elif kind == CDO_SHEET:
-                nxt = SHEETS_SEQ.next_start(CDO_SHEET)
-                out.update(serial_start=nxt, serial_end=nxt + qty - 1, files=go2_file_names(label, n_files))
-            else:
-                out.update(serial_start=None, serial_end=None, files=go2_file_names(label, n_files))
-            return out, 200
 
-        # ── take the serials ──────────────────────────────────────────────────
-        alloc, seq_alloc, warnings = None, None, []
-        start = None
-        try:
-            if kind == "standard":
-                alloc = SS.reserve(job["upc"], job["job_number"], qty, f"addition #{seq}", who=who, offline_start=offline_start)
-                start = alloc["start"]
-                if alloc["offline"]:
-                    warnings.append("Added while the serial registry was offline. The range is saved in the app "
-                                    "database and will be written to the registry when it is back.")
-            elif kind == CDO_SHEET:
-                seq_alloc = SHEETS_SEQ.reserve(CDO_SHEET, job["job_number"], qty, who=who, note=f"addition #{seq}")
-                start = seq_alloc["start"]
-        except SS.SerialsOffline as e:
-            return {"error": f"{e} Nothing was added.", "serial_offline": True, **e.info}, 423
-        except (ValueError, SHEETS_SEQ.SheetSerialError) as e:
-            return {"error": str(e)}, 400
-        except Exception as e:
-            return {"error": f"Serial allocation failed, nothing was added: {e}"}, 500
-        end = start + qty - 1 if start else None
+def _preview_addition(a) -> dict:
+    """What adding would do. Reserves nothing."""
+    job, qty = a.job, a.qty
+    n_rolls = -(-qty // a.lpr) if a.lpr > 0 else 0
+    n_files = len(db_file_split(qty, a.qty_db))
+    suffix = lambda i: f"_DB{i}" if n_files > 1 else ""
+    out = {"preview": True, "quantity": qty, "new_total": a.total_before + qty, "seq": a.seq,
+           "first_roll": a.first_roll if n_rolls else None,
+           "last_roll": a.first_roll + n_rolls - 1 if n_rolls else None, "rolls": n_rolls}
+    if a.kind == "standard":
+        nxt = SS.next_start(job["upc"])
+        out.update(serial_start=nxt, serial_end=nxt + qty - 1,
+                   files=[f"{job['upc']}{a.tag}{suffix(i)}.xlsx" for i in range(1, n_files + 1)])
+        if nxt + qty - 1 > SS.MAX_SERIAL:
+            raise refuse("That range runs past the largest serial an EPC can hold.", 400)
+    elif a.kind == CDO_SHEET:
+        nxt = SHEETS_SEQ.next_start(CDO_SHEET)
+        out.update(serial_start=nxt, serial_end=nxt + qty - 1, files=go2_file_names(a.label, n_files))
+    else:
+        out.update(serial_start=None, serial_end=None, files=go2_file_names(a.label, n_files))
+    return out
 
-        # ── rolls and files ───────────────────────────────────────────────────
-        if not lpr:
-            rolls = []
-        elif kind == "standard":
-            rolls = roll_plan(job["upc"], start, qty, lpr, first_roll)
-        elif kind == CDO_SHEET:
-            rolls = roll_plan_seq(start, qty, lpr, first_roll)
-        else:
-            rolls = roll_plan_plain(qty, lpr, first_roll)
-        try:
-            if kind == "standard":
-                gen = generate_db_files(folder, job["upc"], start, qty, qty_db, tag=tag)
-            elif kind == CDO_SHEET:
-                gen = generate_cdo_files(folder, label, start, qty, qty_db)
-            else:
-                gen = generate_go2_files(folder, label, qty, qty_db, exclude=read_go2_epcs(folder))
-        except Exception as e:
-            if seq_alloc:
-                SHEETS_SEQ.void(seq_alloc, f"addition data not written for {job['job_number']}")
-            return {"error": f"The data files could not be written, so nothing was added: {e}"
-                             + (f" Serials {start:,}–{end:,} stay recorded as used, so they are never handed out again." if start else "")}, 500
-        names = [os.path.basename(f) for f in gen["files"]]
 
-        # ── save ──────────────────────────────────────────────────────────────
-        conn = get_db()
+def _take_addition_numbers(build, a):
+    job = a.job
+    opts = {"offline_start": a.offline_start} if a.kind == "standard" else {}
+    try:
+        alloc = _reserve_numbers(build, a.kind, job["upc"], job["job_number"], a.qty, f"addition #{a.seq}", a.who, **opts)
+    except SS.SerialsOffline as e:
+        raise build.stop(f"{e} Nothing was added.", 423, serial_offline=True, **e.info)
+    except (ValueError, SHEETS_SEQ.SheetSerialError) as e:
+        raise build.stop(str(e), 400)
+    except Exception as e:
+        raise build.stop(f"Serial allocation failed, nothing was added: {e}", 500)
+    if a.kind == "standard" and alloc["offline"]:
+        build.warn("Added while the serial registry was offline. The range is saved in the app "
+                   "database and will be written to the registry when it is back.")
+    a.start = alloc["start"] if alloc else None
+    a.end = a.start + a.qty - 1 if a.start else None
+
+
+def _write_addition_files(build, a):
+    """New rolls that continue the numbering, and new _ADD<n> data files. Existing files are never changed."""
+    job, start, end = a.job, a.start, a.end
+    a.rolls = _roll_plan(a.kind, job["upc"], start, a.qty, a.lpr, a.first_roll) if a.lpr else []
+    try:
+        opts = ({"tag": a.tag} if a.kind == "standard"
+                else {"exclude": read_go2_epcs(a.folder)} if a.kind != CDO_SHEET else {})
+        gen = _generate_data_files(a.kind, a.folder, job["upc"], a.label, start, a.qty, a.qty_db, **opts)
+    except Exception as e:
+        raise build.stop(f"The data files could not be written, so nothing was added: {e}"
+                         + (f" Serials {start:,}–{end:,} stay recorded as used, so they are never handed out again." if start else ""),
+                         500, because=f"addition data not written for {job['job_number']}")
+    a.files = gen["files"]
+    a.names = [os.path.basename(f) for f in a.files]
+
+    def remove_files(why):
+        for f in a.files:
+            try: os.remove(f)
+            except OSError: pass
+    build.took("data files", undo=remove_files)
+
+
+def _save_addition(build, a):
+    job, job_id, qty, start, end, rolls = a.job, a.job_id, a.qty, a.start, a.end, a.rolls
+    with DB.connect() as conn:
         try:
             ts = now_str()
             cur = conn.execute(
                 "INSERT INTO job_additions (job_id, seq, quantity, serial_start, serial_end, first_roll, last_roll,"
                 " files, reason, added_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (job_id, seq, qty, start, end, rolls[0]["roll_number"] if rolls else 0,
-                 rolls[-1]["roll_number"] if rolls else 0, json.dumps(names), reason, who, ts))
+                (job_id, a.seq, qty, start, end, rolls[0]["roll_number"] if rolls else 0,
+                 rolls[-1]["roll_number"] if rolls else 0, json.dumps(a.names), a.reason, a.who, ts))
             add_id = cur.lastrowid
             _insert_rolls(conn, job_id, rolls, addition_id=add_id)
             reopened = job["status"] == "Complete"
@@ -717,44 +765,41 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
                          + (f", serials {start:,}–{end:,}" if start else "")
                          + (f", rolls {rolls[0]['roll_number']}–{rolls[-1]['roll_number']}" if rolls else "")
                          + (" (job reopened)" if reopened else "")
-                         + (f" — {reason}" if reason else ""), who)
+                         + (f" — {a.reason}" if a.reason else ""), a.who)
             conn.commit()
-            addition = dict(conn.execute("SELECT * FROM job_additions WHERE id=?", (add_id,)).fetchone())
-            saved = _load_job(conn, job_id)
+            a.addition = dict(conn.execute("SELECT * FROM job_additions WHERE id=?", (add_id,)).fetchone())
+            a.saved = _load_job(conn, job_id)
         except Exception as e:
-            conn.rollback(); conn.close()
-            for f in gen["files"]:
-                try: os.remove(f)
-                except OSError: pass
-            if seq_alloc:
-                SHEETS_SEQ.void(seq_alloc, f"addition not saved for {job['job_number']}")
-            return {"error": f"The addition could not be saved, so nothing was added: {e}"
-                             + (f" Serials {start:,}–{end:,} stay recorded as used." if start else "")}, 500
-        conn.close()
-        try:
-            warnings += [f"Checklist / QC sheet not rewritten: {m}" for m in regenerate_sheets(job_id)]
-        except Exception as e:
-            warnings.append(f"Checklist / QC sheet not rewritten: {e}")
-        return {"success": True, "addition": addition, "job": saved, "rolls_added": len(rolls),
-                "files": names, "warnings": warnings}, 201
+            conn.rollback()
+            raise build.stop(f"The addition could not be saved, so nothing was added: {e}"
+                             + (f" Serials {start:,}–{end:,} stay recorded as used." if start else ""),
+                             500, because=f"addition not saved for {job['job_number']}")
+    build.keep()                    # saved: the files and numbers now belong to the job
 
 
-def _discard_job(job_id, folder=None):
-    """Undo a job that failed before any serials were taken: drop the reserved row and
-    any folder this attempt created."""
+def _finish_addition(build, a):
     try:
-        c = get_db()
-        row = c.execute("SELECT job_number FROM jobs WHERE id=?", (job_id,)).fetchone()
-        c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-        # Give the number back if nothing was issued after it (no serials were taken under it).
-        if row:
-            n = int(row["job_number"].split("-")[1])
-            c.execute("UPDATE app_settings SET value=? WHERE key='job_number_last' AND value=?", (str(n - 1), str(n)))
-        c.commit(); c.close()
+        for m in regenerate_sheets(a.job_id):
+            build.warn(f"Checklist / QC sheet not rewritten: {m}")
+    except Exception as e:
+        build.warn(f"Checklist / QC sheet not rewritten: {e}")
+    return {"success": True, "addition": a.addition, "job": a.saved, "rolls_added": len(a.rolls),
+            "files": a.names, "warnings": build.warnings}, 201
+
+
+def _discard_job(job_id):
+    """Undo a job that failed before any serials were taken: drop the reserved row."""
+    try:
+        with DB.connect() as c:
+            row = c.execute("SELECT job_number FROM jobs WHERE id=?", (job_id,)).fetchone()
+            c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+            # Give the number back if nothing was issued after it (no serials were taken under it).
+            if row:
+                n = int(row["job_number"].split("-")[1])
+                c.execute("UPDATE app_settings SET value=? WHERE key='job_number_last' AND value=?", (str(n - 1), str(n)))
+            c.commit()
     except Exception:
         pass
-    if folder:
-        shutil.rmtree(folder, ignore_errors=True)
 
 
 def _insert_rolls(conn, job_id, rolls, addition_id=None):
@@ -822,12 +867,11 @@ def _dedupe(values):
 
 @app.route("/api/meta")
 def api_meta():
-    conn = get_db()
-    hist_c = [r[0] for r in conn.execute("SELECT DISTINCT customer FROM jobs")]
-    hist_s = [r[0] for r in conn.execute("SELECT DISTINCT label_size FROM jobs")]
-    inlays = [r[0] for r in conn.execute(
-        "SELECT inlay_type FROM jobs WHERE inlay_type IS NOT NULL GROUP BY inlay_type ORDER BY COUNT(*) DESC")]
-    conn.close()
+    with DB.connect() as conn:
+        hist_c = [r[0] for r in conn.execute("SELECT DISTINCT customer FROM jobs")]
+        hist_s = [r[0] for r in conn.execute("SELECT DISTINCT label_size FROM jobs")]
+        inlays = [r[0] for r in conn.execute(
+            "SELECT inlay_type FROM jobs WHERE inlay_type IS NOT NULL GROUP BY inlay_type ORDER BY COUNT(*) DESC")]
     return jsonify({
         "version": APP_VERSION, "system": SYSTEM,
         "db_path": DB_PATH, "registry_dir": SERIAL_REGISTRY_DIR, "z_drive_base": Z_DRIVE_BASE,
@@ -844,21 +888,19 @@ def api_meta():
 
 
 def _recent_names():
-    conn = get_db()
-    rows = [r[0] for r in conn.execute("""SELECT actor FROM activity WHERE actor IS NOT NULL AND actor != ''
+    with DB.connect() as conn:
+        rows = [r[0] for r in conn.execute("""SELECT actor FROM activity WHERE actor IS NOT NULL AND actor != ''
         AND actor != 'Import' GROUP BY actor ORDER BY MAX(ts) DESC LIMIT 40""")]
-    conn.close()
     return rows
 
 
 @app.route("/api/stamp")
 def api_stamp():
     """Cheap change marker the browser polls to know when to refresh."""
-    conn = get_db()
-    r = conn.execute("""SELECT (SELECT COUNT(*) FROM jobs) c, (SELECT MAX(updated_at) FROM jobs) m,
+    with DB.connect() as conn:
+        r = conn.execute("""SELECT (SELECT COUNT(*) FROM jobs) c, (SELECT MAX(updated_at) FROM jobs) m,
                                (SELECT MAX(id) FROM activity) a,
                                (SELECT value FROM app_settings WHERE key='priority_version') p""").fetchone()
-    conn.close()
     h = {**SS.health(), "registry_gaps": _registry_gap_count["n"]}
     return jsonify({"stamp": f"{r['c']}|{r['m']}|{r['a']}|{r['p']}",
                     "serials_ok": h["registry_ok"] and not h["conflicts"], "serials": h,
@@ -889,9 +931,8 @@ def api_jobs():
     sql += " ORDER BY j.created_at DESC"
     if view != "active":
         sql += " LIMIT 500"
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(sql, params)]
-    conn.close()
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(sql, params)]
     return jsonify({"jobs": rows})
 
 
@@ -934,18 +975,17 @@ def api_archive_list():
     d = "ASC" if a.get("dir") == "asc" else "DESC"
     order = ARCHIVE_SORTS.get(a.get("sort"), ARCHIVE_SORTS["archived"]).format(d=d) + ", j.id DESC"
     w = " AND ".join(where)
-    conn = get_db()
-    total = conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE {w}", params).fetchone()[0]
-    pages = max(1, -(-total // size)); page = min(page, pages)
-    rows = [dict(r) for r in conn.execute(
-        f"SELECT j.*, {ROLL_SUMMARY} FROM jobs j WHERE {w} ORDER BY {order} LIMIT ? OFFSET ?",
-        params + [size, (page - 1) * size])]
-    customers = [r[0] for r in conn.execute(
-        "SELECT DISTINCT customer FROM jobs WHERE archived_at IS NOT NULL AND customer IS NOT NULL "
-        "ORDER BY customer COLLATE NOCASE")]
-    statuses = [r[0] for r in conn.execute(
-        "SELECT DISTINCT status FROM jobs WHERE archived_at IS NOT NULL ORDER BY status")]
-    conn.close()
+    with DB.connect() as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE {w}", params).fetchone()[0]
+        pages = max(1, -(-total // size)); page = min(page, pages)
+        rows = [dict(r) for r in conn.execute(
+            f"SELECT j.*, {ROLL_SUMMARY} FROM jobs j WHERE {w} ORDER BY {order} LIMIT ? OFFSET ?",
+            params + [size, (page - 1) * size])]
+        customers = [r[0] for r in conn.execute(
+            "SELECT DISTINCT customer FROM jobs WHERE archived_at IS NOT NULL AND customer IS NOT NULL "
+            "ORDER BY customer COLLATE NOCASE")]
+        statuses = [r[0] for r in conn.execute(
+            "SELECT DISTINCT status FROM jobs WHERE archived_at IS NOT NULL ORDER BY status")]
     return jsonify({"jobs": rows, "total": total, "page": page, "pages": pages, "size": size,
                     "customers": customers, "statuses": statuses})
 
@@ -1018,16 +1058,15 @@ def _list_files(folder):
 
 @app.route("/api/jobs/<int:job_id>")
 def api_job_detail(job_id):
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    rolls = ensure_rolls(conn, job)
-    notes = _notes(conn, job_id)
-    additions = job_additions(conn, job_id)
-    ranges = job_serial_ranges(conn, job)
-    total = job_total_qty(conn, job) if job["quantity"] else None
-    conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        rolls = ensure_rolls(conn, job)
+        notes = _notes(conn, job_id)
+        additions = job_additions(conn, job_id)
+        ranges = job_serial_ranges(conn, job)
+        total = job_total_qty(conn, job) if job["quantity"] else None
     return jsonify({"job": job, "rolls": rolls, "notes": notes, "files": _list_files(job["folder_path"]),
                     "total_qty": total, "additions": additions, "serial_ranges": ranges,
                     "end_serial": ranges[-1]["end"] if ranges else None,
@@ -1059,32 +1098,31 @@ def api_job_edit(job_id):
     if not sets:
         return err("Nothing to update")
     sets.append("updated_at=?"); vals += [now_str(), job_id]
-    conn = get_db()
-    before = _load_job(conn, job_id)
-    who = (data.get("operator") or "").strip()[:40] or actor()
-    if before:
-        new_ticket = (data["job_ticket"] if "job_ticket" in data else before.get("job_ticket")) or ""
-        new_status = data.get("status", before["status"])
-        changed = ("job_ticket" in data and new_ticket.strip().lower() != (before.get("job_ticket") or "").strip().lower()) \
-                  or (before["status"] == "Cancelled" and new_status != "Cancelled")
-        if changed and new_status != "Cancelled":
-            same = _same_ticket(conn, new_ticket, exclude_id=job_id)
-            if same:
-                conn.close()
-                return err(f"Ticket {new_ticket.strip()} already belongs to {', '.join(j['job_number'] for j in same)}. "
-                           "Two jobs can't share a ticket.", 409)
-    cur = conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", vals)
-    if before:
-        if "status" in data and data["status"] != before["status"]:
-            log_activity(conn, "status", job_id, f"{job_label(before)} set to {data['status']}", who)
-            conn.execute("UPDATE jobs SET completed_at=? WHERE id=?",
-                         (now_str() if data["status"] == "Complete" else None, job_id))
-        changed = [f.replace("_", " ") for f in EDITABLE if f != "status" and f in data
-                   and (data[f] or None) != (before.get(f) or None)]
-        if changed:
-            log_activity(conn, "edited", job_id, f"{job_label(before)}: changed {', '.join(changed)}")
-    conn.commit()
-    job = _load_job(conn, job_id); conn.close()
+    with DB.connect() as conn:
+        before = _load_job(conn, job_id)
+        who = (data.get("operator") or "").strip()[:40] or actor()
+        if before:
+            new_ticket = (data["job_ticket"] if "job_ticket" in data else before.get("job_ticket")) or ""
+            new_status = data.get("status", before["status"])
+            changed = ("job_ticket" in data and new_ticket.strip().lower() != (before.get("job_ticket") or "").strip().lower()) \
+                      or (before["status"] == "Cancelled" and new_status != "Cancelled")
+            if changed and new_status != "Cancelled":
+                same = _same_ticket(conn, new_ticket, exclude_id=job_id)
+                if same:
+                    return err(f"Ticket {new_ticket.strip()} already belongs to {', '.join(j['job_number'] for j in same)}. "
+                               "Two jobs can't share a ticket.", 409)
+        cur = conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", vals)
+        if before:
+            if "status" in data and data["status"] != before["status"]:
+                log_activity(conn, "status", job_id, f"{job_label(before)} set to {data['status']}", who)
+                conn.execute("UPDATE jobs SET completed_at=? WHERE id=?",
+                             (now_str() if data["status"] == "Complete" else None, job_id))
+            changed = [f.replace("_", " ") for f in EDITABLE if f != "status" and f in data
+                       and (data[f] or None) != (before.get(f) or None)]
+            if changed:
+                log_activity(conn, "edited", job_id, f"{job_label(before)}: changed {', '.join(changed)}")
+        conn.commit()
+        job = _load_job(conn, job_id)
     if not cur.rowcount:
         return err("Job not found", 404)
     return jsonify({"success": True, "job": job})
@@ -1094,19 +1132,19 @@ def api_job_edit(job_id):
 def api_archive(job_id):
     undo = (request.get_json(silent=True) or {}).get("undo")
     ts = now_str()
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    cur = conn.execute("UPDATE jobs SET archived_at=?, updated_at=? WHERE id=?",
-                       (None if undo else ts, ts, job_id))
-    if undo:
-        conn.execute("UPDATE jobs SET completed_at=? WHERE id=? AND status='Complete'", (ts, job_id))
-    if not undo and job and job["priority_rank"] is not None:
-        conn.execute("UPDATE jobs SET priority_rank=NULL WHERE id=?", (job_id,))
-        _renumber_priority(conn); _bump_priority(conn)
-    if job:
-        log_activity(conn, "archived", job_id,
-                     f"{job_label(job)} {'moved back to jobs' if undo else 'archived'}")
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        cur = conn.execute("UPDATE jobs SET archived_at=?, updated_at=? WHERE id=?",
+                           (None if undo else ts, ts, job_id))
+        if undo:
+            conn.execute("UPDATE jobs SET completed_at=? WHERE id=? AND status='Complete'", (ts, job_id))
+        if not undo and job and job["priority_rank"] is not None:
+            conn.execute("UPDATE jobs SET priority_rank=NULL WHERE id=?", (job_id,))
+            _renumber_priority(conn); _bump_priority(conn)
+        if job:
+            log_activity(conn, "archived", job_id,
+                         f"{job_label(job)} {'moved back to jobs' if undo else 'archived'}")
+        conn.commit()
     return jsonify({"success": True}) if cur.rowcount else err("Job not found", 404)
 
 
@@ -1114,19 +1152,19 @@ def api_archive(job_id):
 def api_job_delete(job_id):
     """Removes the record only. Folder and serial registry are never touched,
     so the serial range stays used and can't be handed out again."""
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "shelf_transactions" in tables:
-        conn.execute("UPDATE shelf_transactions SET job_id=NULL WHERE job_id=?", (job_id,))
-    for t in ("rewind_scans", "btw_job_assignments", "job_rolls"):
-        if t in tables:
-            conn.execute(f"DELETE FROM {t} WHERE job_id=?", (job_id,))
-    conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-    log_activity(conn, "deleted", None, f"Deleted the record for {job['job_number']} ({job_label(job)})")
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "shelf_transactions" in tables:
+            conn.execute("UPDATE shelf_transactions SET job_id=NULL WHERE job_id=?", (job_id,))
+        for t in ("rewind_scans", "btw_job_assignments", "job_rolls"):
+            if t in tables:
+                conn.execute(f"DELETE FROM {t} WHERE job_id=?", (job_id,))
+        conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        log_activity(conn, "deleted", None, f"Deleted the record for {job['job_number']} ({job_label(job)})")
+        conn.commit()
     return jsonify({"success": True, "job_number": job["job_number"]})
 
 
@@ -1145,34 +1183,34 @@ def api_roll_printer(job_id, roll_number):
     data = request.get_json(silent=True) or {}
     printer = " ".join(str(data.get("printer") or "").split())[:30]
     who = (data.get("operator") or "").strip()[:40] or actor()
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    ensure_rolls(conn, job)
-    row = conn.execute("SELECT status, printer FROM job_rolls WHERE job_id=? AND roll_number=?",
-                       (job_id, roll_number)).fetchone()
-    if not row:
-        conn.close(); return err("Roll not found", 404)
-    if row["status"] in ("complete", "verified"):
-        conn.close(); return err("This roll is done. Reopen it before changing its printer.", 400)
-    ts = now_str()
-    if printer:
-        if row["status"] == "pending":
-            conn.execute("""UPDATE job_rolls SET printer=?, status='running', started_at=?, started_by=?
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        ensure_rolls(conn, job)
+        row = conn.execute("SELECT status, printer FROM job_rolls WHERE job_id=? AND roll_number=?",
+                           (job_id, roll_number)).fetchone()
+        if not row:
+            return err("Roll not found", 404)
+        if row["status"] in ("complete", "verified"):
+            return err("This roll is done. Reopen it before changing its printer.", 400)
+        ts = now_str()
+        if printer:
+            if row["status"] == "pending":
+                conn.execute("""UPDATE job_rolls SET printer=?, status='running', started_at=?, started_by=?
                             WHERE job_id=? AND roll_number=?""", (printer, ts, who, job_id, roll_number))
-            if job["status"] == "Pending":
-                conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+                if job["status"] == "Pending":
+                    conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+            else:
+                conn.execute("UPDATE job_rolls SET printer=? WHERE job_id=? AND roll_number=?",
+                             (printer, job_id, roll_number))
+            msg = f"{job_label(job)}: roll {roll_number} on {printer}"
         else:
-            conn.execute("UPDATE job_rolls SET printer=? WHERE job_id=? AND roll_number=?",
-                         (printer, job_id, roll_number))
-        msg = f"{job_label(job)}: roll {roll_number} on {printer}"
-    else:
-        conn.execute("UPDATE job_rolls SET printer=NULL WHERE job_id=? AND roll_number=?", (job_id, roll_number))
-        msg = f"{job_label(job)}: roll {roll_number} taken off {row['printer'] or 'its printer'}"
-    conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
-    log_activity(conn, "roll_start", job_id, msg + _roll_progress(conn, job_id), who)
-    conn.commit(); conn.close()
+            conn.execute("UPDATE job_rolls SET printer=NULL WHERE job_id=? AND roll_number=?", (job_id, roll_number))
+            msg = f"{job_label(job)}: roll {roll_number} taken off {row['printer'] or 'its printer'}"
+        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
+        log_activity(conn, "roll_start", job_id, msg + _roll_progress(conn, job_id), who)
+        conn.commit()
     return jsonify({"success": True, "printer": printer or None})
 
 
@@ -1180,8 +1218,8 @@ def api_roll_printer(job_id, roll_number):
 def api_printers():
     """The configured printers and what each one is running right now (for the printer board)."""
     names = [n for n in get_settings()["printers"].split("\n") if n.strip()]
-    conn = get_db()
-    busy = [dict(r) for r in conn.execute("""
+    with DB.connect() as conn:
+        busy = [dict(r) for r in conn.execute("""
         SELECT r.printer, r.job_id, r.roll_number, r.quantity, r.status, r.started_by, r.started_at,
                j.customer, j.job_ticket, j.job_number, j.qty_db, j.upc,
                (SELECT COALESCE(SUM(x.quantity), 0) FROM job_rolls x
@@ -1191,7 +1229,6 @@ def api_printers():
         WHERE r.printer IS NOT NULL AND r.printer != '' AND r.status IN ('running', 'paused')
           AND j.archived_at IS NULL
         ORDER BY r.started_at""")]
-    conn.close()
     known = {n.lower() for n in names}
     extra = sorted({b["printer"] for b in busy if b["printer"].lower() not in known})
     return jsonify({"printers": names + extra, "busy": busy})
@@ -1232,55 +1269,55 @@ def _set_rolls(job_id, nums, status, who, note=""):
     saved on the roll."""
     if status not in ("pending", "running", "paused", "complete"):
         return err("Unknown roll status")
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    ensure_rolls(conn, job)
-    ts, changed, words = now_str(), [], []
-    for n in nums:
-        row = conn.execute("SELECT status FROM job_rolls WHERE job_id=? AND roll_number=?", (job_id, n)).fetchone()
-        if not row or row["status"] == status:
-            continue
-        before = row["status"]
-        if status == "complete":
-            conn.execute("""UPDATE job_rolls SET status='complete', completed_at=?, completed_by=?,
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        ensure_rolls(conn, job)
+        ts, changed, words = now_str(), [], []
+        for n in nums:
+            row = conn.execute("SELECT status FROM job_rolls WHERE job_id=? AND roll_number=?", (job_id, n)).fetchone()
+            if not row or row["status"] == status:
+                continue
+            before = row["status"]
+            if status == "complete":
+                conn.execute("""UPDATE job_rolls SET status='complete', completed_at=?, completed_by=?,
                 started_at=COALESCE(started_at, ?), started_by=COALESCE(started_by, ?), paused_at=NULL, paused_by=NULL
                 WHERE job_id=? AND roll_number=?""", (ts, who, ts, who, job_id, n))
-            words.append("done")
-        elif status == "running":
-            # Start, resume after a pause, or reopen a finished roll.
-            conn.execute("""UPDATE job_rolls SET status='running',
+                words.append("done")
+            elif status == "running":
+                # Start, resume after a pause, or reopen a finished roll.
+                conn.execute("""UPDATE job_rolls SET status='running',
                 started_at=CASE WHEN status='paused' THEN started_at ELSE ? END,
                 started_by=CASE WHEN status='paused' THEN started_by ELSE ? END,
                 paused_at=NULL, paused_by=NULL, completed_at=NULL, completed_by=NULL
                 WHERE job_id=? AND roll_number=?""", (ts, who, job_id, n))
-            words.append({"paused": "left in progress", "complete": "reopened"}.get(before, "left in progress"))
-        elif status == "paused":
-            conn.execute("""UPDATE job_rolls SET status='paused', paused_at=?, paused_by=?,
+                words.append({"paused": "left in progress", "complete": "reopened"}.get(before, "left in progress"))
+            elif status == "paused":
+                conn.execute("""UPDATE job_rolls SET status='paused', paused_at=?, paused_by=?,
                 started_at=COALESCE(started_at, ?), started_by=COALESCE(started_by, ?), completed_at=NULL, completed_by=NULL
                 WHERE job_id=? AND roll_number=?""", (ts, who, ts, who, job_id, n))
-            words.append("paused")
-        else:
-            conn.execute("""UPDATE job_rolls SET status='pending', started_at=NULL, started_by=NULL,
+                words.append("paused")
+            else:
+                conn.execute("""UPDATE job_rolls SET status='pending', started_at=NULL, started_by=NULL,
                 paused_at=NULL, paused_by=NULL, completed_at=NULL, completed_by=NULL, printer=NULL
                 WHERE job_id=? AND roll_number=?""", (job_id, n))
-            words.append("reset to not started")
-        changed.append(n)
-    if changed:
-        if status in ("running", "paused", "complete") and job["status"] == "Pending":
-            conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
-        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
-        if note and len(changed) == 1:
-            conn.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
-                         " VALUES (?,?,?,?,0,?)", (job_id, changed[0], who, note, ts))
-        word = words[0] if len(set(words)) == 1 else {"complete": "done", "running": "started",
-                                                      "paused": "paused", "pending": "reset"}[status]
-        label = "roll" if len(changed) == 1 else "rolls"
-        kind = {"complete": "roll", "running": "roll_start", "paused": "roll_pause", "pending": "roll_undo"}[status]
-        log_activity(conn, kind, job_id, f"{job_label(job)}: {label} {_ranges(changed)} {word}"
-                     + (f" — {note[:80]}" if note else "") + _roll_progress(conn, job_id), who)
-    conn.commit(); conn.close()
+                words.append("reset to not started")
+            changed.append(n)
+        if changed:
+            if status in ("running", "paused", "complete") and job["status"] == "Pending":
+                conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+            conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
+            if note and len(changed) == 1:
+                conn.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
+                             " VALUES (?,?,?,?,0,?)", (job_id, changed[0], who, note, ts))
+            word = words[0] if len(set(words)) == 1 else {"complete": "done", "running": "started",
+                                                          "paused": "paused", "pending": "reset"}[status]
+            label = "roll" if len(changed) == 1 else "rolls"
+            kind = {"complete": "roll", "running": "roll_start", "paused": "roll_pause", "pending": "roll_undo"}[status]
+            log_activity(conn, kind, job_id, f"{job_label(job)}: {label} {_ranges(changed)} {word}"
+                         + (f" — {note[:80]}" if note else "") + _roll_progress(conn, job_id), who)
+        conn.commit()
     return jsonify({"success": True, "changed": changed})
 
 
@@ -1298,22 +1335,22 @@ def api_rolls_done_through(job_id):
         upto = int(data.get("roll_number"))
     except (TypeError, ValueError):
         return err("Enter a roll number")
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    ensure_rolls(conn, job)
-    who = (data.get("operator") or "").strip()[:40] or actor()
-    cur = conn.execute("""UPDATE job_rolls SET status='complete', completed_at=?, completed_by=?
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        ensure_rolls(conn, job)
+        who = (data.get("operator") or "").strip()[:40] or actor()
+        cur = conn.execute("""UPDATE job_rolls SET status='complete', completed_at=?, completed_by=?
                           WHERE job_id=? AND roll_number<=? AND status='pending'""",
-                       (now_str(), who, job_id, upto))
-    if cur.rowcount:
-        if job["status"] == "Pending":
-            conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
-        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
-        log_activity(conn, "roll", job_id, f"{job_label(job)}: {cur.rowcount} rolls done through roll {upto}"
-                     + _roll_progress(conn, job_id), who)
-    conn.commit(); conn.close()
+                           (now_str(), who, job_id, upto))
+        if cur.rowcount:
+            if job["status"] == "Pending":
+                conn.execute("UPDATE jobs SET status='In Progress' WHERE id=?", (job_id,))
+            conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
+            log_activity(conn, "roll", job_id, f"{job_label(job)}: {cur.rowcount} rolls done through roll {upto}"
+                         + _roll_progress(conn, job_id), who)
+        conn.commit()
     return jsonify({"success": True, "marked": cur.rowcount})
 
 
@@ -1331,36 +1368,36 @@ def api_note_add(job_id):
         return err("Write a note first")
     roll = data.get("roll_number") or None
     important = 1 if data.get("important") else 0
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    who = (data.get("author") or "").strip()[:40] or actor()
-    conn.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
-                 " VALUES (?,?,?,?,?,?)", (job_id, roll, who, body[:2000], important, now_str()))
-    short = body if len(body) <= 90 else body[:87] + "…"
-    log_activity(conn, "note_important" if important else "note", job_id,
-                 f"{job_label(job)}{f' roll {roll}' if roll else ''}: {short}", who)
-    conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
-    conn.commit()
-    notes = _notes(conn, job_id); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        who = (data.get("author") or "").strip()[:40] or actor()
+        conn.execute("INSERT INTO job_notes (job_id, roll_number, author, body, important, created_at)"
+                     " VALUES (?,?,?,?,?,?)", (job_id, roll, who, body[:2000], important, now_str()))
+        short = body if len(body) <= 90 else body[:87] + "…"
+        log_activity(conn, "note_important" if important else "note", job_id,
+                     f"{job_label(job)}{f' roll {roll}' if roll else ''}: {short}", who)
+        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
+        conn.commit()
+        notes = _notes(conn, job_id)
     return jsonify({"success": True, "notes": notes})
 
 
 @app.route("/api/notes/<int:note_id>", methods=["PATCH", "DELETE"])
 def api_note_change(note_id):
-    conn = get_db()
-    note = conn.execute("SELECT * FROM job_notes WHERE id=?", (note_id,)).fetchone()
-    if not note:
-        conn.close(); return err("Note not found", 404)
-    if request.method == "DELETE":
-        conn.execute("DELETE FROM job_notes WHERE id=?", (note_id,))
-    else:
-        imp = 1 if (request.get_json(silent=True) or {}).get("important") else 0
-        conn.execute("UPDATE job_notes SET important=? WHERE id=?", (imp, note_id))
-    conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), note["job_id"]))
-    conn.commit()
-    notes = _notes(conn, note["job_id"]); conn.close()
+    with DB.connect() as conn:
+        note = conn.execute("SELECT * FROM job_notes WHERE id=?", (note_id,)).fetchone()
+        if not note:
+            return err("Note not found", 404)
+        if request.method == "DELETE":
+            conn.execute("DELETE FROM job_notes WHERE id=?", (note_id,))
+        else:
+            imp = 1 if (request.get_json(silent=True) or {}).get("important") else 0
+            conn.execute("UPDATE job_notes SET important=? WHERE id=?", (imp, note_id))
+        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), note["job_id"]))
+        conn.commit()
+        notes = _notes(conn, note["job_id"])
     return jsonify({"success": True, "notes": notes})
 
 
@@ -1368,8 +1405,8 @@ def api_note_change(note_id):
 @app.route("/api/floor")
 def api_floor():
     """Open jobs that have rolls, with progress, next roll and note counts."""
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(f"""
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(f"""
         SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.due_date,
                j.label_size, j.inlay_type, j.upc, j.created_at, j.notes, {ROLL_SUMMARY},
                (SELECT MIN(roll_number) FROM job_rolls r WHERE r.job_id=j.id AND r.status='pending') AS next_roll,
@@ -1382,7 +1419,6 @@ def api_floor():
         FROM jobs j
         WHERE j.archived_at IS NULL AND j.status IN ('Pending','In Progress','On Hold')
           AND EXISTS (SELECT 1 FROM job_rolls r WHERE r.job_id=j.id)""")]
-    conn.close()
     order = {"In Progress": 0, "On Hold": 1, "Pending": 2}
     # In Progress / On Hold: most recently touched first. Pending: oldest first.
     running = sorted([r for r in rows if r["status"] != "Pending"],
@@ -1405,9 +1441,8 @@ def api_activity():
     if job_id:
         sql += " WHERE a.job_id=?"; params.append(int(job_id))
     sql += " ORDER BY a.id DESC LIMIT ?"; params.append(limit)
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(sql, params)]
-    conn.close()
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(sql, params)]
     return jsonify({"items": rows})
 
 
@@ -1500,33 +1535,31 @@ def api_rewind_jobs():
     order = ("j.updated_at DESC LIMIT 40" if view == "done" else
              "(j.priority_rank IS NULL), j.priority_rank, CASE j.status WHEN 'In Progress' THEN 0 "
              "WHEN 'Pending' THEN 1 ELSE 2 END, j.created_at DESC")
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(f"""SELECT {_REWIND_FIELDS},
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(f"""SELECT {_REWIND_FIELDS},
         (SELECT COUNT(*) FROM job_rolls r WHERE r.job_id=j.id) AS roll_total,
         (SELECT COUNT(*) FROM job_rolls r WHERE r.job_id=j.id AND r.status IN ('complete','verified')) AS roll_done,
         (SELECT COUNT(*) FROM job_rolls r WHERE r.job_id=j.id AND r.status IN ('running','paused')) AS roll_running,
         (SELECT COUNT(*) FROM job_notes n WHERE n.job_id=j.id AND n.important=1) AS important_count,
         (SELECT COUNT(*) FROM job_notes n WHERE n.job_id=j.id) AS note_count
         FROM jobs j WHERE j.archived_at IS NULL AND {where} ORDER BY {order}""")]
-    count = lambda w: conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE j.archived_at IS NULL AND {w}").fetchone()[0]
-    counts = {"running": count("j.status='In Progress'"), "open": count("j.status IN ('Pending','In Progress','On Hold')")}
-    conn.close()
+        count = lambda w: conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE j.archived_at IS NULL AND {w}").fetchone()[0]
+        counts = {"running": count("j.status='In Progress'"), "open": count("j.status IN ('Pending','In Progress','On Hold')")}
     return jsonify({"jobs": rows, "counts": counts, "open_count": counts["open"], "now": now_str()})
 
 
 @app.route("/api/rewind/jobs/<int:job_id>")
 def api_rewind_job(job_id):
     """One job with its roll data and notes. Light on purpose: no file listing."""
-    conn = get_db()
-    row = conn.execute(f"SELECT {_REWIND_FIELDS}, j.notes AS ticket_notes, j.archived_at, j.inlay_type "
-                       "FROM jobs j WHERE j.id=?", (job_id,)).fetchone()
-    if not row:
-        conn.close(); return err("Job not found", 404)
-    job = dict(row)
-    full = _load_job(conn, job_id)
-    rolls = ensure_rolls(conn, full)
-    notes = _notes(conn, job_id)
-    conn.close()
+    with DB.connect() as conn:
+        row = conn.execute(f"SELECT {_REWIND_FIELDS}, j.notes AS ticket_notes, j.archived_at, j.inlay_type "
+                           "FROM jobs j WHERE j.id=?", (job_id,)).fetchone()
+        if not row:
+            return err("Job not found", 404)
+        job = dict(row)
+        full = _load_job(conn, job_id)
+        rolls = ensure_rolls(conn, full)
+        notes = _notes(conn, job_id)
     keep = ("roll_number", "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
             "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by")
     return jsonify({"job": job, "rolls": [{k: r.get(k) for k in keep} for r in rolls], "notes": notes,
@@ -1607,22 +1640,19 @@ def _lookup(conn, raw, job_id=None):
 def api_rewind_lookup():
     data = request.get_json(silent=True) or {}
     jid = data.get("job_id")
-    conn = get_db()
-    try:
+    with DB.connect() as conn:
         return jsonify(_lookup(conn, str(data.get("raw") or ""), int(jid) if str(jid or "").isdigit() else None))
-    finally:
-        conn.close()
 
 
 @app.route("/jobs/<int:job_id>/roll-sheet")
 def roll_sheet(job_id):
     """The QC / roll tracking sheet, same layout as the file in the job folder.
     ?print=1 opens the print dialog."""
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); abort(404)
-    rolls = ensure_rolls(conn, job); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            abort(404)
+        rolls = ensure_rolls(conn, job)
     html, _ = qc_html(job, rolls, auto_print=request.args.get("print") == "1")
     return Response(html, mimetype="text/html")
 
@@ -1630,15 +1660,12 @@ def roll_sheet(job_id):
 def regenerate_sheets(job_id) -> list:
     """Rewrite the checklist and QC sheet from the job as it is now, additions included.
     Returns a list of error messages (empty when both were written)."""
-    conn = get_db()
-    try:
+    with DB.connect() as conn:
         job = _load_job(conn, job_id)
         rolls = ensure_rolls(conn, job)
         job["po_clean"] = clean_po(job["po_number"])
         job["additions"] = job_additions(conn, job_id)
         job["roll_count"] = len(rolls)
-    finally:
-        conn.close()
     out = [generate_checklist_html(job["folder_path"], job)]
     if rolls:
         out.append(generate_qc_sheet(job["folder_path"], job, rolls))
@@ -1649,11 +1676,11 @@ def regenerate_sheets(job_id) -> list:
 def api_regenerate(job_id):
     """Rewrite the checklist and QC sheet from current job data. Never touches
     serials or the encoding database files."""
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job:
-        conn.close(); return err("Job not found", 404)
-    rolls = ensure_rolls(conn, job); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            return err("Job not found", 404)
+        rolls = ensure_rolls(conn, job)
     folder = job["folder_path"]
     if not folder or not os.path.isdir(folder):
         return err("The job folder isn't reachable")
@@ -1676,8 +1703,8 @@ def api_regenerate(job_id):
 @app.route("/api/jobs/<int:job_id>/template", methods=["POST"])
 def api_job_template(job_id):
     tid = (request.get_json(silent=True) or {}).get("template_id")
-    conn = get_db()
-    job = _load_job(conn, job_id); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
     if not job:
         return err("Job not found", 404)
     if not job["folder_path"] or not os.path.isdir(job["folder_path"]):
@@ -1685,18 +1712,18 @@ def api_job_template(job_id):
     res = copy_template(int(tid or 0), job["folder_path"], job["job_number"])
     if res.get("error"):
         return err(res["error"])
-    conn = get_db()
-    conn.execute("UPDATE jobs SET template_path=?, updated_at=? WHERE id=?",
-                 (res["dest_path"], now_str(), job_id))
-    log_activity(conn, "template", job_id, f"{job_label(job)}: template {os.path.basename(res['dest_path'])} copied into Print")
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE jobs SET template_path=?, updated_at=? WHERE id=?",
+                     (res["dest_path"], now_str(), job_id))
+        log_activity(conn, "template", job_id, f"{job_label(job)}: template {os.path.basename(res['dest_path'])} copied into Print")
+        conn.commit()
     return jsonify({"success": True, "dest_path": res["dest_path"]})
 
 
 @app.route("/api/jobs/<int:job_id>/file/<path:rel>")
 def api_job_file(job_id, rel):
-    conn = get_db()
-    job = _load_job(conn, job_id); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
     if not job or not job["folder_path"]:
         abort(404)
     root   = os.path.realpath(job["folder_path"])
@@ -1715,29 +1742,28 @@ def api_job_upload(job_id):
     files = request.files.getlist("files")
     if not files:
         return err("Choose at least one file")
-    conn = get_db()
-    job = _load_job(conn, job_id)
-    if not job or not job["folder_path"] or not os.path.isdir(job["folder_path"]):
-        conn.close(); return err("The job folder isn't reachable")
-    dest_dir = os.path.join(job["folder_path"], sub)
-    os.makedirs(dest_dir, exist_ok=True)
-    saved = []
-    for f in files:
-        name = _safe_name(os.path.basename(f.filename or "").strip())
-        if not name:
-            continue
-        stem, ext = os.path.splitext(name)
-        target, n = os.path.join(dest_dir, name), 2
-        while os.path.exists(target):          # never overwrite
-            target = os.path.join(dest_dir, f"{stem} ({n}){ext}"); n += 1
-        f.save(target)
-        saved.append(os.path.basename(target))
-    if saved:
-        log_activity(conn, "upload", job_id,
-                     f"{job_label(job)}: added {', '.join(saved[:3])}{' and more' if len(saved) > 3 else ''} to {sub or 'job folder'}")
-        conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
-        conn.commit()
-    conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job or not job["folder_path"] or not os.path.isdir(job["folder_path"]):
+            return err("The job folder isn't reachable")
+        dest_dir = os.path.join(job["folder_path"], sub)
+        os.makedirs(dest_dir, exist_ok=True)
+        saved = []
+        for f in files:
+            name = _safe_name(os.path.basename(f.filename or "").strip())
+            if not name:
+                continue
+            stem, ext = os.path.splitext(name)
+            target, n = os.path.join(dest_dir, name), 2
+            while os.path.exists(target):          # never overwrite
+                target = os.path.join(dest_dir, f"{stem} ({n}){ext}"); n += 1
+            f.save(target)
+            saved.append(os.path.basename(target))
+        if saved:
+            log_activity(conn, "upload", job_id,
+                         f"{job_label(job)}: added {', '.join(saved[:3])}{' and more' if len(saved) > 3 else ''} to {sub or 'job folder'}")
+            conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now_str(), job_id))
+            conn.commit()
     return jsonify({"success": True, "saved": saved})
 
 
@@ -1793,9 +1819,8 @@ def _helper_roots() -> list:
     existing job folder lives under (layout is root\\customer\\size\\job). This covers
     jobs saved with Z:\\ paths and jobs saved with \\\\server\\share paths."""
     roots = [Z_DRIVE_BASE]
-    conn = get_db()
-    paths = [r[0] for r in conn.execute("SELECT folder_path FROM jobs WHERE folder_path IS NOT NULL")]
-    conn.close()
+    with DB.connect() as conn:
+        paths = [r[0] for r in conn.execute("SELECT folder_path FROM jobs WHERE folder_path IS NOT NULL")]
     seen = {}
     for p in paths:
         parts = re.split(r"[\\/]", p)
@@ -1856,8 +1881,8 @@ def api_open_folder(job_id):
     else gets the path copied instead (the old per-PC agent is gone)."""
     if request.remote_addr not in ("127.0.0.1", "::1"):
         return err("Open folder only works on the host PC", 403)
-    conn = get_db()
-    job = _load_job(conn, job_id); conn.close()
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
     folder = job and job["folder_path"]
     if not folder or not os.path.isdir(folder):
         return err("Folder not found")
@@ -1887,10 +1912,9 @@ def api_upc(upc):
     h = SS.history(upc)
     rows = h["rows"]
     last = max(rows, key=lambda r: r["end"]) if rows else None
-    conn = get_db()
-    prev = conn.execute("""SELECT customer, label_size, inlay_type, lpr, title, part_number
+    with DB.connect() as conn:
+        prev = conn.execute("""SELECT customer, label_size, inlay_type, lpr, title, part_number
         FROM jobs WHERE upc=? ORDER BY id DESC LIMIT 1""", (upc,)).fetchone()
-    conn.close()
     return jsonify({"valid": True, "next_start": h["next_start"], "is_new": not rows,
                     "default_start": SS.DEFAULT_START, "allocations": h["jobs"],
                     "registry_ok": h["registry_ok"],
@@ -1914,11 +1938,10 @@ def _renumber_priority(conn):
 
 @app.route("/api/priority")
 def api_priority():
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(f"""SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title,
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(f"""SELECT j.id, j.job_number, j.job_ticket, j.customer, j.title,
         j.status, j.due_date, j.priority_rank, {ROLL_SUMMARY} FROM jobs j
         WHERE j.priority_rank IS NOT NULL AND j.archived_at IS NULL ORDER BY j.priority_rank""")]
-    conn.close()
     return jsonify({"jobs": rows})
 
 
@@ -1927,8 +1950,7 @@ def api_priority_change():
     """{action: add | remove | order, job_id, ids: [...]}"""
     data = request.get_json(silent=True) or {}
     action, jid = data.get("action"), data.get("job_id")
-    conn = get_db()
-    try:
+    with DB.connect() as conn:
         if action in ("add", "remove"):
             job = _load_job(conn, int(jid or 0))
             if not job:
@@ -1965,8 +1987,6 @@ def api_priority_change():
             return err("Unknown action")
         _bump_priority(conn)
         conn.commit()
-    finally:
-        conn.close()
     return api_priority()
 
 
@@ -1992,20 +2012,19 @@ def copy_template(tid, job_dir, job_number):
     """Copy a Master Template into the job's Print folder as '<JOB-####> - <name>.btw'.
     If the indexed path is stale, the file is looked up again in Master Templates.
     The copy is checked against the original before it counts."""
-    conn = get_db()
-    row = conn.execute("SELECT file_path FROM btw_templates WHERE id=?", (tid,)).fetchone()
-    conn.close()
+    with DB.connect() as conn:
+        row = conn.execute("SELECT file_path FROM btw_templates WHERE id=?", (tid,)).fetchone()
     if not row:
         return {"error": "Template not found"}
     src = row["file_path"]
     if not os.path.isfile(src):
         name = re.split(r"[\\/]", src)[-1]
-        found = _find_in_master(name)
+        found = _find_in_master(name)          # walks Master Templates: no connection held open meanwhile
         if not found:
             return {"error": f"Template not found in Master Templates: {name}"}
-        conn = get_db()
-        conn.execute("UPDATE btw_templates SET file_path=?, active=1, updated_at=? WHERE id=?", (found, now_str(), tid))
-        conn.commit(); conn.close()
+        with DB.connect() as conn:
+            conn.execute("UPDATE btw_templates SET file_path=?, active=1, updated_at=? WHERE id=?", (found, now_str(), tid))
+            conn.commit()
         src = found
     dest = os.path.join(job_dir, "Print", f"{job_number} - {os.path.basename(src)}")
     try:
@@ -2063,19 +2082,18 @@ def _upc_forms(upc):
 
 def match_templates(upc="", customer="", label_size="", part_number="", limit=8):
     upc, part_number = (upc or "").strip(), (part_number or "").strip()
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute("SELECT id, name, file_path FROM btw_templates WHERE active=1")]
-    used_upc, used_cust = {}, {}
-    if upc or customer:
-        for r in conn.execute("""SELECT upc, customer, template_path FROM jobs
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute("SELECT id, name, file_path FROM btw_templates WHERE active=1")]
+        used_upc, used_cust = {}, {}
+        if upc or customer:
+            for r in conn.execute("""SELECT upc, customer, template_path FROM jobs
                                  WHERE template_path IS NOT NULL ORDER BY id DESC"""):
-            base = re.split(r"[\\/]", r["template_path"])[-1]
-            base = base.split(" - ", 1)[1] if base.startswith("JOB-") and " - " in base else base
-            if upc and r["upc"] == upc:
-                used_upc[base.lower()] = used_upc.get(base.lower(), 0) + 1
-            if customer and _norm(r["customer"]) == _norm(customer):
-                used_cust[base.lower()] = used_cust.get(base.lower(), 0) + 1
-    conn.close()
+                base = re.split(r"[\\/]", r["template_path"])[-1]
+                base = base.split(" - ", 1)[1] if base.startswith("JOB-") and " - " in base else base
+                if upc and r["upc"] == upc:
+                    used_upc[base.lower()] = used_upc.get(base.lower(), 0) + 1
+                if customer and _norm(r["customer"]) == _norm(customer):
+                    used_cust[base.lower()] = used_cust.get(base.lower(), 0) + 1
 
     forms = _upc_forms(upc) if re.fullmatch(r"\d{12}", upc) else {"exact": [], "variant": []}
     c_norm, c_tok = _norm(customer), _tokens(customer)
@@ -2242,9 +2260,8 @@ def _unique_path(path):
 
 
 def _tpl_get(tid):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM btw_templates WHERE id=? AND active=1", (tid,)).fetchone()
-    conn.close()
+    with DB.connect() as conn:
+        row = conn.execute("SELECT * FROM btw_templates WHERE id=? AND active=1", (tid,)).fetchone()
     return dict(row) if row else None
 
 
@@ -2289,11 +2306,10 @@ def api_templates():
         if w:
             sql += " AND (name || ' ' || file_path) LIKE ?"; params.append(f"%{w}%")
     root = _tpl_root()
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(sql, params)]
-    total = conn.execute("SELECT COUNT(*) FROM btw_templates WHERE active=1").fetchone()[0]
-    used = _tpl_used_counts(conn)
-    conn.close()
+    with DB.connect() as conn:
+        rows = [dict(r) for r in conn.execute(sql, params)]
+        total = conn.execute("SELECT COUNT(*) FROM btw_templates WHERE active=1").fetchone()[0]
+        used = _tpl_used_counts(conn)
     thumbs = _thumb_ids()
     items = [_tpl_public(r, root, thumbs, used) for r in rows]
     if folder is not None:
@@ -2324,9 +2340,8 @@ def api_templates():
 @app.route("/api/templates/folders")
 def api_template_folders():
     root = _tpl_root()
-    conn = get_db()
-    paths = [r["file_path"] for r in conn.execute("SELECT file_path FROM btw_templates WHERE active=1")]
-    conn.close()
+    with DB.connect() as conn:
+        paths = [r["file_path"] for r in conn.execute("SELECT file_path FROM btw_templates WHERE active=1")]
     direct = {}
     for p in paths:
         d = _tpl_rel_dir(root, p)
@@ -2364,14 +2379,13 @@ def api_template_detail(tid):
     if not row:
         return err("Template not found", 404)
     root = _tpl_root()
-    conn = get_db()
-    used = _tpl_used_counts(conn)
-    base = os.path.basename(row["file_path"])
-    jobs = [dict(r) for r in conn.execute(
-        """SELECT id, job_number, job_ticket, customer, status FROM jobs
+    with DB.connect() as conn:
+        used = _tpl_used_counts(conn)
+        base = os.path.basename(row["file_path"])
+        jobs = [dict(r) for r in conn.execute(
+            """SELECT id, job_number, job_ticket, customer, status FROM jobs
            WHERE template_path IS NOT NULL AND lower(template_path) LIKE ? ORDER BY id DESC LIMIT 8""",
-        (f"%- {base.lower()}",))]
-    conn.close()
+            (f"%- {base.lower()}",))]
     t = _tpl_public(row, root, _thumb_ids(), used)
     t["missing"] = not os.path.isfile(row["file_path"])
     t["jobs"] = jobs
@@ -2449,10 +2463,10 @@ def api_template_rename(tid):
             os.rename(src, os.path.join(root, "_Previous versions", stem + v["file"][len(old_stem):]))
     except OSError as e:
         return err(str(e))
-    conn = get_db()
-    conn.execute("UPDATE btw_templates SET name=?, file_path=?, updated_at=? WHERE id=?", (stem, new, now_str(), tid))
-    _tpl_log(conn, f'Template renamed: "{os.path.basename(old)}" to "{stem}.btw"')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE btw_templates SET name=?, file_path=?, updated_at=? WHERE id=?", (stem, new, now_str(), tid))
+        _tpl_log(conn, f'Template renamed: "{os.path.basename(old)}" to "{stem}.btw"')
+        conn.commit()
     return jsonify({"success": True})
 
 
@@ -2481,10 +2495,10 @@ def api_template_move(tid):
         shutil.move(old, new)
     except OSError as e:
         return err(str(e))
-    conn = get_db()
-    conn.execute("UPDATE btw_templates SET file_path=?, updated_at=? WHERE id=?", (new, now_str(), tid))
-    _tpl_log(conn, f'Template "{os.path.basename(old)}" moved to {"/".join(parts) or "the top level"}')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE btw_templates SET file_path=?, updated_at=? WHERE id=?", (new, now_str(), tid))
+        _tpl_log(conn, f'Template "{os.path.basename(old)}" moved to {"/".join(parts) or "the top level"}')
+        conn.commit()
     return jsonify({"success": True})
 
 
@@ -2504,10 +2518,10 @@ def api_template_duplicate(tid):
         shutil.copy2(row["file_path"], new)
     except OSError as e:
         return err(str(e))
-    conn = get_db()
-    nid = _tpl_register(conn, new)
-    _tpl_log(conn, f'Template "{os.path.basename(row["file_path"])}" duplicated as "{stem}.btw"')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        nid = _tpl_register(conn, new)
+        _tpl_log(conn, f'Template "{os.path.basename(row["file_path"])}" duplicated as "{stem}.btw"')
+        conn.commit()
     return jsonify({"success": True, "id": nid})
 
 
@@ -2532,11 +2546,11 @@ def api_template_replace(tid):
     bad = _tpl_save_upload(f, path)
     if bad:
         return err(bad)
-    conn = get_db()
-    conn.execute("UPDATE btw_templates SET updated_at=? WHERE id=?", (now_str(), tid))
-    _tpl_stat_update(conn, path)
-    _tpl_log(conn, f'Template "{os.path.basename(path)}" replaced with a new file (the old one is kept in _Previous versions)')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE btw_templates SET updated_at=? WHERE id=?", (now_str(), tid))
+        _tpl_stat_update(conn, path)
+        _tpl_log(conn, f'Template "{os.path.basename(path)}" replaced with a new file (the old one is kept in _Previous versions)')
+        conn.commit()
     return jsonify({"success": True})
 
 
@@ -2553,10 +2567,10 @@ def api_template_remove(tid):
             shutil.move(path, _unique_path(os.path.join(root, "_Removed", os.path.basename(path))))
         except OSError as e:
             return err(str(e))
-    conn = get_db()
-    conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (now_str(), tid))
-    _tpl_log(conn, f'Template "{os.path.basename(path)}" removed (the file is in _Removed)')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (now_str(), tid))
+        _tpl_log(conn, f'Template "{os.path.basename(path)}" removed (the file is in _Removed)')
+        conn.commit()
     return jsonify({"success": True})
 
 
@@ -2622,10 +2636,10 @@ def api_template_upload():
     bad = _tpl_save_upload(f, dest)
     if bad:
         return err(bad)
-    conn = get_db()
-    nid = _tpl_register(conn, dest)
-    _tpl_log(conn, f'Template "{stem}.btw" added to {"/".join(parts) or "the top level"}')
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        nid = _tpl_register(conn, dest)
+        _tpl_log(conn, f'Template "{stem}.btw" added to {"/".join(parts) or "the top level"}')
+        conn.commit()
     return jsonify({"success": True, "id": nid})
 
 
@@ -2647,44 +2661,44 @@ def sync_templates() -> dict:
         found += [os.path.join(dirpath, f) for f in files
                   if f.lower().endswith(".btw") and not f.startswith("~")]
     leaf = lambda p: re.split(r"[\\/]", p)[-1].lower()
-    conn = get_db()
-    known = {r["file_path"]: (r["id"], r["active"]) for r in
-             conn.execute("SELECT id, file_path, active FROM btw_templates")}
-    ts, added, repointed = now_str(), 0, 0
-    found_set = set(found)
-    new_paths = [p for p in found if p not in known]
-    missing = {p: tid for p, (tid, act) in known.items() if act and p not in found_set}
+    with DB.connect() as conn:
+        known = {r["file_path"]: (r["id"], r["active"]) for r in
+                 conn.execute("SELECT id, file_path, active FROM btw_templates")}
+        ts, added, repointed = now_str(), 0, 0
+        found_set = set(found)
+        new_paths = [p for p in found if p not in known]
+        missing = {p: tid for p, (tid, act) in known.items() if act and p not in found_set}
 
-    by_old, by_new = {}, {}
-    for p in missing: by_old.setdefault(leaf(p), []).append(p)
-    for p in new_paths: by_new.setdefault(leaf(p), []).append(p)
-    for name, olds in by_old.items():
-        news = by_new.get(name, [])
-        if len(olds) == 1 and len(news) == 1:
-            conn.execute("UPDATE btw_templates SET file_path=?, active=1, updated_at=? WHERE id=?",
-                         (news[0], ts, missing[olds[0]]))
-            repointed += 1
-            new_paths.remove(news[0]); del missing[olds[0]]
+        by_old, by_new = {}, {}
+        for p in missing: by_old.setdefault(leaf(p), []).append(p)
+        for p in new_paths: by_new.setdefault(leaf(p), []).append(p)
+        for name, olds in by_old.items():
+            news = by_new.get(name, [])
+            if len(olds) == 1 and len(news) == 1:
+                conn.execute("UPDATE btw_templates SET file_path=?, active=1, updated_at=? WHERE id=?",
+                             (news[0], ts, missing[olds[0]]))
+                repointed += 1
+                new_paths.remove(news[0]); del missing[olds[0]]
 
-    for path in new_paths:
-        conn.execute("INSERT INTO btw_templates (name, file_path, active, created_at, updated_at)"
-                     " VALUES (?, ?, 1, ?, ?)", (os.path.splitext(os.path.basename(path))[0], path, ts, ts))
-        added += 1
-    for path in found:                                   # bring back entries that reappeared
-        if path in known and not known[path][1]:
-            conn.execute("UPDATE btw_templates SET active=1, updated_at=? WHERE id=?", (ts, known[path][0]))
+        for path in new_paths:
+            conn.execute("INSERT INTO btw_templates (name, file_path, active, created_at, updated_at)"
+                         " VALUES (?, ?, 1, ?, ?)", (os.path.splitext(os.path.basename(path))[0], path, ts, ts))
             added += 1
+        for path in found:                                   # bring back entries that reappeared
+            if path in known and not known[path][1]:
+                conn.execute("UPDATE btw_templates SET active=1, updated_at=? WHERE id=?", (ts, known[path][0]))
+                added += 1
 
-    active_n = sum(1 for _, a in known.values() if a)
-    # If most known templates still look "missing", the folder is probably the wrong one
-    # or temporarily unreachable. Hide nothing in that case.
-    skipped = bool(missing) and len(missing) > active_n / 2
-    if not skipped:
-        for tid in missing.values():
-            conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (ts, tid))
-    for path in found:                                   # size and date for sorting and the detail panel
-        _tpl_stat_update(conn, path)
-    conn.commit(); conn.close()
+        active_n = sum(1 for _, a in known.values() if a)
+        # If most known templates still look "missing", the folder is probably the wrong one
+        # or temporarily unreachable. Hide nothing in that case.
+        skipped = bool(missing) and len(missing) > active_n / 2
+        if not skipped:
+            for tid in missing.values():
+                conn.execute("UPDATE btw_templates SET active=0, updated_at=? WHERE id=?", (ts, tid))
+        for path in found:                                   # size and date for sorting and the detail panel
+            _tpl_stat_update(conn, path)
+        conn.commit()
     return {"success": True, "found": len(found), "added": added, "repointed": repointed,
             "hidden": 0 if skipped else len(missing),
             "warning": (f"{len(missing)} registered templates weren't found under {root}. Nothing was "
@@ -2734,9 +2748,9 @@ def api_thumb_put(tid):
     path = os.path.join(THUMBNAIL_DIR, f"{tid}{ext}")
     with open(path, "wb") as fh:
         fh.write(data)
-    conn = get_db()
-    conn.execute("UPDATE btw_templates SET thumbnail_path=?, updated_at=? WHERE id=?", (path, now_str(), tid))
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        conn.execute("UPDATE btw_templates SET thumbnail_path=?, updated_at=? WHERE id=?", (path, now_str(), tid))
+        conn.commit()
     return jsonify({"success": True})
 
 
@@ -2749,20 +2763,20 @@ def api_settings_save():
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
                "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
                "auto_archive_hours"}
-    conn = get_db()
-    for k, v in data.items():
-        if k in allowed:
-            if k == "backup_auto":
-                v = "1" if v in (True, "1", 1, "true") else "0"
-            if k == "printers":
-                v = clean_printers(v)
-            if k == "auto_archive_hours":
-                try:
-                    v = max(0, min(8760, int(float(v))))
-                except (TypeError, ValueError):
-                    v = 32
-            conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, str(v).strip()))
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        for k, v in data.items():
+            if k in allowed:
+                if k == "backup_auto":
+                    v = "1" if v in (True, "1", 1, "true") else "0"
+                if k == "printers":
+                    v = clean_printers(v)
+                if k == "auto_archive_hours":
+                    try:
+                        v = max(0, min(8760, int(float(v))))
+                    except (TypeError, ValueError):
+                        v = 32
+                conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", (k, str(v).strip()))
+        conn.commit()
     SS.set_journal_dir(get_settings()["backup_dir"])
     start_backup_scheduler()
     return jsonify({"success": True, "settings": get_settings()})
@@ -2966,13 +2980,12 @@ def api_backup_verify():
 def api_data_status():
     """Where each kind of data lives, whether it can be reached, and whether it is backed up."""
     s = get_settings(); bdir = backup_dir_effective(s)
-    conn = get_db()
-    n = lambda sql: conn.execute(sql).fetchone()[0]
-    counts = {"jobs": n("SELECT COUNT(*) FROM jobs"), "rolls": n("SELECT COUNT(*) FROM job_rolls"),
-              "notes": n("SELECT COUNT(*) FROM job_notes"), "activity": n("SELECT COUNT(*) FROM activity"),
-              "serial_ranges": n("SELECT COUNT(*) FROM serial_allocations"),
-              "templates": n("SELECT COUNT(*) FROM btw_templates WHERE active=1")}
-    conn.close()
+    with DB.connect() as conn:
+        n = lambda sql: conn.execute(sql).fetchone()[0]
+        counts = {"jobs": n("SELECT COUNT(*) FROM jobs"), "rolls": n("SELECT COUNT(*) FROM job_rolls"),
+                  "notes": n("SELECT COUNT(*) FROM job_notes"), "activity": n("SELECT COUNT(*) FROM activity"),
+                  "serial_ranges": n("SELECT COUNT(*) FROM serial_allocations"),
+                  "templates": n("SELECT COUNT(*) FROM btw_templates WHERE active=1")}
     h = SS.health()
     try:
         reg_files = sum(1 for f in os.listdir(SERIAL_REGISTRY_DIR) if f.endswith(".txt"))
@@ -3115,13 +3128,13 @@ def serial_startup():
 def _log_conflicts(conflicts):
     if not conflicts:
         return
-    conn = get_db()
-    for c in conflicts:
-        log_activity(conn, "serial_conflict", None,
-                     f"SERIAL CONFLICT: {c['job_number']} took {c['start']:,}–{c['end']:,} for UPC {c['upc']} while "
-                     f"the registry was offline, and {', '.join(c['clashes_with'])} used an overlapping range. "
-                     "Check before encoding.", "System")
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        for c in conflicts:
+            log_activity(conn, "serial_conflict", None,
+                         f"SERIAL CONFLICT: {c['job_number']} took {c['start']:,}–{c['end']:,} for UPC {c['upc']} while "
+                         f"the registry was offline, and {', '.join(c['clashes_with'])} used an overlapping range. "
+                         "Check before encoding.", "System")
+        conn.commit()
 
 
 def auto_archive_completed():
@@ -3131,19 +3144,19 @@ def auto_archive_completed():
     if hours <= 0:
         return 0
     cutoff = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_db()
-    jobs = [dict(r) for r in conn.execute(
-        """SELECT * FROM jobs WHERE status='Complete' AND archived_at IS NULL
+    with DB.connect() as conn:
+        jobs = [dict(r) for r in conn.execute(
+            """SELECT * FROM jobs WHERE status='Complete' AND archived_at IS NULL
            AND completed_at IS NOT NULL AND completed_at <= ?""", (cutoff,))]
-    ts, ranked = now_str(), False
-    for job in jobs:
-        conn.execute("UPDATE jobs SET archived_at=?, updated_at=?, priority_rank=NULL WHERE id=?", (ts, ts, job["id"]))
-        ranked = ranked or job["priority_rank"] is not None
-        log_activity(conn, "archived", job["id"],
-                     f"{job_label(job)} archived automatically ({hours} h after it was completed)", "System")
-    if ranked:
-        _renumber_priority(conn); _bump_priority(conn)
-    conn.commit(); conn.close()
+        ts, ranked = now_str(), False
+        for job in jobs:
+            conn.execute("UPDATE jobs SET archived_at=?, updated_at=?, priority_rank=NULL WHERE id=?", (ts, ts, job["id"]))
+            ranked = ranked or job["priority_rank"] is not None
+            log_activity(conn, "archived", job["id"],
+                         f"{job_label(job)} archived automatically ({hours} h after it was completed)", "System")
+        if ranked:
+            _renumber_priority(conn); _bump_priority(conn)
+        conn.commit()
     return len(jobs)
 
 
@@ -3215,7 +3228,8 @@ def api_serials_change(upc):
     except ValueError as e:
         return err(str(e))
     if r.get("changed"):
-        conn = get_db(); log_activity(conn, "serials", None, msg, who); conn.commit(); conn.close()
+        with DB.connect() as conn:
+            log_activity(conn, "serials", None, msg, who); conn.commit()
     return jsonify({"success": True, **r, "history": SS.history(upc)})
 
 
@@ -3232,10 +3246,10 @@ def api_serials_resolve(row_id):
         return err(str(e), 423)
     except ValueError as e:
         return err(str(e))
-    conn = get_db()
-    log_activity(conn, "serials", None, f"Serial conflict for {row['job_number']} (UPC {row['upc']}, "
-                 f"{row['start']:,}–{row['end']:,}) reviewed: {note}. The range stays recorded.", who)
-    conn.commit(); conn.close()
+    with DB.connect() as conn:
+        log_activity(conn, "serials", None, f"Serial conflict for {row['job_number']} (UPC {row['upc']}, "
+                     f"{row['start']:,}–{row['end']:,}) reviewed: {note}. The range stays recorded.", who)
+        conn.commit()
     return jsonify({"success": True, "health": SS.health()})
 
 
@@ -3303,8 +3317,8 @@ def tool_database():
     tmp = tempfile.mkdtemp()
     try:
         if mode == "job":
-            conn = get_db()
-            job = _load_job(conn, int(data.get("job_id") or 0)); conn.close()
+            with DB.connect() as conn:
+                job = _load_job(conn, int(data.get("job_id") or 0))
             if not job or not job["upc"] or not job["start_serial"]:
                 return err("That job has no serial range (special jobs have no encoding database)")
             upc, start = job["upc"], job["start_serial"]
@@ -3333,10 +3347,10 @@ def tool_database():
             except ValueError as e:
                 return err(str(e))
             start = a["start"]
-            conn = get_db()
-            log_activity(conn, "serials", None, f"Tools: {total:,} serials {start:,}–{a['end']:,} for UPC {upc} "
-                                                 f"recorded as {label} — {reason}", who)
-            conn.commit(); conn.close()
+            with DB.connect() as conn:
+                log_activity(conn, "serials", None, f"Tools: {total:,} serials {start:,}–{a['end']:,} for UPC {upc} "
+                                                     f"recorded as {label} — {reason}", who)
+                conn.commit()
         info = generate_db_files(tmp, upc, start, total, qty_db)
         files = info["files"]
         if len(files) == 1:
@@ -3383,7 +3397,21 @@ def _lan_ips():
 
 if __name__ == "__main__":
     validate_and_prepare()
-    init_db()
+    if "--create-database" in sys.argv:           # new install, asked for on purpose (new_install.bat)
+        if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0:
+            print(f"  [STOP] There is already a file at {DB_PATH}")
+            print("         Nothing was changed. Start Job Manager with run.bat.")
+            raise SystemExit(1)
+        init_db(create=True)
+        print("  New, empty database created. Start Job Manager with run.bat.")
+        raise SystemExit(0)
+    try:
+        init_db()
+    except MIG.SchemaError as e:
+        print("-" * 64)
+        print(f"  [STOP] {e}")
+        print("=" * 64)
+        raise SystemExit(1)
     serial_startup()
     init_backup_state()
     start_backup_scheduler()

@@ -108,7 +108,7 @@ def main():
 
     config.validate_and_prepare()
     import app as A
-    A.init_db()
+    A.init_db(create=True)        # the import is how a new install gets its first data
 
     if not dry:
         bk = f"{config.DB_PATH}.before-import-{datetime.now():%Y%m%d-%H%M%S}"
@@ -216,6 +216,7 @@ def main():
         nc.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('job_number_floor', ?)", (str(floor),))
         A.log_activity(nc, "import", None, f"Imported from the old app: {j_added} jobs, "
                        f"{stats['copied'] + stats['merged']} serial registries, {t_added} templates", "Import")
+        A.repair_data(nc)             # imported jobs are in the old shape: completion dates, job type, roll trackers
         nc.commit()
         print(f"  Next new job number: JOB-{floor + 1:04d} or later")
     nc.close(); oc.close()

@@ -22,8 +22,9 @@ import sqlite3
 import threading
 from datetime import datetime
 
+import db as DB
 import serial_registry as R
-from config import DB_PATH, SERIAL_REGISTRY_DIR
+from config import SERIAL_REGISTRY_DIR
 
 DEFAULT_START = R.SERIAL_START_DEFAULT
 MAX_SERIAL = (1 << 38) - 1
@@ -38,13 +39,6 @@ class SerialsOffline(Exception):
     def __init__(self, msg, info):
         super().__init__(msg)
         self.info = info
-
-
-def _db():
-    c = sqlite3.connect(DB_PATH, timeout=15)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    return c
 
 
 def _now():
@@ -112,11 +106,10 @@ def registry_ok(force=False):
 def health():
     ok, msg = registry_ok()
     jp = journal_path()
-    conn = _db()
-    pending = conn.execute("SELECT COUNT(*) FROM serial_allocations WHERE registry_state=0").fetchone()[0]
-    conflicts = [dict(r) for r in conn.execute(
-        'SELECT id, upc, job_number, start, "end", qty, created_at FROM serial_allocations WHERE registry_state=-1')]
-    conn.close()
+    with DB.connect() as conn:
+        pending = conn.execute("SELECT COUNT(*) FROM serial_allocations WHERE registry_state=0").fetchone()[0]
+        conflicts = [dict(r) for r in conn.execute(
+            'SELECT id, upc, job_number, start, "end", qty, created_at FROM serial_allocations WHERE registry_state=-1')]
     return {"registry_ok": ok, "registry_message": msg, "registry_dir": SERIAL_REGISTRY_DIR,
             "journal_path": jp, "journal_ok": bool(jp) and os.path.isdir(_journal["dir"]),
             "pending": pending, "conflicts": conflicts}
@@ -208,7 +201,7 @@ def used_ranges(upc, conn=None, include_registry=True):
     """Every range any record says was used for this UPC: the registry file, the app database
     mirror, the journal and the jobs themselves. Duplicates across records are harmless."""
     own = conn is None
-    conn = conn or _db()
+    conn = conn or DB.open()
     try:
         rows = [{"job_number": r["job_number"], "start": r["start"], "end": r["end"]}
                 for r in conn.execute('SELECT job_number, start, "end" FROM serial_allocations WHERE upc=?', (upc,))]
@@ -236,7 +229,7 @@ def range_conflicts(upc, start, qty):
 def known_last_end(upc, conn=None):
     """Highest end in any record that can be read right now (None if none)."""
     own = conn is None
-    conn = conn or _db()
+    conn = conn or DB.open()
     try:
         ends = [_mirror_last_end(conn, upc), _journal_last_end(upc), _jobs_last_end(conn, upc)]
         if registry_ok()[0]:
@@ -299,7 +292,7 @@ def reserve(upc, job_number, qty, note="base", min_start=None, who=None, offline
         raise ValueError("Start serial must be 1 or more")
     with _lock:
         ok, msg = registry_ok(force=True)
-        conn = _db()
+        conn = DB.open()
         try:
             known = [e for e in (_mirror_last_end(conn, upc), _journal_last_end(upc), _jobs_last_end(conn, upc))
                      if e is not None]
@@ -363,7 +356,7 @@ def record_history(upc, last_used, note, who=None):
     with _lock:
         if not registry_ok(force=True)[0]:
             raise SerialsOffline("The serial registry can't be reached.", {})
-        conn = _db()
+        conn = DB.open()
         try:
             known = known_last_end(upc, conn)
             floor = (known if known is not None else DEFAULT_START - 1)
@@ -390,7 +383,7 @@ def registry_gaps():
     if not registry_ok()[0]:
         return []
     from generators import production_qty
-    conn = _db()
+    conn = DB.open()
     try:
         ends = {}
         for upc, st, q, ov in conn.execute("SELECT upc, start_serial, quantity, overage_pct FROM jobs "
@@ -414,7 +407,7 @@ def backfill_from_registry():
     by seed_serials / import_old). Returns number of lines added."""
     if not registry_ok(force=True)[0]:
         return 0
-    conn = _db()
+    conn = DB.open()
     added = 0
     try:
         for f in os.listdir(SERIAL_REGISTRY_DIR):
@@ -436,7 +429,7 @@ def repair_all():
     """Write confirmed database ranges back into registry files that lost them."""
     if not registry_ok(force=True)[0]:
         return 0
-    conn = _db()
+    conn = DB.open()
     try:
         upcs = [r[0] for r in conn.execute("SELECT DISTINCT upc FROM serial_allocations WHERE registry_state=1")]
         return sum(_repair_registry(conn, u) for u in upcs)
@@ -450,7 +443,7 @@ def sync_pending():
     if not registry_ok(force=True)[0]:
         return out
     with _lock:
-        conn = _db()
+        conn = DB.open()
         try:
             rows = [dict(r) for r in conn.execute(
                 'SELECT id, upc, job_number, start, "end", qty, note, created_at FROM serial_allocations '
@@ -480,7 +473,7 @@ def resolve_conflict(row_id, who, note):
     with _lock:
         if not registry_ok(force=True)[0]:
             raise SerialsOffline("The serial registry can't be reached.", {})
-        conn = _db()
+        conn = DB.open()
         try:
             row = conn.execute('SELECT * FROM serial_allocations WHERE id=? AND registry_state=-1', (row_id,)).fetchone()
             if not row:
@@ -500,10 +493,9 @@ def history(upc):
     """Every range for a UPC from the registry and the database, merged."""
     reg_ok = registry_ok()[0]
     reg = {(r["job_number"], r["start"]): r for r in (R.read_records(upc) if reg_ok else [])}
-    conn = _db()
-    mir = {(r["job_number"], r["start"]): dict(r) for r in conn.execute(
-        'SELECT * FROM serial_allocations WHERE upc=?', (upc,))}
-    conn.close()
+    with DB.connect() as conn:
+        mir = {(r["job_number"], r["start"]): dict(r) for r in conn.execute(
+            'SELECT * FROM serial_allocations WHERE upc=?', (upc,))}
     rows = []
     for k in set(reg) | set(mir):
         r, m = reg.get(k), mir.get(k)

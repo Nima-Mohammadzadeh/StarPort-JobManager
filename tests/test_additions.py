@@ -45,7 +45,7 @@ def test_serial_store_safety_nets_include_additions(jm):
     upc = res["job"]["upc"]
     s = res["job"]["start_serial"] + 5_000_000
     add_row(jm, res["job"]["id"], 1, 1000, s, s + 999, 4, 23)
-    c = jm.SS._db()
+    c = jm.db.open()
     assert jm.SS._jobs_last_end(c, upc) == s + 999
     assert {"job_number": res["job_number"], "start": s, "end": s + 999} in jm.SS._jobs_ranges(c, upc)
     c.close()
@@ -124,7 +124,7 @@ def test_addition_recorded_in_registry_mirror_journal(jm):
     out, code = add(jm, res["job"]["id"], 300)
     a = out["addition"]; upc = res["job"]["upc"]
     assert (a["serial_start"], a["serial_end"]) in [(r["start"], r["end"]) for r in jm.R.read_records(upc)]
-    c = jm.SS._db()
+    c = jm.db.open()
     mir = [(r["start"], r["end"], r["registry_state"]) for r in c.execute(
         'SELECT start, "end", registry_state FROM serial_allocations WHERE upc=?', (upc,))]
     c.close()

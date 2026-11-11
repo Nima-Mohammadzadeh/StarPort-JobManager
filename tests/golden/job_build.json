@@ -1,0 +1,7461 @@
+{
+ "add_cdo": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"C200_ADD1_Serials.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 3768677759,
+    "serial_start": 3768677685
+   },
+   "files": [
+    "C200_ADD1_Serials.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "CDO",
+    "data_sheet": "cdo_seq",
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "C200",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": 100,
+    "quantity": 120,
+    "start_serial": 3768677565,
+    "status": "Pending",
+    "template_path": null,
+    "title": "CDO tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "CDO C200: added 75 labels, serials 3,768,677,685–3,768,677,759, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"C200_ADD1_Serials.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 3768677759,
+     "serial_start": 3768677685
+    }
+   ],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_ADD1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base",
+     "<TS> | JOB-0001 | 3768677685 | 3768677759 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "E0A17566",
+     "epc_start": "E0A17535",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 3768677734,
+     "serial_start": 3768677685,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "E0A1757F",
+     "epc_start": "E0A17567",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 3768677759,
+     "serial_start": 3768677735,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    },
+    {
+     "created_by": "Lee",
+     "end": 3768677759,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "sheet": "cdo_seq",
+     "start": 3768677685
+    }
+   ]
+  },
+  "status": 201
+ },
+ "add_fails_cdo_numbers_refused": {
+  "answer": {
+   "error": "The CDO series is full."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    }
+   ]
+  },
+  "status": 400
+ },
+ "add_fails_files_cdo": {
+  "answer": {
+   "error": "The data files could not be written, so nothing was added: disk full Serials 3,768,677,685–3,768,677,759 stay recorded as used, so they are never handed out again."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base",
+     "<TS> | JOB-0001 | 3768677685 | 3768677759 | 75 | addition #1",
+     "<TS> | JOB-0001 | 3768677685 | 3768677759 | 0 | VOID: addition data not written for JOB-0001"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    },
+    {
+     "created_by": "Lee",
+     "end": 3768677759,
+     "job_number": "JOB-0001",
+     "note": "VOID: addition data not written for JOB-0001",
+     "qty": 75,
+     "sheet": "cdo_seq",
+     "start": 3768677685
+    }
+   ]
+  },
+  "status": 500
+ },
+ "add_fails_files_go2": {
+  "answer": {
+   "error": "The data files could not be written, so nothing was added: disk full"
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for GO2, ticket G300 (special, GO2 data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "GO2/",
+    "GO2/<DATE> - G300/",
+    "GO2/<DATE> - G300/Data/",
+    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
+    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "GO2/<DATE> - G300/Print/",
+    "GO2/<DATE> - G300/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "GO2",
+     "data_sheet": "go2_rand",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "G300",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "GO2 tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "add_fails_files_standard": {
+  "answer": {
+   "error": "The data files could not be written, so nothing was added: disk full Serials 26,000,000,127–26,000,000,201 stay recorded as used, so they are never handed out again."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "add_fails_save_cdo": {
+  "answer": {
+   "error": "The addition could not be saved, so nothing was added: db locked Serials 3,768,677,685–3,768,677,759 stay recorded as used."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base",
+     "<TS> | JOB-0001 | 3768677685 | 3768677759 | 75 | addition #1",
+     "<TS> | JOB-0001 | 3768677685 | 3768677759 | 0 | VOID: addition not saved for JOB-0001"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    },
+    {
+     "created_by": "Lee",
+     "end": 3768677759,
+     "job_number": "JOB-0001",
+     "note": "VOID: addition not saved for JOB-0001",
+     "qty": 75,
+     "sheet": "cdo_seq",
+     "start": 3768677685
+    }
+   ]
+  },
+  "status": 500
+ },
+ "add_fails_save_go2": {
+  "answer": {
+   "error": "The addition could not be saved, so nothing was added: db locked"
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for GO2, ticket G300 (special, GO2 data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "GO2/",
+    "GO2/<DATE> - G300/",
+    "GO2/<DATE> - G300/Data/",
+    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
+    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "GO2/<DATE> - G300/Print/",
+    "GO2/<DATE> - G300/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "GO2",
+     "data_sheet": "go2_rand",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "G300",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "GO2 tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "add_fails_save_standard": {
+  "answer": {
+   "error": "The addition could not be saved, so nothing was added: db locked Serials 26,000,000,127–26,000,000,201 stay recorded as used."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "add_fails_serials_offline": {
+  "answer": {
+   "error": "The serial registry can't be reached. Nothing was added.",
+   "next_start": 5000,
+   "registry_message": "gone",
+   "serial_offline": true
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 423
+ },
+ "add_fails_serials_refused": {
+  "answer": {
+   "error": "No room left."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "add_fails_serials_unexpected": {
+  "answer": {
+   "error": "Serial allocation failed, nothing was added: registry file locked"
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "add_go2": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"G300_ADD1_Serials.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": null,
+    "serial_start": null
+   },
+   "files": [
+    "G300_ADD1_Serials.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "GO2",
+    "data_sheet": "go2_rand",
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "G300",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": null,
+    "status": "Pending",
+    "template_path": null,
+    "title": "GO2 tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for GO2, ticket G300 (special, GO2 data sheet) — 120 labels in 3 rolls"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "GO2 G300: added 75 labels, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"G300_ADD1_Serials.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": null,
+     "serial_start": null
+    }
+   ],
+   "folders": [
+    "./",
+    "GO2/",
+    "GO2/<DATE> - G300/",
+    "GO2/<DATE> - G300/Data/",
+    "GO2/<DATE> - G300/Data/G300_ADD1_Serials.xlsx",
+    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
+    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "GO2/<DATE> - G300/Print/",
+    "GO2/<DATE> - G300/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "GO2",
+     "data_sheet": "go2_rand",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "G300",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "GO2 tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_no_labels_per_roll": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 0,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 0,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": null,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 0,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 0,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 0,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": null,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_preview_cdo": {
+  "answer": {
+   "files": [
+    "C200_ADD1_Serials.xlsx"
+   ],
+   "first_roll": 4,
+   "last_roll": 5,
+   "new_total": 195,
+   "preview": true,
+   "quantity": 75,
+   "rolls": 2,
+   "seq": 1,
+   "serial_end": 3768677759,
+   "serial_start": 3768677685
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    }
+   ]
+  },
+  "status": 200
+ },
+ "add_preview_go2": {
+  "answer": {
+   "files": [
+    "G300_ADD1_Serials.xlsx"
+   ],
+   "first_roll": 4,
+   "last_roll": 5,
+   "new_total": 195,
+   "preview": true,
+   "quantity": 75,
+   "rolls": 2,
+   "seq": 1,
+   "serial_end": null,
+   "serial_start": null
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for GO2, ticket G300 (special, GO2 data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "GO2/",
+    "GO2/<DATE> - G300/",
+    "GO2/<DATE> - G300/Data/",
+    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
+    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "GO2/<DATE> - G300/Print/",
+    "GO2/<DATE> - G300/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "GO2",
+     "data_sheet": "go2_rand",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "G300",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "GO2 tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 200
+ },
+ "add_preview_standard": {
+  "answer": {
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "first_roll": 4,
+   "last_roll": 5,
+   "new_total": 201,
+   "preview": true,
+   "quantity": 75,
+   "rolls": 2,
+   "seq": 1,
+   "serial_end": 26000000201,
+   "serial_start": 26000000127
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 200
+ },
+ "add_refused_archived": {
+  "answer": {
+   "error": "This job is archived. Move it back to jobs before adding data."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": "<TS>",
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 409
+ },
+ "add_refused_bad_quantity": {
+  "answer": {
+   "error": "Quantity must be at least 1"
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "add_refused_folder_gone": {
+  "answer": {
+   "error": "The job folder isn't reachable from the host PC. Nothing was added."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/gone",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 503
+ },
+ "add_refused_plain_special": {
+  "answer": {
+   "error": "This job has no encoded data (no UPC, no data sheet), so there is nothing to add to."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket S400 (special, no serials) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/<DATE> - S400/",
+    "Acme/<DATE> - S400/Acme-S400-JOB-0001-QualityControl.html",
+    "Acme/<DATE> - S400/Data/",
+    "Acme/<DATE> - S400/Encoding Checklist - JOB-0001.html",
+    "Acme/<DATE> - S400/Print/",
+    "Acme/<DATE> - S400/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/Acme/<DATE> - S400",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "S400",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Hang tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "add_refused_too_many": {
+  "answer": {
+   "error": "Add at most 1,000,000 labels at a time."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "add_refused_unknown_job": {
+  "answer": {
+   "error": "Job not found"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./"
+   ],
+   "job_number_last": [],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 404
+ },
+ "add_reopens_complete_job": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "In Progress",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 (job reopened) — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "In Progress",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_second_addition": {
+  "answer": {
+   "addition": {
+    "added_by": null,
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD2.xlsx\"]",
+    "first_roll": 6,
+    "id": 2,
+    "job_id": 1,
+    "last_roll": 6,
+    "quantity": 10,
+    "reason": null,
+    "seq": 2,
+    "serial_end": 26000000211,
+    "serial_start": 26000000202
+   },
+   "files": [
+    "008100000012_ADD2.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 1,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    },
+    {
+     "actor": null,
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 10 labels, serials 26,000,000,202–26,000,000,211, rolls 6–6"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    },
+    {
+     "added_by": null,
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD2.xlsx\"]",
+     "first_roll": 6,
+     "id": 2,
+     "job_id": 1,
+     "last_roll": 6,
+     "quantity": 10,
+     "reason": null,
+     "seq": 2,
+     "serial_end": 26000000211,
+     "serial_start": 26000000202
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD2.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1",
+     "<TS> | JOB-0001 | 26000000202 | 26000000211 | 10 | addition #2"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    },
+    {
+     "addition_id": 2,
+     "epc_end": "3034007E900000460DB884D3",
+     "epc_start": "3034007E900000460DB884CA",
+     "job_id": 1,
+     "quantity": 10,
+     "roll_number": 6,
+     "serial_end": 26000000211,
+     "serial_start": 26000000202,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": null,
+     "end": 26000000211,
+     "job_number": "JOB-0001",
+     "note": "addition #2",
+     "qty": 10,
+     "registry_state": 1,
+     "start": 26000000202,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_standard": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_standard_split": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1_DB1.xlsx\", \"008100000012_ADD1_DB2.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1_DB1.xlsx",
+    "008100000012_ADD1_DB2.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": 50,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1_DB1.xlsx\", \"008100000012_ADD1_DB2.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1_DB1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1_DB2.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB2.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB3.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 50,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_warns_paperwork_crashed": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": [
+    "Checklist / QC sheet not rewritten: printer on fire"
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_warns_paperwork_not_rewritten": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": [
+    "Checklist / QC sheet not rewritten: QC sheet locked"
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "add_warns_registry_offline": {
+  "answer": {
+   "addition": {
+    "added_by": "Lee",
+    "created_at": "<TS>",
+    "files": "[\"008100000012_ADD1.xlsx\"]",
+    "first_roll": 4,
+    "id": 1,
+    "job_id": 1,
+    "last_roll": 5,
+    "quantity": 75,
+    "reason": "customer wants more",
+    "seq": 1,
+    "serial_end": 26000000201,
+    "serial_start": 26000000127
+   },
+   "files": [
+    "008100000012_ADD1.xlsx"
+   ],
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "rolls_added": 2,
+   "success": true,
+   "warnings": [
+    "Added while the serial registry was offline. The range is saved in the app database and will be written to the registry when it is back."
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Lee",
+     "job_id": 1,
+     "kind": "data_added",
+     "message": "Acme T100: added 75 labels, serials 26,000,000,127–26,000,000,201, rolls 4–5 — customer wants more"
+    }
+   ],
+   "additions": [
+    {
+     "added_by": "Lee",
+     "created_at": "<TS>",
+     "files": "[\"008100000012_ADD1.xlsx\"]",
+     "first_roll": 4,
+     "id": 1,
+     "job_id": 1,
+     "last_roll": 5,
+     "quantity": 75,
+     "reason": "customer wants more",
+     "seq": 1,
+     "serial_end": 26000000201,
+     "serial_start": 26000000127
+    }
+   ],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_ADD1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%",
+     "<TS> | JOB-0001 | 26000000127 | 26000000201 | 75 | addition #1"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884B0",
+     "epc_start": "3034007E900000460DB8847F",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 4,
+     "serial_end": 26000000176,
+     "serial_start": 26000000127,
+     "status": "pending"
+    },
+    {
+     "addition_id": 1,
+     "epc_end": "3034007E900000460DB884C9",
+     "epc_start": "3034007E900000460DB884B1",
+     "job_id": 1,
+     "quantity": 25,
+     "roll_number": 5,
+     "serial_end": 26000000201,
+     "serial_start": 26000000177,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Lee",
+     "end": 26000000201,
+     "job_number": "JOB-0001",
+     "note": "addition #1",
+     "qty": 75,
+     "registry_state": 1,
+     "start": 26000000127,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_after_failed_cdo_sheet_next_job": {
+  "answer": {
+   "db_split": [],
+   "folder_path": "<ROOT>/customers/CDO/<DATE> - C201",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "CDO",
+    "data_sheet": "cdo_seq",
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/CDO/<DATE> - C201",
+    "id": 2,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "C201",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": 100,
+    "quantity": 120,
+    "start_serial": 3768677685,
+    "status": "Pending",
+    "template_path": null,
+    "title": "CDO tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 3768677804,
+    "job_number": "JOB-0001",
+    "qty": 120,
+    "sheet": "cdo_seq",
+    "start": 3768677685
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 2,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C201 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C201/",
+    "CDO/<DATE> - C201/CDO-C201-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C201/Data/",
+    "CDO/<DATE> - C201/Data/C201_DB1_Serials.xlsx",
+    "CDO/<DATE> - C201/Data/C201_DB2_Serials.xlsx",
+    "CDO/<DATE> - C201/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C201/Print/",
+    "CDO/<DATE> - C201/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C201",
+     "id": 2,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C201",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677685,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base",
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 0 | VOID: sheet not written for JOB-0001",
+     "<TS> | JOB-0001 | 3768677685 | 3768677804 | 120 | base"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A17566",
+     "epc_start": "E0A17535",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677734,
+     "serial_start": 3768677685,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17598",
+     "epc_start": "E0A17567",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677784,
+     "serial_start": 3768677735,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A175AC",
+     "epc_start": "E0A17599",
+     "job_id": 2,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677804,
+     "serial_start": 3768677785,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "VOID: sheet not written for JOB-0001",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    },
+    {
+     "created_by": "Dana",
+     "end": 3768677804,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677685
+    }
+   ]
+  },
+  "status": 201
+ },
+ "new_after_failed_folder_next_job_reuses_number": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 2,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 2,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 2,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 2,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_cdo": {
+  "answer": {
+   "db_split": [],
+   "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "CDO",
+    "data_sheet": "cdo_seq",
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "C200",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": 100,
+    "quantity": 120,
+    "start_serial": 3768677565,
+    "status": "Pending",
+    "template_path": null,
+    "title": "CDO tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 3768677684,
+    "job_number": "JOB-0001",
+    "qty": 120,
+    "sheet": "cdo_seq",
+    "start": 3768677565
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for CDO, ticket C200 (special, CDO data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/CDO/<DATE> - C200",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 100,
+     "quantity": 120,
+     "start_serial": 3768677565,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "E0A174EE",
+     "epc_start": "E0A174BD",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 3768677614,
+     "serial_start": 3768677565,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17520",
+     "epc_start": "E0A174EF",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 3768677664,
+     "serial_start": 3768677615,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "E0A17534",
+     "epc_start": "E0A17521",
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": 3768677684,
+     "serial_start": 3768677665,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    }
+   ]
+  },
+  "status": 201
+ },
+ "new_fails_cdo_numbers_refused": {
+  "answer": {
+   "error": "The CDO series is full. Nothing was created."
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "new_fails_cdo_numbers_unexpected": {
+  "answer": {
+   "error": "CDO serial allocation failed, job not created: log locked"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "new_fails_cdo_sheet_write": {
+  "answer": {
+   "error": "The CDO data sheet could not be written, so nothing was created: disk full"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base",
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 0 | VOID: sheet not written for JOB-0001"
+    ]
+   },
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "VOID: sheet not written for JOB-0001",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    }
+   ]
+  },
+  "status": 500
+ },
+ "new_fails_final_save_cdo": {
+  "answer": {
+   "error": "Files were created but the job record could not be saved: db locked. Serials 3768677565 onward are recorded under JOB-0001."
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "CDO/",
+    "CDO/<DATE> - C200/",
+    "CDO/<DATE> - C200/CDO-C200-JOB-0001-QualityControl.html",
+    "CDO/<DATE> - C200/Data/",
+    "CDO/<DATE> - C200/Data/C200_DB1_Serials.xlsx",
+    "CDO/<DATE> - C200/Data/C200_DB2_Serials.xlsx",
+    "CDO/<DATE> - C200/Encoding Checklist - JOB-0001.html",
+    "CDO/<DATE> - C200/Print/",
+    "CDO/<DATE> - C200/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": null,
+     "customer": "CDO",
+     "data_sheet": "cdo_seq",
+     "due_date": null,
+     "folder_path": null,
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "C200",
+     "job_type": "standard",
+     "label_size": null,
+     "lpr": null,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "CDO tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "data_sheets/cdo_seq.txt": [
+     "<TS> | JOB-0001 | 3768677565 | 3768677684 | 120 | base"
+    ]
+   },
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": [
+    {
+     "created_by": "Dana",
+     "end": 3768677684,
+     "job_number": "JOB-0001",
+     "note": "base",
+     "qty": 120,
+     "sheet": "cdo_seq",
+     "start": 3768677565
+    }
+   ]
+  },
+  "status": 500
+ },
+ "new_fails_final_save_standard": {
+  "answer": {
+   "error": "Files were created but the job record could not be saved: db locked. Serials 26000000001 onward are recorded under JOB-0001."
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": null,
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": null,
+     "folder_path": null,
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": null,
+     "lpr": null,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "new_fails_go2_sheet_write": {
+  "answer": {
+   "error": "The GO2 data sheet could not be written, so nothing was created: disk full"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "GO2/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "new_fails_making_folder": {
+  "answer": {
+   "error": "The job folder couldn't be created, so nothing was created: share went away"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "new_fails_serials_offline": {
+  "answer": {
+   "error": "The serial registry can't be reached. Nothing was created.",
+   "next_start": 5000,
+   "registry_message": "gone",
+   "serial_offline": true
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 423
+ },
+ "new_fails_serials_refused": {
+  "answer": {
+   "error": "That start serial is taken."
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "new_fails_serials_unexpected": {
+  "answer": {
+   "error": "Serial allocation failed, job not created: registry file locked"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/"
+   ],
+   "job_number_last": [
+    "0"
+   ],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 500
+ },
+ "new_go2": {
+  "answer": {
+   "db_split": [],
+   "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "GO2",
+    "data_sheet": "go2_rand",
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "G300",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": null,
+    "status": "Pending",
+    "template_path": null,
+    "title": "GO2 tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": null,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for GO2, ticket G300 (special, GO2 data sheet) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "GO2/",
+    "GO2/<DATE> - G300/",
+    "GO2/<DATE> - G300/Data/",
+    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
+    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "GO2/<DATE> - G300/Print/",
+    "GO2/<DATE> - G300/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "GO2",
+     "data_sheet": "go2_rand",
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "G300",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "GO2 tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_refused_bad_upc": {
+  "answer": {
+   "corrected_upc": null,
+   "error": "UPC needs 12 digits (5 entered)"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./"
+   ],
+   "job_number_last": [],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "new_refused_duplicate_ticket": {
+  "answer": {
+   "duplicate_ids": [
+    1
+   ],
+   "duplicate_of": [
+    "JOB-0001"
+   ],
+   "error": "Ticket T100 already has a job (JOB-0001). Open that job instead of creating a second one. To redo it, cancel that job first."
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 409
+ },
+ "new_refused_folders_unreachable": {
+  "answer": {
+   "error": "The job folders aren't reachable from the host PC (<ROOT>/not_there). Nothing was created. Check that the drive or share is connected."
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./"
+   ],
+   "job_number_last": [],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 503
+ },
+ "new_refused_no_customer": {
+  "answer": {
+   "error": "Customer is required"
+  },
+  "left_behind": {
+   "activity": [],
+   "additions": [],
+   "folders": [
+    "./"
+   ],
+   "job_number_last": [],
+   "jobs": [],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "new_refused_overlapping_manual_start": {
+  "answer": {
+   "conflicts": [
+    {
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "start": 26000000001
+    }
+   ],
+   "error": "Serials 26,000,000,006–26,000,000,131 were already used for this UPC by JOB-0001 (26,000,000,001–26,000,000,126). Choose a start whose whole range is unused.",
+   "next_start": 26000000127
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 400
+ },
+ "new_second_job_same_day_same_ticket_folder": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - JOB-0002",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - JOB-0002",
+    "id": 2,
+    "inlay_type": "M730",
+    "job_number": "JOB-0002",
+    "job_ticket": null,
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Other",
+    "upc": "008100000029",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0002",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    },
+    {
+     "actor": "Dana",
+     "job_id": 2,
+     "kind": "created",
+     "message": "Created JOB-0002 for Acme — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - JOB-0001/",
+    "Acme/2 x 1/<DATE> - JOB-0001/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - JOB-0001/Data/",
+    "Acme/2 x 1/<DATE> - JOB-0001/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - JOB-0001/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - JOB-0001/Print/",
+    "Acme/2 x 1/<DATE> - JOB-0001/Proof/",
+    "Acme/2 x 1/<DATE> - JOB-0002/",
+    "Acme/2 x 1/<DATE> - JOB-0002/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - JOB-0002/Data/",
+    "Acme/2 x 1/<DATE> - JOB-0002/Data/008100000029.xlsx",
+    "Acme/2 x 1/<DATE> - JOB-0002/Encoding Checklist - JOB-0002.html",
+    "Acme/2 x 1/<DATE> - JOB-0002/Print/",
+    "Acme/2 x 1/<DATE> - JOB-0002/Proof/"
+   ],
+   "job_number_last": [
+    "2"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - JOB-0001",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": null,
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    },
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - JOB-0002",
+     "id": 2,
+     "inlay_type": "M730",
+     "job_number": "JOB-0002",
+     "job_ticket": null,
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Other",
+     "upc": "008100000029",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ],
+    "008100000029.txt": [
+     "<TS> | JOB-0002 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000860DB88432",
+     "epc_start": "3034007E900000860DB88401",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000860DB88464",
+     "epc_start": "3034007E900000860DB88433",
+     "job_id": 2,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000860DB8847E",
+     "epc_start": "3034007E900000860DB88465",
+     "job_id": 2,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    },
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0002",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000029"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_special_no_quantity": {
+  "answer": {
+   "db_split": [],
+   "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": null,
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": null,
+    "job_type": "special",
+    "label_size": null,
+    "lpr": null,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": null,
+    "start_serial": null,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Art only",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 0,
+   "serial_alloc": null,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": null,
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme (special, no serials)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/<DATE> - JOB-0001/",
+    "Acme/<DATE> - JOB-0001/Data/",
+    "Acme/<DATE> - JOB-0001/Encoding Checklist - JOB-0001.html",
+    "Acme/<DATE> - JOB-0001/Print/",
+    "Acme/<DATE> - JOB-0001/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": null,
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": null,
+     "job_type": "special",
+     "label_size": null,
+     "lpr": null,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": null,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Art only",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_special_plain": {
+  "answer": {
+   "db_split": [],
+   "folder_path": "<ROOT>/customers/Acme/<DATE> - S400",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": null,
+    "folder_path": "<ROOT>/customers/Acme/<DATE> - S400",
+    "id": 1,
+    "inlay_type": null,
+    "job_number": "JOB-0001",
+    "job_ticket": "S400",
+    "job_type": "special",
+    "label_size": null,
+    "lpr": 50,
+    "notes": null,
+    "overage_pct": 0.0,
+    "part_number": null,
+    "po_number": null,
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": null,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Hang tags",
+    "upc": null,
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": null,
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket S400 (special, no serials) — 120 labels in 3 rolls"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/<DATE> - S400/",
+    "Acme/<DATE> - S400/Acme-S400-JOB-0001-QualityControl.html",
+    "Acme/<DATE> - S400/Data/",
+    "Acme/<DATE> - S400/Encoding Checklist - JOB-0001.html",
+    "Acme/<DATE> - S400/Print/",
+    "Acme/<DATE> - S400/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": null,
+     "folder_path": "<ROOT>/customers/Acme/<DATE> - S400",
+     "id": 1,
+     "inlay_type": null,
+     "job_number": "JOB-0001",
+     "job_ticket": "S400",
+     "job_type": "special",
+     "label_size": null,
+     "lpr": 50,
+     "notes": null,
+     "overage_pct": 0.0,
+     "part_number": null,
+     "po_number": null,
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": null,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Hang tags",
+     "upc": null,
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {},
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": null,
+     "epc_start": null,
+     "job_id": 1,
+     "quantity": 20,
+     "roll_number": 3,
+     "serial_end": null,
+     "serial_start": null,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_standard": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_standard_manual_start": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 70000,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 70125,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 70000
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 70,000–70,125 (specified by user)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 70000,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 70000 | 70125 | 126 | +5%; start serial specified by Dana"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E90000040000111A1",
+     "epc_start": "3034007E9000004000011170",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 70049,
+     "serial_start": 70000,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E90000040000111D3",
+     "epc_start": "3034007E90000040000111A2",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 70099,
+     "serial_start": 70050,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E90000040000111ED",
+     "epc_start": "3034007E90000040000111D4",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 70125,
+     "serial_start": 70100,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 70125,
+     "job_number": "JOB-0001",
+     "note": "+5%; start serial specified by Dana",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 70000,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_standard_no_ticket_no_size": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": null,
+    "job_type": "standard",
+    "label_size": null,
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "n/a",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/<DATE> - JOB-0001/",
+    "Acme/<DATE> - JOB-0001/Acme-P-1-JOB-0001-QualityControl.html",
+    "Acme/<DATE> - JOB-0001/Data/",
+    "Acme/<DATE> - JOB-0001/Data/008100000012.xlsx",
+    "Acme/<DATE> - JOB-0001/Encoding Checklist - JOB-0001.html",
+    "Acme/<DATE> - JOB-0001/Print/",
+    "Acme/<DATE> - JOB-0001/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/<DATE> - JOB-0001",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": null,
+     "job_type": "standard",
+     "label_size": null,
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "n/a",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_standard_split_files": {
+  "answer": {
+   "db_split": [
+    50,
+    50,
+    26
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": 50,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": []
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB1.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB2.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012_DB3.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": 50,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_warns_checklist_and_qc_not_written": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": [
+    "Checklist not written: no room",
+    "QC sheet not written: no room either"
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_warns_encoding_database_not_written": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": [
+    "Encoding database not written: disk full"
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_warns_registry_offline_and_journal_unwritten": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": false,
+    "offline": true,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": [
+    "Created while the serial registry was offline. The range is saved in the app database and will be written to the registry when it is back.",
+    "The serial journal (backup folder) couldn't be written. The range is still saved in the registry and the app database."
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ },
+ "new_warns_template_not_copied": {
+  "answer": {
+   "db_split": [
+    126
+   ],
+   "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+   "job": {
+    "archived_at": null,
+    "completed_at": null,
+    "created_at": "<TS>",
+    "created_by": "Dana",
+    "customer": "Acme",
+    "data_sheet": null,
+    "due_date": "2026-12-01",
+    "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+    "id": 1,
+    "inlay_type": "M730",
+    "job_number": "JOB-0001",
+    "job_ticket": "T100",
+    "job_type": "standard",
+    "label_size": "2 x 1",
+    "lpr": 50,
+    "notes": "rush",
+    "overage_pct": 5.0,
+    "part_number": "P-1",
+    "po_number": "PO7",
+    "priority": "Medium",
+    "priority_rank": null,
+    "qty_db": null,
+    "quantity": 120,
+    "start_serial": 26000000001,
+    "status": "Pending",
+    "template_path": null,
+    "title": "Blue shirt",
+    "upc": "008100000012",
+    "updated_at": "<TS>"
+   },
+   "job_number": "JOB-0001",
+   "rolls": 3,
+   "serial_alloc": {
+    "end": 26000000126,
+    "journaled": true,
+    "offline": false,
+    "qty": 126,
+    "skipped": 0,
+    "start": 26000000001
+   },
+   "success": true,
+   "warnings": [
+    "Template not copied: Template not found"
+   ]
+  },
+  "left_behind": {
+   "activity": [
+    {
+     "actor": "Dana",
+     "job_id": 1,
+     "kind": "created",
+     "message": "Created JOB-0001 for Acme, ticket T100 — 126 labels in 3 rolls; serials 26,000,000,001–26,000,000,126 (automatic)"
+    }
+   ],
+   "additions": [],
+   "folders": [
+    "./",
+    "Acme/",
+    "Acme/2 x 1/",
+    "Acme/2 x 1/<DATE> - T100/",
+    "Acme/2 x 1/<DATE> - T100/Acme-P-1-PO7-QualityControl.html",
+    "Acme/2 x 1/<DATE> - T100/Data/",
+    "Acme/2 x 1/<DATE> - T100/Data/008100000012.xlsx",
+    "Acme/2 x 1/<DATE> - T100/Encoding Checklist - JOB-0001.html",
+    "Acme/2 x 1/<DATE> - T100/Print/",
+    "Acme/2 x 1/<DATE> - T100/Proof/"
+   ],
+   "job_number_last": [
+    "1"
+   ],
+   "jobs": [
+    {
+     "archived_at": null,
+     "completed_at": null,
+     "created_at": "<TS>",
+     "created_by": "Dana",
+     "customer": "Acme",
+     "data_sheet": null,
+     "due_date": "2026-12-01",
+     "folder_path": "<ROOT>/customers/Acme/2 x 1/<DATE> - T100",
+     "id": 1,
+     "inlay_type": "M730",
+     "job_number": "JOB-0001",
+     "job_ticket": "T100",
+     "job_type": "standard",
+     "label_size": "2 x 1",
+     "lpr": 50,
+     "notes": "rush",
+     "overage_pct": 5.0,
+     "part_number": "P-1",
+     "po_number": "PO7",
+     "priority": "Medium",
+     "priority_rank": null,
+     "qty_db": null,
+     "quantity": 120,
+     "start_serial": 26000000001,
+     "status": "Pending",
+     "template_path": null,
+     "title": "Blue shirt",
+     "upc": "008100000012",
+     "updated_at": "<TS>"
+    }
+   ],
+   "registry_files": {
+    "008100000012.txt": [
+     "<TS> | JOB-0001 | 26000000001 | 26000000126 | 126 | +5%"
+    ]
+   },
+   "rolls": [
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88432",
+     "epc_start": "3034007E900000460DB88401",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 1,
+     "serial_end": 26000000050,
+     "serial_start": 26000000001,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB88464",
+     "epc_start": "3034007E900000460DB88433",
+     "job_id": 1,
+     "quantity": 50,
+     "roll_number": 2,
+     "serial_end": 26000000100,
+     "serial_start": 26000000051,
+     "status": "pending"
+    },
+    {
+     "addition_id": null,
+     "epc_end": "3034007E900000460DB8847E",
+     "epc_start": "3034007E900000460DB88465",
+     "job_id": 1,
+     "quantity": 26,
+     "roll_number": 3,
+     "serial_end": 26000000126,
+     "serial_start": 26000000101,
+     "status": "pending"
+    }
+   ],
+   "serial_allocations": [
+    {
+     "created_by": "Dana",
+     "end": 26000000126,
+     "job_number": "JOB-0001",
+     "note": "+5%",
+     "qty": 126,
+     "registry_state": 1,
+     "start": 26000000001,
+     "upc": "008100000012"
+    }
+   ],
+   "sheet_serials": []
+  },
+  "status": 201
+ }
+}
