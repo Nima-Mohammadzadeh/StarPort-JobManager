@@ -73,3 +73,12 @@ def test_every_module_gets_the_same_kind_of_connection(jm):
 def test_no_private_copies_of_the_opener_remain(jm):
     assert not hasattr(jm.SS, "_db")
     assert not hasattr(jm.SHEETS, "_db")
+
+
+def test_app_code_never_opens_a_connection_it_has_to_close_by_hand(jm):
+    """Guard for new code: use `with DB.connect() as conn:`. get_db() is only for tests and scripts."""
+    import os
+    import re
+    src = open(os.path.join(jm.root, "app.py"), encoding="utf-8").read()
+    assert not re.findall(r"=\s*get_db\(\)", src)
+    assert "sqlite3.connect(" not in src
