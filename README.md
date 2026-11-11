@@ -95,6 +95,7 @@ is flagged as a conflict.
 |---|---|
 | `app.py` | Server and API |
 | `db.py` | The one way to open the app database (connections close themselves) |
+| `job_build.py` | Remembers what a half-made job has taken so a failure is undone in one place |
 | `migrations.py` | Database version and the numbered steps that update it, each run once |
 | `serial_store.py` | Registry + database copy + journal, health, sync |
 | `serial_registry.py` | Per-UPC registry files with locks |
