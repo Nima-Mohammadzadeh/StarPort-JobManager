@@ -65,3 +65,55 @@ def test_warnings_collect_in_order():
     b = JB.Build()
     b.warn("first"); b.warn("second")
     assert b.warnings == ["first", "second"]
+
+
+# ── the undo path, through the real job functions ─────────────────────────────
+def _boom(*a, **k):
+    raise RuntimeError("unexpected crash")
+
+
+CDO = {"customer": "CDO", "title": "CDO tags", "job_ticket": "C1", "job_type": "special", "data_sheet": "cdo_seq",
+       "quantity": 100, "lpr": 50}
+
+
+def _counts(jm):
+    with jm.db.connect() as c:
+        return {"jobs": c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0],
+                "serials": c.execute("SELECT COUNT(*) FROM serial_allocations").fetchone()[0],
+                "sheet_notes": [r[0] for r in c.execute("SELECT note FROM sheet_serials ORDER BY id")],
+                "last": c.execute("SELECT value FROM app_settings WHERE key='job_number_last'").fetchone()[0]}
+
+
+def test_unexpected_crash_before_serials_leaves_nothing_behind(jm, monkeypatch):
+    monkeypatch.setattr(jm.app, "roll_plan_seq", _boom)          # after the CDO numbers are taken
+    with pytest.raises(RuntimeError, match="unexpected crash"):
+        jm.app.create_job(CDO)
+    got = _counts(jm)
+    assert got["jobs"] == 0 and got["last"] == "0"
+    assert got["sheet_notes"] == ["VOID: job creation failed unexpectedly"]        # a gap, never a repeat
+    assert not any(fs for _b, _d, fs in os.walk(jm.customers))                     # no files left anywhere
+
+
+def test_unexpected_crash_after_upc_serials_keeps_the_job_number_they_are_recorded_under(jm, monkeypatch):
+    monkeypatch.setattr(jm.app, "roll_plan", _boom)              # after the UPC serials are taken
+    with pytest.raises(RuntimeError, match="unexpected crash"):
+        jm.app.create_job({"customer": "Acme", "title": "Shirt", "job_ticket": "T1", "upc": jm.upc(1),
+                           "quantity": 100, "lpr": 50})
+    got = _counts(jm)
+    assert got["serials"] == 1 and got["jobs"] == 1 and got["last"] == "1"
+    monkeypatch.undo()
+    nxt, code = jm.app.create_job({"customer": "Acme", "title": "Shirt 2", "job_ticket": "T2", "upc": jm.upc(1),
+                                   "quantity": 100, "lpr": 50})
+    assert code == 201 and nxt["job_number"] == "JOB-0002"       # the number is not handed out again
+    assert nxt["serial_alloc"]["start"] > jm.R.SERIAL_START_DEFAULT + 99
+
+
+def test_unexpected_crash_while_adding_data_voids_the_new_cdo_numbers(jm, monkeypatch):
+    body, code = jm.app.create_job(CDO); assert code == 201
+    monkeypatch.setattr(jm.app, "roll_plan_seq", _boom)
+    with pytest.raises(RuntimeError, match="unexpected crash"):
+        jm.app.add_data(body["job"]["id"], {"quantity": 40})
+    got = _counts(jm)
+    assert got["sheet_notes"] == ["base", "VOID: addition failed unexpectedly"]
+    with jm.db.connect() as c:
+        assert c.execute("SELECT COUNT(*) FROM job_additions").fetchone()[0] == 0

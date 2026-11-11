@@ -620,144 +620,171 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
     serial range (not necessarily next to the original), new rolls that continue the job's
     numbering, and new data files named _ADD<n>. Serials, once taken, are never released.
     data: quantity, reason, added_by, preview (True = report what would happen, reserve nothing),
-    offline_start / offline_confirm (registry unreachable, same as a new job)."""
-    data = data or {}
+    offline_start / offline_confirm (registry unreachable, same as a new job).
+
+    Same shape as create_job: a list of steps, undone in one place if a later one fails."""
+    build = Build()
     try:
-        qty = _int(data.get("quantity"), "Quantity", required=True)
-    except ValueError as e:
-        return {"error": str(e)}, 400
-    if qty > MAX_ADDITION:
-        return {"error": f"Add at most {MAX_ADDITION:,} labels at a time."}, 400
-    reason = (str(data.get("reason") or "")).strip()[:200] or None
-    who = ((str(data.get("added_by") or "")).strip() or actor() or "")[:40] or None
-    preview = bool(data.get("preview"))
+        a = _read_addition(data or {})          # checks only; takes nothing
+        with _add_lock(job_id):
+            _load_job_for_addition(a, job_id)
+            if a.preview:
+                return _preview_addition(a), 200
+            _take_addition_numbers(build, a)
+            _write_addition_files(build, a)
+            _save_addition(build, a)
+            return _finish_addition(build, a)
+    except Stop as stop:
+        return stop.answer
+    except Exception:
+        build.rollback("addition failed unexpectedly")
+        raise
+
+
+def _read_addition(data) -> SimpleNamespace:
+    a = SimpleNamespace()
     try:
-        offline_start = _int(data.get("offline_start"), "Start serial") if data.get("offline_confirm") else None
+        a.qty = _int(data.get("quantity"), "Quantity", required=True)
     except ValueError as e:
-        return {"error": str(e)}, 400
+        raise refuse(str(e), 400)
+    if a.qty > MAX_ADDITION:
+        raise refuse(f"Add at most {MAX_ADDITION:,} labels at a time.", 400)
+    a.reason = (str(data.get("reason") or "")).strip()[:200] or None
+    a.who = ((str(data.get("added_by") or "")).strip() or actor() or "")[:40] or None
+    a.preview = bool(data.get("preview"))
+    try:
+        a.offline_start = _int(data.get("offline_start"), "Start serial") if data.get("offline_confirm") else None
+    except ValueError as e:
+        raise refuse(str(e), 400)
+    return a
 
-    with _add_lock(job_id):
-        with DB.connect() as conn:
-            job = _load_job(conn, job_id)
-            if not job:
-                return {"error": "Job not found"}, 404
-            if job["archived_at"]:
-                return {"error": "This job is archived. Move it back to jobs before adding data."}, 409
-            kind = "standard" if job["upc"] else job["data_sheet"] if job["data_sheet"] in DATA_SHEETS else None
-            if not kind:
-                return {"error": "This job has no encoded data (no UPC, no data sheet), so there is nothing to add to."}, 400
-            folder = job["folder_path"]
-            if not folder or not os.path.isdir(folder):
-                return {"error": "The job folder isn't reachable from the host PC. Nothing was added."}, 503
-            seq = (conn.execute("SELECT COALESCE(MAX(seq),0) FROM job_additions WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
-            first_roll = (conn.execute("SELECT COALESCE(MAX(roll_number),0) FROM job_rolls WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
-            total_before = job_total_qty(conn, job)
-            lpr, qty_db, tag = job["lpr"] or 0, job["qty_db"], f"_ADD{seq}"
-            label = f"{job['job_ticket'] or job['job_number']}{tag}"
-        n_rolls = -(-qty // lpr) if lpr > 0 else 0
-        n_files = len(db_file_split(qty, qty_db))
-        suffix = lambda i: f"_DB{i}" if n_files > 1 else ""
 
-        if preview:
-            out = {"preview": True, "quantity": qty, "new_total": total_before + qty, "seq": seq,
-                   "first_roll": first_roll if n_rolls else None,
-                   "last_roll": first_roll + n_rolls - 1 if n_rolls else None, "rolls": n_rolls}
-            if kind == "standard":
-                nxt = SS.next_start(job["upc"])
-                out.update(serial_start=nxt, serial_end=nxt + qty - 1,
-                           files=[f"{job['upc']}{tag}{suffix(i)}.xlsx" for i in range(1, n_files + 1)])
-                if nxt + qty - 1 > SS.MAX_SERIAL:
-                    return {"error": "That range runs past the largest serial an EPC can hold."}, 400
-            elif kind == CDO_SHEET:
-                nxt = SHEETS_SEQ.next_start(CDO_SHEET)
-                out.update(serial_start=nxt, serial_end=nxt + qty - 1, files=go2_file_names(label, n_files))
-            else:
-                out.update(serial_start=None, serial_end=None, files=go2_file_names(label, n_files))
-            return out, 200
+def _load_job_for_addition(a, job_id):
+    """The job as it is now, and where the addition continues from (addition number, next roll)."""
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job:
+            raise refuse("Job not found", 404)
+        if job["archived_at"]:
+            raise refuse("This job is archived. Move it back to jobs before adding data.", 409)
+        a.kind = "standard" if job["upc"] else job["data_sheet"] if job["data_sheet"] in DATA_SHEETS else None
+        if not a.kind:
+            raise refuse("This job has no encoded data (no UPC, no data sheet), so there is nothing to add to.", 400)
+        a.folder = job["folder_path"]
+        if not a.folder or not os.path.isdir(a.folder):
+            raise refuse("The job folder isn't reachable from the host PC. Nothing was added.", 503)
+        a.seq = (conn.execute("SELECT COALESCE(MAX(seq),0) FROM job_additions WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
+        a.first_roll = (conn.execute("SELECT COALESCE(MAX(roll_number),0) FROM job_rolls WHERE job_id=?", (job_id,)).fetchone()[0]) + 1
+        a.total_before = job_total_qty(conn, job)
+    a.job, a.job_id = job, job_id
+    a.lpr, a.qty_db, a.tag = job["lpr"] or 0, job["qty_db"], f"_ADD{a.seq}"
+    a.label = f"{job['job_ticket'] or job['job_number']}{a.tag}"
 
-        # ── take the serials ──────────────────────────────────────────────────
-        alloc, seq_alloc, warnings = None, None, []
-        start = None
+
+def _preview_addition(a) -> dict:
+    """What adding would do. Reserves nothing."""
+    job, qty = a.job, a.qty
+    n_rolls = -(-qty // a.lpr) if a.lpr > 0 else 0
+    n_files = len(db_file_split(qty, a.qty_db))
+    suffix = lambda i: f"_DB{i}" if n_files > 1 else ""
+    out = {"preview": True, "quantity": qty, "new_total": a.total_before + qty, "seq": a.seq,
+           "first_roll": a.first_roll if n_rolls else None,
+           "last_roll": a.first_roll + n_rolls - 1 if n_rolls else None, "rolls": n_rolls}
+    if a.kind == "standard":
+        nxt = SS.next_start(job["upc"])
+        out.update(serial_start=nxt, serial_end=nxt + qty - 1,
+                   files=[f"{job['upc']}{a.tag}{suffix(i)}.xlsx" for i in range(1, n_files + 1)])
+        if nxt + qty - 1 > SS.MAX_SERIAL:
+            raise refuse("That range runs past the largest serial an EPC can hold.", 400)
+    elif a.kind == CDO_SHEET:
+        nxt = SHEETS_SEQ.next_start(CDO_SHEET)
+        out.update(serial_start=nxt, serial_end=nxt + qty - 1, files=go2_file_names(a.label, n_files))
+    else:
+        out.update(serial_start=None, serial_end=None, files=go2_file_names(a.label, n_files))
+    return out
+
+
+def _take_addition_numbers(build, a):
+    job = a.job
+    opts = {"offline_start": a.offline_start} if a.kind == "standard" else {}
+    try:
+        alloc = _reserve_numbers(build, a.kind, job["upc"], job["job_number"], a.qty, f"addition #{a.seq}", a.who, **opts)
+    except SS.SerialsOffline as e:
+        raise build.stop(f"{e} Nothing was added.", 423, serial_offline=True, **e.info)
+    except (ValueError, SHEETS_SEQ.SheetSerialError) as e:
+        raise build.stop(str(e), 400)
+    except Exception as e:
+        raise build.stop(f"Serial allocation failed, nothing was added: {e}", 500)
+    if a.kind == "standard" and alloc["offline"]:
+        build.warn("Added while the serial registry was offline. The range is saved in the app "
+                   "database and will be written to the registry when it is back.")
+    a.start = alloc["start"] if alloc else None
+    a.end = a.start + a.qty - 1 if a.start else None
+
+
+def _write_addition_files(build, a):
+    """New rolls that continue the numbering, and new _ADD<n> data files. Existing files are never changed."""
+    job, start, end = a.job, a.start, a.end
+    a.rolls = _roll_plan(a.kind, job["upc"], start, a.qty, a.lpr, a.first_roll) if a.lpr else []
+    try:
+        opts = ({"tag": a.tag} if a.kind == "standard"
+                else {"exclude": read_go2_epcs(a.folder)} if a.kind != CDO_SHEET else {})
+        gen = _generate_data_files(a.kind, a.folder, job["upc"], a.label, start, a.qty, a.qty_db, **opts)
+    except Exception as e:
+        raise build.stop(f"The data files could not be written, so nothing was added: {e}"
+                         + (f" Serials {start:,}–{end:,} stay recorded as used, so they are never handed out again." if start else ""),
+                         500, because=f"addition data not written for {job['job_number']}")
+    a.files = gen["files"]
+    a.names = [os.path.basename(f) for f in a.files]
+
+    def remove_files(why):
+        for f in a.files:
+            try: os.remove(f)
+            except OSError: pass
+    build.took("data files", undo=remove_files)
+
+
+def _save_addition(build, a):
+    job, job_id, qty, start, end, rolls = a.job, a.job_id, a.qty, a.start, a.end, a.rolls
+    with DB.connect() as conn:
         try:
-            if kind == "standard":
-                alloc = SS.reserve(job["upc"], job["job_number"], qty, f"addition #{seq}", who=who, offline_start=offline_start)
-                start = alloc["start"]
-                if alloc["offline"]:
-                    warnings.append("Added while the serial registry was offline. The range is saved in the app "
-                                    "database and will be written to the registry when it is back.")
-            elif kind == CDO_SHEET:
-                seq_alloc = SHEETS_SEQ.reserve(CDO_SHEET, job["job_number"], qty, who=who, note=f"addition #{seq}")
-                start = seq_alloc["start"]
-        except SS.SerialsOffline as e:
-            return {"error": f"{e} Nothing was added.", "serial_offline": True, **e.info}, 423
-        except (ValueError, SHEETS_SEQ.SheetSerialError) as e:
-            return {"error": str(e)}, 400
+            ts = now_str()
+            cur = conn.execute(
+                "INSERT INTO job_additions (job_id, seq, quantity, serial_start, serial_end, first_roll, last_roll,"
+                " files, reason, added_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (job_id, a.seq, qty, start, end, rolls[0]["roll_number"] if rolls else 0,
+                 rolls[-1]["roll_number"] if rolls else 0, json.dumps(a.names), a.reason, a.who, ts))
+            add_id = cur.lastrowid
+            _insert_rolls(conn, job_id, rolls, addition_id=add_id)
+            reopened = job["status"] == "Complete"
+            if reopened:
+                conn.execute("UPDATE jobs SET status='In Progress', completed_at=NULL WHERE id=?", (job_id,))
+            conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
+            log_activity(conn, "data_added", job_id,
+                         f"{job_label(job)}: added {qty:,} labels"
+                         + (f", serials {start:,}–{end:,}" if start else "")
+                         + (f", rolls {rolls[0]['roll_number']}–{rolls[-1]['roll_number']}" if rolls else "")
+                         + (" (job reopened)" if reopened else "")
+                         + (f" — {a.reason}" if a.reason else ""), a.who)
+            conn.commit()
+            a.addition = dict(conn.execute("SELECT * FROM job_additions WHERE id=?", (add_id,)).fetchone())
+            a.saved = _load_job(conn, job_id)
         except Exception as e:
-            return {"error": f"Serial allocation failed, nothing was added: {e}"}, 500
-        end = start + qty - 1 if start else None
+            conn.rollback()
+            raise build.stop(f"The addition could not be saved, so nothing was added: {e}"
+                             + (f" Serials {start:,}–{end:,} stay recorded as used." if start else ""),
+                             500, because=f"addition not saved for {job['job_number']}")
+    build.keep()                    # saved: the files and numbers now belong to the job
 
-        # ── rolls and files ───────────────────────────────────────────────────
-        if not lpr:
-            rolls = []
-        elif kind == "standard":
-            rolls = roll_plan(job["upc"], start, qty, lpr, first_roll)
-        elif kind == CDO_SHEET:
-            rolls = roll_plan_seq(start, qty, lpr, first_roll)
-        else:
-            rolls = roll_plan_plain(qty, lpr, first_roll)
-        try:
-            if kind == "standard":
-                gen = generate_db_files(folder, job["upc"], start, qty, qty_db, tag=tag)
-            elif kind == CDO_SHEET:
-                gen = generate_cdo_files(folder, label, start, qty, qty_db)
-            else:
-                gen = generate_go2_files(folder, label, qty, qty_db, exclude=read_go2_epcs(folder))
-        except Exception as e:
-            if seq_alloc:
-                SHEETS_SEQ.void(seq_alloc, f"addition data not written for {job['job_number']}")
-            return {"error": f"The data files could not be written, so nothing was added: {e}"
-                             + (f" Serials {start:,}–{end:,} stay recorded as used, so they are never handed out again." if start else "")}, 500
-        names = [os.path.basename(f) for f in gen["files"]]
 
-        # ── save ──────────────────────────────────────────────────────────────
-        with DB.connect() as conn:
-            try:
-                ts = now_str()
-                cur = conn.execute(
-                    "INSERT INTO job_additions (job_id, seq, quantity, serial_start, serial_end, first_roll, last_roll,"
-                    " files, reason, added_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                    (job_id, seq, qty, start, end, rolls[0]["roll_number"] if rolls else 0,
-                     rolls[-1]["roll_number"] if rolls else 0, json.dumps(names), reason, who, ts))
-                add_id = cur.lastrowid
-                _insert_rolls(conn, job_id, rolls, addition_id=add_id)
-                reopened = job["status"] == "Complete"
-                if reopened:
-                    conn.execute("UPDATE jobs SET status='In Progress', completed_at=NULL WHERE id=?", (job_id,))
-                conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (ts, job_id))
-                log_activity(conn, "data_added", job_id,
-                             f"{job_label(job)}: added {qty:,} labels"
-                             + (f", serials {start:,}–{end:,}" if start else "")
-                             + (f", rolls {rolls[0]['roll_number']}–{rolls[-1]['roll_number']}" if rolls else "")
-                             + (" (job reopened)" if reopened else "")
-                             + (f" — {reason}" if reason else ""), who)
-                conn.commit()
-                addition = dict(conn.execute("SELECT * FROM job_additions WHERE id=?", (add_id,)).fetchone())
-                saved = _load_job(conn, job_id)
-            except Exception as e:
-                conn.rollback()
-                for f in gen["files"]:
-                    try: os.remove(f)
-                    except OSError: pass
-                if seq_alloc:
-                    SHEETS_SEQ.void(seq_alloc, f"addition not saved for {job['job_number']}")
-                return {"error": f"The addition could not be saved, so nothing was added: {e}"
-                                 + (f" Serials {start:,}–{end:,} stay recorded as used." if start else "")}, 500
-        try:
-            warnings += [f"Checklist / QC sheet not rewritten: {m}" for m in regenerate_sheets(job_id)]
-        except Exception as e:
-            warnings.append(f"Checklist / QC sheet not rewritten: {e}")
-        return {"success": True, "addition": addition, "job": saved, "rolls_added": len(rolls),
-                "files": names, "warnings": warnings}, 201
+def _finish_addition(build, a):
+    try:
+        for m in regenerate_sheets(a.job_id):
+            build.warn(f"Checklist / QC sheet not rewritten: {m}")
+    except Exception as e:
+        build.warn(f"Checklist / QC sheet not rewritten: {e}")
+    return {"success": True, "addition": a.addition, "job": a.saved, "rolls_added": len(a.rolls),
+            "files": a.names, "warnings": build.warnings}, 201
 
 
 def _discard_job(job_id):
