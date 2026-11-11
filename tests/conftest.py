@@ -10,7 +10,7 @@ import importlib
 import pytest
 
 SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP_MODULES = ("config", "db", "migrations", "serial_registry", "serial_store", "sheet_serials", "generators", "checklist_generator",
+APP_MODULES = ("config", "db", "migrations", "job_build", "serial_registry", "serial_store", "sheet_serials", "generators", "checklist_generator",
                "lists", "app", "backup", "restore_backup", "import_old")
 
 

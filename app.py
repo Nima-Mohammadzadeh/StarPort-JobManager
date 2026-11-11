@@ -25,6 +25,7 @@ import subprocess
 import io
 from html import escape
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from flask import Flask, jsonify, render_template, request, send_file, abort, Response
 
@@ -36,6 +37,7 @@ from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
+from job_build import Build, Stop, refuse
 import migrations as MIG
 import serial_registry as R
 import serial_store as SS
@@ -280,89 +282,122 @@ def create_job(data: dict) -> tuple[dict, int]:
                 (if quantity and labels per roll are given) rolls tracked by quantity.
                 No UPC serials are given out. Optional data_sheet (see DATA_SHEETS in generators.py):
                 "go2_rand" (customer GO2 only) random EPC sheet; "cdo_seq" (customer CDO only)
-                sequential serial + 8-hex EPC sheet, numbers from sheet_serials.py."""
-    g = lambda k: (str(data.get(k) or "")).strip() or None
-    customer, title, ticket = g("customer"), g("title"), g("job_ticket")
-    upc, label_size, inlay  = g("upc"), g("label_size"), g("inlay_type")
-    part, po, notes, due    = g("part_number"), g("po_number"), g("notes"), g("due_date")
-    created_by = (g("created_by") or actor() or "")[:40] or None
-    job_type = (g("job_type") or ("standard" if upc else "special")).lower()
-    if job_type not in ("standard", "special"):
-        return {"error": "Job type must be standard or special"}, 400
+                sequential serial + 8-hex EPC sheet, numbers from sheet_serials.py.
 
-    if not customer: return {"error": "Customer is required"}, 400
-    customer = sheet_customer(customer) or customer     # go2 / Go2 / cdo / Cdo are one customer each (folders, grouping)
-    if not title:    return {"error": "Item / title is required"}, 400
-    if job_type == "standard" and not upc:
-        return {"error": "A standard job needs a UPC. Choose Special for jobs without one."}, 400
-    data_sheet = g("data_sheet")
-    if data_sheet:
-        cfg = DATA_SHEETS.get(data_sheet)
-        if not cfg:
-            return {"error": "Unknown data sheet."}, 400
-        if job_type != "special" or customer != cfg["customer"]:
-            return {"error": f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}."}, 400
-    if job_type == "special":
-        upc = None                          # special jobs never take serials
+    The work is a list of steps. Each step that takes something (job number, folder, numbers)
+    tells the Build how to put it back, so a failure anywhere is undone in one place (job_build.py)."""
+    build = Build()
     try:
-        quantity = _int(data.get("quantity"), "Quantity", required=(job_type == "standard" or bool(data_sheet)))
-        lpr      = _int(data.get("lpr"), "Labels per roll")
-        qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
-        start_override = _int(data.get("start_serial"), "Start serial") if upc else None
-        offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
-        overage  = float(data.get("overage_pct") or 0)
-        if not 0 <= overage <= 100:
+        s = _read_new_job(data)                 # checks only; takes nothing
+        _check_before_taking_anything(s)
+        _reserve_job_number(build, s)
+        _make_job_folder(build, s)              # BEFORE any serials are taken
+        _take_new_job_numbers(build, s)
+        s.rolls = _roll_plan(s.kind, s.upc, s.start_serial, s.total_qty, s.lpr)
+        _write_new_job_files(build, s)
+        _copy_job_template(build, s)
+        return _save_new_job(build, s)
+    except Stop as stop:
+        return stop.answer
+    except Exception:
+        build.rollback("job creation failed unexpectedly")
+        raise
+
+
+def _read_new_job(data) -> SimpleNamespace:
+    """Read and check what was entered. Raises a refusal; nothing has been taken yet."""
+    g = lambda k: (str(data.get(k) or "")).strip() or None
+    s = SimpleNamespace(
+        customer=g("customer"), title=g("title"), ticket=g("job_ticket"),
+        upc=g("upc"), label_size=g("label_size"), inlay=g("inlay_type"),
+        part=g("part_number"), po=g("po_number"), notes=g("notes"), due=g("due_date"))
+    s.created_by = (g("created_by") or actor() or "")[:40] or None
+    s.job_type = (g("job_type") or ("standard" if s.upc else "special")).lower()
+    if s.job_type not in ("standard", "special"):
+        raise refuse("Job type must be standard or special", 400)
+
+    if not s.customer:
+        raise refuse("Customer is required", 400)
+    s.customer = sheet_customer(s.customer) or s.customer     # go2 / Go2 / cdo / Cdo are one customer each (folders, grouping)
+    if not s.title:
+        raise refuse("Item / title is required", 400)
+    if s.job_type == "standard" and not s.upc:
+        raise refuse("A standard job needs a UPC. Choose Special for jobs without one.", 400)
+    s.data_sheet = g("data_sheet")
+    if s.data_sheet:
+        cfg = DATA_SHEETS.get(s.data_sheet)
+        if not cfg:
+            raise refuse("Unknown data sheet.", 400)
+        if s.job_type != "special" or s.customer != cfg["customer"]:
+            raise refuse(f"The {cfg['customer']} data sheet is only for special (no UPC) jobs for customer {cfg['customer']}.", 400)
+    if s.job_type == "special":
+        s.upc = None                        # special jobs never take serials
+    upc, data_sheet = s.upc, s.data_sheet
+    try:
+        s.quantity = _int(data.get("quantity"), "Quantity", required=(s.job_type == "standard" or bool(data_sheet)))
+        s.lpr      = _int(data.get("lpr"), "Labels per roll")
+        s.qty_db   = _int(data.get("qty_db"), "Qty per DB file") if (upc or data_sheet) else None
+        s.start_override = _int(data.get("start_serial"), "Start serial") if upc else None
+        s.offline_start  = _int(data.get("offline_start"), "Start serial") if (upc and data.get("offline_confirm")) else None
+        s.overage  = float(data.get("overage_pct") or 0)
+        if not 0 <= s.overage <= 100:
             raise ValueError("Overage must be between 0 and 100")
     except ValueError as e:
-        return {"error": str(e)}, 400
+        raise refuse(str(e), 400)
     if upc:
         v = validate_upc(upc)
         if not v["valid"]:
-            return {"error": v["error"], "corrected_upc": v.get("corrected_upc")}, 400
+            raise refuse(v["error"], 400, corrected_upc=v.get("corrected_upc"))
     # How the serials are chosen. The form always says; callers that don't (batch, scripts) get the
     # old behaviour: automatic unless a start serial is given.
     serial_mode = (g("serial_mode") or "").lower() or None
     if serial_mode not in (None, "auto", "manual"):
-        return {"error": "Serial mode must be auto or manual"}, 400
-    if upc and serial_mode == "manual" and not start_override:
-        return {"error": "You chose to specify the start serial. Enter it, or choose Automatic."}, 400
-    if upc and serial_mode == "auto" and start_override:
-        return {"error": "Automatic serials were chosen, but a start serial was also given. Remove one."}, 400
-    manual_start = bool(upc and start_override)
+        raise refuse("Serial mode must be auto or manual", 400)
+    if upc and serial_mode == "manual" and not s.start_override:
+        raise refuse("You chose to specify the start serial. Enter it, or choose Automatic.", 400)
+    if upc and serial_mode == "auto" and s.start_override:
+        raise refuse("Automatic serials were chosen, but a start serial was also given. Remove one.", 400)
+    s.manual_start = bool(upc and s.start_override)
 
-    total_qty = production_qty(quantity, overage) if quantity else None
+    s.total_qty = production_qty(s.quantity, s.overage) if s.quantity else None
     if data_sheet:
-        too_big = sheet_size_error(total_qty, qty_db)
+        too_big = sheet_size_error(s.total_qty, s.qty_db)
         if too_big:
-            return {"error": too_big}, 400
-    template_id = data.get("template_id")
+            raise refuse(too_big, 400)
+    s.template_id = data.get("template_id")
+    s.kind = "standard" if upc else data_sheet          # what gets encoded: "standard", a data sheet, or None
+    return s
 
-    # Pre-flight: if the shared job folders can't be reached, nothing is reserved,
-    # allocated or written. (A job without its folder and files helps no one.)
+
+def _check_before_taking_anything(s):
+    """Pre-flight: if the shared job folders can't be reached, nothing is reserved,
+    allocated or written. (A job without its folder and files helps no one.)"""
     if not os.path.isdir(Z_DRIVE_BASE):
-        return {"error": f"The job folders aren't reachable from the host PC ({Z_DRIVE_BASE}). "
-                         "Nothing was created. Check that the drive or share is connected."}, 503
-    if upc:
-        nxt = SS.next_start(upc)
-        if start_override:
+        raise refuse(f"The job folders aren't reachable from the host PC ({Z_DRIVE_BASE}). "
+                     "Nothing was created. Check that the drive or share is connected.", 503)
+    if s.upc:
+        nxt = SS.next_start(s.upc)
+        if s.start_override:
             # A start the person typed may sit anywhere, as long as none of its range was used before.
-            rc = SS.range_conflicts(upc, start_override, total_qty)
+            rc = SS.range_conflicts(s.upc, s.start_override, s.total_qty)
             if not rc["ok"]:
-                return {"error": str(R.SerialOverlap(rc["start"], rc["end"], rc["conflicts"])),
-                        "conflicts": rc["conflicts"], "next_start": nxt}, 400
-        if (start_override or offline_start or nxt) + total_qty - 1 > SS.MAX_SERIAL:
-            return {"error": "That range runs past the largest serial an EPC can hold."}, 400
+                raise refuse(str(R.SerialOverlap(rc["start"], rc["end"], rc["conflicts"])), 400,
+                             conflicts=rc["conflicts"], next_start=nxt)
+        if (s.start_override or s.offline_start or nxt) + s.total_qty - 1 > SS.MAX_SERIAL:
+            raise refuse("That range runs past the largest serial an EPC can hold.", 400)
 
-    # 1 ── reserve the job number (short lock) ─────────────────────────────────
+
+def _reserve_job_number(build, s):
+    """Reserve the job number (short lock). Undo: drop the row and give the number back."""
     with DB.connect() as conn:
         try:
             conn.execute("BEGIN IMMEDIATE")
             # No duplicate jobs. Checked inside the same lock that reserves the job number, so
             # two people entering the same ticket at the same moment can't both get through.
-            dup = find_duplicate(conn, ticket, customer, title, upc, quantity)
+            dup = find_duplicate(conn, s.ticket, s.customer, s.title, s.upc, s.quantity)
             if dup:
                 conn.rollback()
-                return dup, 409
+                raise Stop(dup, 409)
             job_number = next_job_number(conn)
             ts = now_str()
             # The ticket, UPC and quantity go in with the reservation so a second request that
@@ -370,144 +405,177 @@ def create_job(data: dict) -> tuple[dict, int]:
             cur = conn.execute(
                 "INSERT INTO jobs (job_number, job_ticket, title, customer, upc, quantity, status, created_at, updated_at,"
                 " data_sheet) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)",
-                (job_number, ticket, title, customer, upc, quantity, ts, ts, data_sheet))
+                (job_number, s.ticket, s.title, s.customer, s.upc, s.quantity, ts, ts, s.data_sheet))
             job_id = cur.lastrowid
             conn.commit()
+        except Stop:
+            raise
         except Exception as e:
             conn.rollback()
-            return {"error": f"Could not reserve a job number: {e}"}, 500
+            raise refuse(f"Could not reserve a job number: {e}", 500)
+    s.job_number, s.job_id = job_number, job_id
+    build.took("job number", undo=lambda why: _discard_job(job_id))
 
-    # 2 ── folders, BEFORE any serials are taken ────────────────────────────────
-    job_dir = os.path.join(Z_DRIVE_BASE, *job_folder_parts(customer, label_size, po, ticket, job_number))
+
+def _make_job_folder(build, s):
+    """<customer>\\<label size>\\<date> - <ticket>\\{Data,Print,Proof}. Undo: remove it, if this job made it."""
+    job_dir = os.path.join(Z_DRIVE_BASE, *job_folder_parts(s.customer, s.label_size, s.po, s.ticket, s.job_number))
     try:
         if os.path.isdir(job_dir) and os.listdir(job_dir):
-            job_dir = f"{job_dir} - {job_number}"       # never mix two jobs in one folder
+            job_dir = f"{job_dir} - {s.job_number}"       # never mix two jobs in one folder
     except OSError:
         pass
-    created_new = not os.path.exists(job_dir)
-    warnings, folder_ok = [], False
+    s.job_dir = job_dir
+    if not os.path.exists(job_dir):
+        build.took("folder", undo=lambda why: shutil.rmtree(job_dir, ignore_errors=True))
     try:
         for sub in ("", "Data", "Print", "Proof"):
             os.makedirs(os.path.join(job_dir, sub), exist_ok=True)
-        folder_ok = True
     except Exception as e:
-        _discard_job(job_id, job_dir if created_new else None)
-        return {"error": f"The job folder couldn't be created, so nothing was created: {e}"}, 500
+        raise build.stop(f"The job folder couldn't be created, so nothing was created: {e}", 500)
 
-    # 3 ── serials (standard jobs only), recorded in registry + database + journal ─
-    alloc = None
-    if upc:
-        note = f"+{overage:g}%" if overage > 0 else "base"
-        if manual_start:
-            note += f"; start serial specified by {created_by or 'operator'}"
+
+def _reserve_numbers(build, kind, upc, job_number, qty, note, who, **serial_opts):
+    """Take the numbers this kind of job encodes (new job and added data both come through here).
+    Returns the allocation (it has "start"), or None when the kind takes none. Errors are passed up
+    so each caller can word them.
+
+    standard   UPC serials: recorded in registry + database + journal, never given back. From here on
+               the job number and folder stay too, because the serials are recorded under them.
+    CDO sheet  the customer's running series. Undo marks the numbers VOID (a gap, never a repeat)."""
+    if kind == "standard":
+        alloc = SS.reserve(upc, job_number, qty, note, who=who, **serial_opts)
+        build.took("serials")
+        build.keep()
+        return alloc
+    if kind == CDO_SHEET:
+        alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, qty, who=who, note=note)
+        build.took("sheet numbers", undo=lambda why: SHEETS_SEQ.void(alloc, why))
+        return alloc
+    return None
+
+
+def _roll_plan(kind, upc, start, qty, lpr, first_roll=1):
+    if kind == "standard":
+        return roll_plan(upc, start, qty, lpr, first_roll)
+    if kind == CDO_SHEET:
+        return roll_plan_seq(start, qty, lpr, first_roll)
+    return roll_plan_plain(qty, lpr, first_roll)
+
+
+def _generate_data_files(kind, folder, upc, label, start, qty, qty_db, **opts):
+    """Write the data the encoders load: the UPC encoding database, or the customer's data sheet."""
+    if kind == "standard":
+        return generate_db_files(folder, upc, start, qty, qty_db, **opts)
+    if kind == CDO_SHEET:
+        return generate_cdo_files(folder, label, start, qty, qty_db)
+    return generate_go2_files(folder, label, qty, qty_db, **opts)
+
+
+def _take_new_job_numbers(build, s):
+    s.alloc = s.seq_alloc = None
+    base = f"+{s.overage:g}%" if s.overage > 0 else "base"
+    if s.kind == "standard":
+        note = base + (f"; start serial specified by {s.created_by or 'operator'}" if s.manual_start else "")
         try:
-            alloc = SS.reserve(upc, job_number, total_qty, note, min_start=None if manual_start else start_override,
-                               exact_start=start_override if manual_start else None,
-                               who=created_by, offline_start=offline_start)
+            s.alloc = _reserve_numbers(build, "standard", s.upc, s.job_number, s.total_qty, note, s.created_by,
+                                       min_start=None if s.manual_start else s.start_override,
+                                       exact_start=s.start_override if s.manual_start else None,
+                                       offline_start=s.offline_start)
         except SS.SerialsOffline as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"{e} Nothing was created.", "serial_offline": True, **e.info}, 423
+            raise build.stop(f"{e} Nothing was created.", 423, serial_offline=True, **e.info)
         except ValueError as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": str(e)}, 400
+            raise build.stop(str(e), 400)
         except Exception as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"Serial allocation failed, job not created: {e}"}, 500
-        if alloc["offline"]:
-            warnings.append("Created while the serial registry was offline. The range is saved in the app "
-                            "database and will be written to the registry when it is back.")
-        if not alloc["journaled"] and SS.journal_path():
-            warnings.append("The serial journal (backup folder) couldn't be written. The range is still "
-                            "saved in the registry and the app database.")
-    seq_alloc = None
-    if data_sheet == CDO_SHEET:
+            raise build.stop(f"Serial allocation failed, job not created: {e}", 500)
+        if s.alloc["offline"]:
+            build.warn("Created while the serial registry was offline. The range is saved in the app "
+                       "database and will be written to the registry when it is back.")
+        if not s.alloc["journaled"] and SS.journal_path():
+            build.warn("The serial journal (backup folder) couldn't be written. The range is still "
+                       "saved in the registry and the app database.")
+    elif s.kind == CDO_SHEET:
         try:
-            seq_alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, total_qty, who=created_by,
-                                           note=f"+{overage:g}%" if overage > 0 else "base")
+            s.seq_alloc = _reserve_numbers(build, CDO_SHEET, None, s.job_number, s.total_qty, base, s.created_by)
         except SHEETS_SEQ.SheetSerialError as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"{e} Nothing was created."}, 400
+            raise build.stop(f"{e} Nothing was created.", 400)
         except Exception as e:
-            _discard_job(job_id, job_dir if created_new else None)
-            return {"error": f"CDO serial allocation failed, job not created: {e}"}, 500
-    start_serial = alloc["start"] if alloc else (seq_alloc["start"] if seq_alloc else None)
+            raise build.stop(f"CDO serial allocation failed, job not created: {e}", 500)
+    s.start_serial = s.alloc["start"] if s.alloc else (s.seq_alloc["start"] if s.seq_alloc else None)
 
-    job = {"job_number": job_number, "customer": customer, "title": title,
-           "job_ticket": ticket, "po_number": po, "po_clean": clean_po(po),
-           "part_number": part, "inlay_type": inlay, "label_size": label_size,
-           "due_date": due, "upc": upc, "quantity": quantity, "lpr": lpr,
-           "qty_db": qty_db, "start_serial": start_serial, "overage_pct": overage}
-    rolls = (roll_plan(upc, start_serial, total_qty, lpr) if upc
-             else roll_plan_seq(start_serial, total_qty, lpr) if seq_alloc
-             else roll_plan_plain(total_qty, lpr))
-    generated = {}
 
-    # 4 ── files ────────────────────────────────────────────────────────────────
-    if folder_ok:
-        if upc:
-            try:
-                generated["db_files"] = generate_db_files(job_dir, upc, start_serial, total_qty, qty_db)
-            except Exception as e:
-                warnings.append(f"Encoding database not written: {e}")
-        if data_sheet:
-            label = DATA_SHEETS[data_sheet]["customer"]
-            try:
-                if seq_alloc:
-                    generated["cdo"] = generate_cdo_files(job_dir, ticket or job_number, seq_alloc["start"],
-                                                          total_qty, qty_db)
-                else:
-                    generated["go2"] = generate_go2_files(job_dir, ticket or job_number, total_qty, qty_db)
-            except Exception as e:
-                # Nothing is half-written (the generator removes its own files). Any sequential
-                # numbers already taken stay used (marked VOID), so they can never repeat.
-                if seq_alloc:
-                    SHEETS_SEQ.void(seq_alloc, f"sheet not written for {job_number}")
-                _discard_job(job_id, job_dir if created_new else None)
-                return {"error": f"The {label} data sheet could not be written, "
-                                 f"so nothing was created: {e}"}, 500
-        r = generate_checklist_html(job_dir, job)
-        if not r.get("success"): warnings.append(f"Checklist not written: {r.get('error')}")
-        if rolls:
-            r = generate_qc_sheet(job_dir, job, rolls)
-            if not r.get("success"): warnings.append(f"QC sheet not written: {r.get('error')}")
+def _write_new_job_files(build, s):
+    """Data files, checklist and QC sheet. A data sheet that can't be written abandons the job;
+    the rest are reported as warnings."""
+    job = {"job_number": s.job_number, "customer": s.customer, "title": s.title,
+           "job_ticket": s.ticket, "po_number": s.po, "po_clean": clean_po(s.po),
+           "part_number": s.part, "inlay_type": s.inlay, "label_size": s.label_size,
+           "due_date": s.due, "upc": s.upc, "quantity": s.quantity, "lpr": s.lpr,
+           "qty_db": s.qty_db, "start_serial": s.start_serial, "overage_pct": s.overage}
+    if s.kind == "standard":
+        try:
+            _generate_data_files("standard", s.job_dir, s.upc, None, s.start_serial, s.total_qty, s.qty_db)
+        except Exception as e:
+            build.warn(f"Encoding database not written: {e}")
+    elif s.kind:
+        try:
+            _generate_data_files(s.kind, s.job_dir, None, s.ticket or s.job_number, s.start_serial, s.total_qty, s.qty_db)
+        except Exception as e:
+            # Nothing is half-written (the generator removes its own files). Any sequential
+            # numbers already taken stay used (marked VOID), so they can never repeat.
+            raise build.stop(f"The {DATA_SHEETS[s.kind]['customer']} data sheet could not be written, "
+                             f"so nothing was created: {e}", 500, because=f"sheet not written for {s.job_number}")
+    r = generate_checklist_html(s.job_dir, job)
+    if not r.get("success"):
+        build.warn(f"Checklist not written: {r.get('error')}")
+    if s.rolls:
+        r = generate_qc_sheet(s.job_dir, job, s.rolls)
+        if not r.get("success"):
+            build.warn(f"QC sheet not written: {r.get('error')}")
 
-    # 5 ── template ─────────────────────────────────────────────────────────────
-    template_path = None
-    if folder_ok and template_id:
-        res = copy_template(int(template_id), job_dir, job_number)
-        if res.get("error"): warnings.append(f"Template not copied: {res['error']}")
-        template_path = res.get("dest_path")
 
-    # 6 ── save everything ──────────────────────────────────────────────────────
+def _copy_job_template(build, s):
+    s.template_path = None
+    if s.template_id:
+        res = copy_template(int(s.template_id), s.job_dir, s.job_number)
+        if res.get("error"):
+            build.warn(f"Template not copied: {res['error']}")
+        s.template_path = res.get("dest_path")
+
+
+def _save_new_job(build, s):
+    # From here nothing is undone: the folder and files exist and any numbers are recorded under
+    # this job number, so the reserved row has to stay even if filling it in fails.
+    build.keep()
     with DB.connect() as conn:
         try:
             conn.execute("""UPDATE jobs SET job_ticket=?, po_number=?, part_number=?, due_date=?,
-            notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
-            label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
-            updated_at=? WHERE id=?""",
-                (ticket, po, part, due, notes, upc, quantity, lpr, qty_db, start_serial, overage,
-                 label_size, inlay, job_dir if folder_ok else None, template_path, job_type, created_by,
-                 now_str(), job_id))
-            _insert_rolls(conn, job_id, rolls)
-            log_activity(conn, "created", job_id,
-                         f"Created {job_number} for {customer}"
-                         + (f", ticket {ticket}" if ticket else "")
-                         + (f" (special, {DATA_SHEETS[data_sheet]['customer']} data sheet)" if data_sheet
-                            else " (special, no serials)" if job_type == "special" else "")
-                         + (f" — {total_qty:,} labels in {len(rolls)} rolls" if rolls else "")
-                         + (f"; serials {alloc['start']:,}–{alloc['end']:,} ({'specified by user' if manual_start else 'automatic'})"
-                            if alloc else ""), created_by)
+                notes=?, upc=?, quantity=?, lpr=?, qty_db=?, start_serial=?, overage_pct=?,
+                label_size=?, inlay_type=?, folder_path=?, template_path=?, job_type=?, created_by=?,
+                updated_at=? WHERE id=?""",
+                (s.ticket, s.po, s.part, s.due, s.notes, s.upc, s.quantity, s.lpr, s.qty_db, s.start_serial, s.overage,
+                 s.label_size, s.inlay, s.job_dir, s.template_path, s.job_type, s.created_by,
+                 now_str(), s.job_id))
+            _insert_rolls(conn, s.job_id, s.rolls)
+            log_activity(conn, "created", s.job_id,
+                         f"Created {s.job_number} for {s.customer}"
+                         + (f", ticket {s.ticket}" if s.ticket else "")
+                         + (f" (special, {DATA_SHEETS[s.data_sheet]['customer']} data sheet)" if s.data_sheet
+                            else " (special, no serials)" if s.job_type == "special" else "")
+                         + (f" — {s.total_qty:,} labels in {len(s.rolls)} rolls" if s.rolls else "")
+                         + (f"; serials {s.alloc['start']:,}–{s.alloc['end']:,} ({'specified by user' if s.manual_start else 'automatic'})"
+                            if s.alloc else ""), s.created_by)
             conn.commit()
-            saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
+            saved = dict(conn.execute("SELECT * FROM jobs WHERE id=?", (s.job_id,)).fetchone())
         except Exception as e:
             conn.rollback()
-            return {"error": f"Files were created but the job record could not be saved: {e}. "
-                             f"Serials {start_serial} onward are recorded under {job_number}."}, 500
+            raise refuse(f"Files were created but the job record could not be saved: {e}. "
+                         f"Serials {s.start_serial} onward are recorded under {s.job_number}.", 500)
 
-    return {"success": True, "job": saved, "job_number": job_number,
-            "folder_path": job_dir if folder_ok else None, "serial_alloc": alloc or seq_alloc,
-            "db_split": db_file_split(total_qty, qty_db) if upc else [],
-            "rolls": len(rolls), "warnings": warnings}, 201
+    return {"success": True, "job": saved, "job_number": s.job_number,
+            "folder_path": s.job_dir, "serial_alloc": s.alloc or s.seq_alloc,
+            "db_split": db_file_split(s.total_qty, s.qty_db) if s.upc else [],
+            "rolls": len(s.rolls), "warnings": build.warnings}, 201
 
 
 def job_additions(conn, job_id) -> list:
@@ -692,9 +760,8 @@ def add_data(job_id: int, data: dict) -> tuple[dict, int]:
                 "files": names, "warnings": warnings}, 201
 
 
-def _discard_job(job_id, folder=None):
-    """Undo a job that failed before any serials were taken: drop the reserved row and
-    any folder this attempt created."""
+def _discard_job(job_id):
+    """Undo a job that failed before any serials were taken: drop the reserved row."""
     try:
         with DB.connect() as c:
             row = c.execute("SELECT job_number FROM jobs WHERE id=?", (job_id,)).fetchone()
@@ -706,8 +773,6 @@ def _discard_job(job_id, folder=None):
             c.commit()
     except Exception:
         pass
-    if folder:
-        shutil.rmtree(folder, ignore_errors=True)
 
 
 def _insert_rolls(conn, job_id, rolls, addition_id=None):
