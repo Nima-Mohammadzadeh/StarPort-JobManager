@@ -16,7 +16,7 @@ sys.path.insert(0, site)
 import app as A  # noqa: E402  (reads the sandbox config.ini next to it)
 
 A.validate_and_prepare()
-A.init_db()                                               # adds any new columns to an older demo database
+A.init_db(create=True)                                               # adds any new columns to an older demo database
 MASTER = os.path.join(site, "Master Templates")
 if os.path.realpath(MASTER).lower().startswith(os.path.realpath(r"Z:\\").lower()):
     sys.exit("Refusing to seed templates onto the Z: drive")

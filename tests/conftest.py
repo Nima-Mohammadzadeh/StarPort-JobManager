@@ -45,7 +45,7 @@ class JM:
         finally:
             sys.path.remove(self.root)
         self.config.validate_and_prepare()
-        self.app.init_db()
+        self.app.init_db(create=True)          # a new install, made on purpose
         self.SS.set_journal_dir(self.backups)
         return self
 

@@ -14,6 +14,7 @@ roll tags, analytics, template rules) was removed on purpose.
 """
 import os
 import re
+import sys
 import json
 import time
 import shutil
@@ -89,8 +90,22 @@ def get_db():
     return DB.open()
 
 
-def init_db():
-    """Bring the database up to the version this app needs (see migrations.py). Each step runs once."""
+def init_db(create=False):
+    """Bring the database up to the version this app needs (see migrations.py). Each step runs once.
+
+    The app never makes a database by itself: if none is found it stops, so a copy started from
+    the wrong folder can't quietly begin a second, empty database (and hand out serials again).
+    create=True is for a new install made on purpose (python app.py --create-database), the
+    import tool, the demo sandbox and the tests."""
+    if not create and not DB.exists():
+        raise MIG.DatabaseMissing(
+            f"No database was found at {DB_PATH}\n"
+            "         Job Manager does not create one by itself.\n"
+            "         Updating the app?   This folder does not hold your data. Copy the new files over the\n"
+            "                             existing Job Manager folder (keep local.db, serial_registry and\n"
+            "                             config.ini), or set 'database' in config.ini to the existing file.\n"
+            "         Lost the database?  Restore the latest backup: see RESTORE.md.\n"
+            "         New install?        Run new_install.bat once, then run.bat.")
     with DB.connect() as conn:
         MIG.run(conn, DB_PATH, after={1: repair_data})
         v = MIG.version(conn)
@@ -3290,6 +3305,14 @@ def _lan_ips():
 
 if __name__ == "__main__":
     validate_and_prepare()
+    if "--create-database" in sys.argv:           # new install, asked for on purpose (new_install.bat)
+        if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0:
+            print(f"  [STOP] There is already a file at {DB_PATH}")
+            print("         Nothing was changed. Start Job Manager with run.bat.")
+            raise SystemExit(1)
+        init_db(create=True)
+        print("  New, empty database created. Start Job Manager with run.bat.")
+        raise SystemExit(0)
     try:
         init_db()
     except MIG.SchemaError as e:

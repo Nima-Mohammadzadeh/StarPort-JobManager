@@ -108,7 +108,7 @@ def main():
 
     config.validate_and_prepare()
     import app as A
-    A.init_db()
+    A.init_db(create=True)        # the import is how a new install gets its first data
 
     if not dry:
         bk = f"{config.DB_PATH}.before-import-{datetime.now():%Y%m%d-%H%M%S}"

@@ -15,6 +15,7 @@ Nothing is committed for you: call conn.commit() when the work should be kept.
 open() returns a plain connection for the few places that manage it themselves
 (they must close it in a finally block).
 """
+import os
 import sqlite3
 from contextlib import contextmanager
 
@@ -29,6 +30,23 @@ def open():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def exists() -> bool:
+    """True when DB_PATH holds a Job Manager database (a readable SQLite file with a jobs table).
+    Only looks: a missing, empty or foreign file is left exactly as it is."""
+    try:
+        if os.path.getsize(DB_PATH) == 0:
+            return False
+    except OSError:
+        return False
+    conn = sqlite3.connect(DB_PATH, timeout=TIMEOUT_SECONDS)
+    try:
+        return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone() is not None
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.close()
 
 
 @contextmanager

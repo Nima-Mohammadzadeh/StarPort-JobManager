@@ -11,10 +11,22 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
    - `z_drive_base` = the shared customer folder. Use the network path
      (`\\10.44.4.15\Starport Tech Shared Drive\3 Encoding and Printing Files\Customers Encoding Files`).
    - `database` and `serial_registry` blank = next to `app.py` on the host.
-3. Double-click `run.bat`. It installs Flask, openpyxl and waitress the first time.
-4. In Settings, set the **Backup folder** on the share. It also turns on the serial journal.
+3. **New install only:** double-click `new_install.bat` once. It makes the empty database.
+4. Double-click `run.bat`. It installs Flask, openpyxl and waitress the first time.
+5. In Settings, set the **Backup folder** on the share. It also turns on the serial journal.
    Backups run every 6 hours by default (adjustable). Each zip is a full snapshot and is only
    kept as a good backup if its serial history checks out. To restore, see `RESTORE.md`.
+
+## Updating the app
+
+Close the app, copy the new files over the existing Job Manager folder, and start `run.bat`.
+`local.db`, `serial_registry`, `config.ini` and `backups` are yours and are not part of the app files,
+so they stay as they are. The first start after an update brings the database up to date by itself
+(it prints `updated to version N`).
+
+Job Manager never creates a database by itself. If it is started from a folder that has no database
+(for example a new copy unzipped somewhere else), it stops and says so instead of quietly starting
+a second, empty one. A database newer than the app is refused the same way.
 
 ## What it does
 
@@ -93,6 +105,7 @@ is flagged as a conflict.
 | `templates/index.html` | The desktop interface |
 | `templates/rewind.html` | The rewind operators' page (tablets, phones) |
 | `run.bat`, `run.sh` | Start the app |
+| `new_install.bat` | Make the empty database for a brand-new install (once) |
 | `import_old.py`, `.bat` | Bring data over from the old app |
 | `seed_serials.py`, `.bat` | Find serials used before the app and reserve them |
 | `backup.py` | Snapshot zips and their serial check |

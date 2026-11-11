@@ -6,7 +6,7 @@ sys.path.insert(0, site)
 import app as A  # noqa: E402  (reads the sandbox config.ini next to it)
 
 A.validate_and_prepare()
-A.init_db()
+A.init_db(create=True)
 A.serial_startup()
 c = A.app.test_client()
 

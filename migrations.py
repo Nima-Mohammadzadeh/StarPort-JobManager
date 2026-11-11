@@ -30,6 +30,10 @@ class SchemaError(Exception):
     """The database can't be brought to the version this app needs."""
 
 
+class DatabaseMissing(SchemaError):
+    """There is no Job Manager database where config.ini points, and none is made unasked."""
+
+
 def _add_col(conn, table, col, ddl):
     if col not in [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
