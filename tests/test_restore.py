@@ -22,7 +22,11 @@ def _jobs(jm):
 
 
 def _all_next(jm, RB):
-    return RB.next_starts(RB._all_upcs(sqlite3.connect(jm.config.DB_PATH)))
+    c = sqlite3.connect(jm.config.DB_PATH)
+    try:
+        return RB.next_starts(RB._all_upcs(c))
+    finally:
+        c.close()          # an open connection keeps local.db locked on Windows
 
 
 @pytest.fixture

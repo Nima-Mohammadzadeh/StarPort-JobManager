@@ -60,7 +60,7 @@ def _state(jm):
         for f in files:
             if f.endswith(".txt"):
                 with open(os.path.join(base, f), encoding="utf-8") as fh:
-                    reg[os.path.relpath(os.path.join(base, f), jm.config.SERIAL_REGISTRY_DIR)] = \
+                    reg[os.path.relpath(os.path.join(base, f), jm.config.SERIAL_REGISTRY_DIR).replace("\\", "/")] = \
                         [ln.rstrip("\r\n") for ln in fh if ln.strip() and not ln.startswith("#")]
     s["registry_files"] = reg
     return s

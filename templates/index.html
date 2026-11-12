@@ -2339,7 +2339,9 @@ function validateBatch(quiet) {
   let bad = 0;
   batchRows().forEach(({tr, o}) => {
     const set = (k, isBad) => tr.querySelector(`[data-k="${k}"]`).classList.toggle('bad', isBad);
-    const b1 = !o.customer, b2 = !o.title, b3 = !!upcProblem(o.upc), b4 = !!o.upc && !o.quantity;
+    // A customer with a data sheet (GO2, CDO) and no UPC gets that sheet written, so it needs a quantity.
+    const sheetNoQty = !o.upc && !!sheetDefs().find(d => d.customer.toLowerCase() === (o.customer || '').trim().toLowerCase());
+    const b1 = !o.customer, b2 = !o.title, b3 = !!upcProblem(o.upc), b4 = (!!o.upc || sheetNoQty) && !o.quantity;
     set('customer', b1); set('title', b2); set('upc', b3); set('quantity', b4);
     if (b1 || b2 || b3 || b4) bad++;
   });
@@ -2359,7 +2361,7 @@ async function submitBatch() {
     const d = await api('/api/jobs/batch', {method: 'POST', body: {jobs}});
     d.results.forEach(res => {
       const {tr} = rows[res.row]; const cell = tr.querySelector('.res');
-      if (res.ok) { tr.classList.add('done'); tr.querySelectorAll('input').forEach(i => i.readOnly = true); cell.className = 'res ok'; cell.textContent = res.job_number + (jobs[res.row].job_type === 'special' ? ', special (no serials)' : '') + (res.template ? ', template ' + res.template : ', no template') + (res.warnings.length ? ' (see warnings)' : ''); res.warnings.forEach(w => toast(`${res.job_number}: ${w}`, true)); }
+      if (res.ok) { tr.classList.add('done'); tr.querySelectorAll('input').forEach(i => i.readOnly = true); cell.className = 'res ok'; cell.textContent = res.job_number + (res.data_sheet ? ', ' + res.data_sheet + ' data sheet written' : jobs[res.row].job_type === 'special' ? ', special (no serials)' : '') + (res.template ? ', template ' + res.template : ', no template') + (res.warnings.length ? ' (see warnings)' : ''); res.warnings.forEach(w => toast(`${res.job_number}: ${w}`, true)); }
       else if (res.duplicate_of) { cell.className = 'res bad'; cell.textContent = `Not created: ticket already has ${res.duplicate_of.join(', ')}`; }
       else { cell.className = 'res bad'; cell.textContent = res.error; }
     });

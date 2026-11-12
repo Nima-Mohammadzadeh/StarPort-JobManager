@@ -35,7 +35,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
-                        sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+                        sheet_customer, sheet_for_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
 from job_build import Build, Stop, refuse
 import migrations as MIG
@@ -324,6 +324,11 @@ def _read_new_job(data) -> SimpleNamespace:
     if s.job_type == "standard" and not s.upc:
         raise refuse("A standard job needs a UPC. Choose Special for jobs without one.", 400)
     s.data_sheet = g("data_sheet")
+    # Callers that don't mention a sheet at all (the Batch form, scripts) still get the customer's
+    # sheet: a GO2 / CDO job with no data file is never what anyone wants. An explicit empty
+    # data_sheet (the New job form's "None") is respected.
+    if "data_sheet" not in data and not s.upc and s.job_type == "special":
+        s.data_sheet = sheet_for_customer(s.customer)
     if s.data_sheet:
         cfg = DATA_SHEETS.get(s.data_sheet)
         if not cfg:
@@ -1025,6 +1030,7 @@ def api_batch_create():
         except Exception as e:
             res, code = {"error": str(e)}, 500
         results.append({"row": i, "ok": code == 201, "job_number": res.get("job_number"),
+                        "data_sheet": (DATA_SHEETS.get((res.get("job") or {}).get("data_sheet")) or {}).get("customer"),
                         "template": picked if code == 201 and (res.get("job") or {}).get("template_path") else None,
                         "error": res.get("error"), "duplicate_of": res.get("duplicate_of"),
                         "warnings": res.get("warnings", [])})

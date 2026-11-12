@@ -66,14 +66,17 @@ def app_is_running():
 def _db_readable(path):
     if not os.path.isfile(path):
         return False
+    c = None
     try:
         c = sqlite3.connect(path)
         ok = c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         c.execute("SELECT COUNT(*) FROM jobs")
-        c.close()
         return ok
     except sqlite3.Error:
         return False
+    finally:
+        if c is not None:
+            c.close()       # always: a connection left open on a damaged file keeps it locked on Windows
 
 
 def _cols(conn, table):
@@ -224,10 +227,18 @@ def _safety_copy():
         dest, n = f"{base}_{n}", n + 1
     os.makedirs(dest)
     if os.path.isfile(config.DB_PATH):
+        src = dst = None
         try:
             src, dst = sqlite3.connect(config.DB_PATH), sqlite3.connect(os.path.join(dest, "local.db"))
-            src.backup(dst); dst.close(); src.close()
-        except sqlite3.Error:                      # damaged: copy the raw files instead
+            src.backup(dst)
+            ok = True
+        except sqlite3.Error:
+            ok = False
+        finally:                                   # always close: an open connection locks the file on Windows
+            for c in (dst, src):
+                if c is not None:
+                    c.close()
+        if not ok:                                 # damaged: copy the raw files instead
             for ext in ("", "-wal", "-shm"):
                 if os.path.isfile(config.DB_PATH + ext):
                     shutil.copy2(config.DB_PATH + ext, os.path.join(dest, "local.db" + ext))

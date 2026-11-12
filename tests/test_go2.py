@@ -101,3 +101,38 @@ def test_verifier_rejects_a_drifting_prefix(tmp_path):
     p = str(tmp_path / "bad.xlsx"); wb.save(p)
     with pytest.raises(ValueError, match="bad prefix"):
         g.verify_go2_file(p, 2)
+
+
+# ── Batch form: rows carry no data_sheet, but a GO2 row must still get its data file ──
+def _batch(jm, rows):
+    r = jm.app.app.test_client().post("/api/jobs/batch", json={"jobs": rows})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    return r.get_json()
+
+
+def test_batch_go2_row_writes_its_data_file_on_the_job_drive(jm):
+    d = _batch(jm, [{"customer": "go2", "title": "Tag", "job_ticket": "BG1", "quantity": "250", "lpr": "100",
+                     "job_type": "special"}])
+    (res,) = d["results"]
+    assert res["ok"], res
+    assert res["data_sheet"] == "GO2"
+    from_db = jm.app.app.test_client().get("/api/jobs").get_json()
+    job = next(j for j in (from_db["jobs"] if isinstance(from_db, dict) else from_db) if j["job_number"] == res["job_number"])
+    assert job["data_sheet"] == "go2_rand" and job["customer"] == "GO2"
+    data_dir = os.path.join(job["folder_path"], "Data")
+    assert job["folder_path"].startswith(jm.customers)               # on the shared job drive, like any other job
+    (name,) = [f for f in os.listdir(data_dir) if f.endswith(".xlsx")]
+    rows = _rows(os.path.join(data_dir, name))
+    assert len(rows) == 250 and all(re.fullmatch(r"E2004[0-9A-F]{19}", r[2]) for r in rows)
+
+
+def test_batch_go2_row_without_quantity_is_refused_and_leaves_nothing(jm):
+    d = _batch(jm, [{"customer": "GO2", "title": "Tag", "job_ticket": "BG2", "job_type": "special"}])
+    (res,) = d["results"]
+    assert not res["ok"] and "Quantity" in res["error"]
+
+
+def test_explicitly_no_sheet_is_still_respected(jm):
+    res, code = jm.app.create_job({"customer": "GO2", "title": "x", "job_ticket": "N1", "job_type": "special",
+                                   "data_sheet": ""})
+    assert code == 201 and res["job"]["data_sheet"] is None
