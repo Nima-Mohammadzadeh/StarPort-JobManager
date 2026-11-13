@@ -1,6 +1,6 @@
 # Floor page for Zebra RFID handhelds — design
 
-Date: 2026-11-12 · Status: awaiting review
+Date: 2026-11-12 · Status: approved (scan rules added 2026-11-13)
 
 ## Purpose
 
@@ -56,7 +56,14 @@ that roll, without going back to a desk PC.
   - `other_job`, `wrong_product`, `not_issued`, `ambiguous`, `invalid`, `tid`: a full-width coloured message
     with the server's text, and no action buttons.
 - A scan only identifies. It never changes a roll.
-- Duplicate scans of the same tag within about 2 seconds are ignored, so a held trigger does not stack results.
+- **One tag at a time.** DataWedge cannot be made to send only one tag, so the page enforces it. Input is
+  collected into a burst: a burst closes `BURST_MS` (400 ms) after the last Enter. If the burst holds one
+  distinct tag, it is looked up. If it holds two or more different tags, the page shows a red message
+  ("More than one tag read. Move closer to the one you want and pull again.") and takes none of them.
+  Repeats of the same tag inside a burst count as one.
+- **Gap between scans.** After a burst is accepted, input is ignored for `COOLDOWN_MS` (1500 ms), so a held
+  trigger or a quick second pull does not stack results. A tag identical to the last accepted one is also
+  ignored for that period. Both values are constants at the top of `floor.html` so they can be tuned on a device.
 - Typed or pasted input works in the same field, for devices without a working trigger.
 
 ## Roll actions
@@ -129,10 +136,10 @@ backups or restore.
 
 ## Open items
 
-- **How the Zebra delivers a scan to the browser** is assumed, not confirmed. The model, whether DataWedge
-  has an RFID input profile for it, and whether TagMatiks must stay open all need checking on a device. If a
-  device can't send keystrokes, the fallback is the typed or pasted field, and a native wrapper becomes a
-  separate piece of work.
+- **Scan delivery is confirmed.** The Zebra, through DataWedge, types the EPC into a text field. The
+  profile settings we rely on: RFID Input on, memory bank EPC only, hex to ASCII off, RSSI off, trigger mode
+  Immediate, a short tag read duration; Keystroke Output on with Enter appended and 50 ms inter-character
+  delay. The Scan test screen is how to check them on each device.
 - Whether encoders also need to **add a job note** from the floor is left out of the first version.
 
 ## Out of scope
