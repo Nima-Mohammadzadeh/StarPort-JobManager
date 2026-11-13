@@ -85,6 +85,9 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 #dlg .row{display:flex;gap:10px;margin-top:14px}#dlg .row button{flex:1}
 #dlg .row button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
 #dlg textarea{width:100%;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.emptyhome{text-align:center;padding:36px 14px}.emptyhome .big{font-size:34px;font-weight:800}.emptyhome p{color:var(--muted);margin:8px 0 20px}
+.browse{font-size:19px;font-weight:700;padding:16px 24px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
+.smsg.ok{background:var(--green);color:#fff}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
 </style>
 </head>
@@ -103,9 +106,12 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
     <div id="smsg" aria-live="assertive"></div>
   </div>
   <section id="v-pick" hidden><h2 class="pick">Who is using this scanner?</h2><div id="names"></div></section>
-  <section id="v-home" hidden><div class="sb"><input id="q" type="search" placeholder="Search ticket or customer" autocomplete="off" autocapitalize="off" aria-label="Search jobs"></div><div id="cards"></div></section>
+  <section id="v-home" hidden>
+    <div id="rview"></div>
+    <div id="empty" class="emptyhome" hidden><div class="big">Scan a tag</div><p>Pull the trigger on any tag to see its roll.</p><button id="browse-btn" class="browse">Browse jobs</button></div>
+  </section>
+  <section id="v-browse" hidden><div class="sb"><input id="q" type="search" placeholder="Search ticket or customer" autocomplete="off" autocapitalize="off" aria-label="Search jobs"></div><div id="cards"></div></section>
   <section id="v-job" hidden><div id="jhead"></div><div id="rolls"></div></section>
-  <section id="v-roll" hidden><div id="rview"></div></section>
   <section id="v-test" hidden>
     <div class="tbox">
       <b>Scan test</b>
@@ -167,7 +173,8 @@ const $ = s => document.querySelector(s);
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmt = n => (n === null || n === undefined || n === '') ? '-' : Number(n).toLocaleString();
 const OP_KEY = 'jm_floor_operator';
-const S = {jobs: [], d: null, q: '', busy: false, operator: '', cfg: null, picking: false, offline: false, scan: null, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
+/* S.cur is the roll on screen: {job, roll, scan}. S.seq numbers lookups so a slow, older one never replaces a newer scan. */
+const S = {jobs: [], d: null, q: '', busy: false, operator: '', cfg: null, picking: false, offline: false, cur: null, seq: 0, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
 try { S.operator = localStorage.getItem(OP_KEY) || ''; } catch (e) {}
 
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
@@ -193,27 +200,39 @@ function feedback(good) {
   } catch (e) {}
 }
 
-/* ── routing: #/ · #/job/12 · #/job/12/roll/3 · #/test ── */
+/* ── routing: #/ is the scan screen · #/browse · #/browse/12 · #/test ── */
 function route() {
   const h = location.hash || '#/';
-  if (h === '#/test') return {test: true, job: null, roll: null};
-  const m = h.match(/^#\/job\/(\d+)(?:\/roll\/(\d+))?$/);
-  return m ? {test: false, job: +m[1], roll: m[2] ? +m[2] : null} : {test: false, job: null, roll: null};
+  if (h === '#/test') return {view: 'test', job: null};
+  if (h === '#/browse') return {view: 'browse', job: null};
+  const m = h.match(/^#\/browse\/(\d+)$/);
+  return m ? {view: 'job', job: +m[1]} : {view: 'scan', job: null};
 }
 function go(h) { if (location.hash === h) render(); else location.hash = h; }
 window.addEventListener('hashchange', () => { if (dialogOpen()) closeDlg(); render(); });
 
-/* ── who is using it ── */
+/* ── data ── */
 async function loadList() { S.jobs = (await api('/api/rewind/jobs?view=open')).jobs; }
-async function loadJob(id) { S.d = await api('/api/rewind/jobs/' + id); }
+async function loadJob(id) {
+  const d = await api('/api/rewind/jobs/' + id), rt = route();
+  if ((rt.view === 'job' ? rt.job : S.cur && S.cur.job) === id) S.d = d;   // ignore a job that is no longer on screen
+}
 async function refresh() {
   const rt = route();
-  try { if (!rt.test && !S.picking && S.operator) { if (rt.job === null) await loadList(); else await loadJob(rt.job); } } catch (e) {}
+  try {
+    if (!S.picking && S.operator) {
+      if (rt.view === 'browse') await loadList();
+      else if (rt.view === 'job') await loadJob(rt.job);
+      else if (rt.view === 'scan' && S.cur) await loadJob(S.cur.job);
+    }
+  } catch (e) {}
   draw();
 }
 const dialogOpen = () => !$('#dlg').hidden;
 const rstate = r => (r.status === 'complete' || r.status === 'verified') ? 'done' : r.status === 'running' ? 'running' : r.status === 'paused' ? 'paused' : 'pending';
 const RLAB = {done: 'Done', running: 'In progress', paused: 'Left in progress', pending: 'Not started'};
+
+/* ── who is using it ── */
 async function loadCfg() { S.cfg = await api('/api/floor/config'); }
 function setOperator(name) {
   S.operator = name; S.picking = false;
@@ -229,40 +248,58 @@ function drawNames() {
 }
 $('#who').onclick = async () => { S.picking = true; render(); try { await loadCfg(); drawNames(); } catch (e) {} };
 
-/* ── scanning ── */
-const collector = createScanCollector();
+/* ── the roll on screen ── */
+function setMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${kind}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`; }
+function clearMsg() { $('#smsg').innerHTML = ''; }
+function showCard(job, roll, scan) {          // a found tag, or a roll tapped while browsing
+  S.cur = {job, roll, scan}; S.seq++;
+  if (S.d && S.d.job.id !== job) S.d = null;
+  clearMsg(); if (dialogOpen()) closeDlg();
+  go('#/');
+}
+function rejectScan(text, extra, kind) {       // nothing the encoder could act on: no card, so no buttons
+  S.cur = null; S.d = null; S.seq++;
+  if (dialogOpen()) closeDlg();
+  setMsg(kind || 'bad', text, extra);
+  go('#/');
+}
+
+/* ── scanning: auto-submit when a complete tag has been typed, or Enter; the collector keeps it to one tag ── */
+const collector = createScanCollector(), auto = createAutoSubmit();
 const REJECT = 'More than one tag read. Move closer to the one you want and pull again.';
-function visible(t) { return String(t).replace(/\t/g, '\u21E5').replace(/ /g, '\u00B7').replace(/\r|\n/g, '\u21B5'); }
+function visible(t) { return String(t).replace(/\t/g, '⇥').replace(/ /g, '·').replace(/\r|\n/g, '↵'); }
+function take(v) { S.lastRaw = v; S.lastScanAt = Date.now(); drawTest(); collector.push(v, Date.now()); }
 $('#scan').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
-  const v = $('#scan').value; $('#scan').value = '';
-  if (dialogOpen()) return;
-  S.lastRaw = v; S.lastScanAt = Date.now(); drawTest();
-  collector.push(v, Date.now());
+  const v = $('#scan').value; $('#scan').value = ''; auto.input('', Date.now());
+  if (dialogOpen() || !v.trim()) return;
+  take(v);
 });
-$('#scan').addEventListener('input', () => { if (!dialogOpen()) collector.activity(Date.now()); });
+$('#scan').addEventListener('input', () => { if (dialogOpen()) return; collector.activity(Date.now()); auto.input($('#scan').value, Date.now()); });
 setInterval(() => {
-  const d = collector.due(Date.now());
-  if (!d) return;
-  if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); showMsg('bad', REJECT); drawTest(); return; }
-  if (!dialogOpen()) lookup(d.epc);
+  const now = Date.now(), a = auto.due(now);
+  if (a !== null && !dialogOpen()) { $('#scan').value = ''; take(a); }
+  const d = collector.due(now);
+  if (!d || dialogOpen()) return;
+  if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); rejectScan(REJECT); drawTest(); return; }
+  lookup(d.epc);
 }, 50);
-function showMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${kind}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`; }
 async function lookup(raw) {
-  $('#smsg').innerHTML = '';
+  clearMsg();
+  const my = ++S.seq;
   let r;
-  const sentAt = location.hash;
-  try { r = await api('/api/rewind/lookup', {raw, job_id: route().job || ''}); }
-  catch (e) { S.lastResult = 'No connection to the server'; showMsg('bad', 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.'); feedback(false); drawTest(); return; }
+  try { r = await api('/api/rewind/lookup', {raw, job_id: ''}); }
+  catch (e) { if (my !== S.seq) return; S.lastResult = 'No connection to the server'; setMsg('bad', 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.'); feedback(false); drawTest(); return; }
+  if (my !== S.seq) return;                    // a newer scan or a tap replaced this one while it ran
   S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
   drawTest();
-  if (dialogOpen() || location.hash !== sentAt) return;     // the screen changed while the lookup ran: never act on it
-  if (route().test) { feedback(r.result === 'found'); return; }   // Scan test only shows the verdict
-  if (r.result === 'found') { S.scan = r; feedback(true); go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); return; }
+  if (dialogOpen()) return;
+  if (route().view === 'test') { feedback(r.result === 'found'); return; }   // Scan test only shows the verdict
+  if (r.result === 'found') { feedback(true); showCard(r.roll.job_id, r.roll.roll_number, r); return; }
   feedback(false);
-  showMsg(r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad', r.message,
-          r.note ? esc(r.note) : (r.epc && r.epc.length === 24 ? `<span class="data">${esc(r.epc)}</span>` : ''));
+  rejectScan(r.message, r.note ? esc(r.note) : (r.epc && r.epc.length === 24 ? `<span class="data">${esc(r.epc)}</span>` : ''),
+             r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad');
 }
 
 /* ── drawing ── */
@@ -281,29 +318,30 @@ function drawTest() {
 function drawList() {
   const q = S.q.toLowerCase().trim();
   const rows = S.jobs.filter(j => !q || [j.job_ticket, j.customer, j.title, j.job_number, j.upc].join(' ').toLowerCase().includes(q));
-  $('#cards').innerHTML = rows.length ? rows.map(j => `<button class="card" onclick="go('#/job/${j.id}')">
+  $('#cards').innerHTML = rows.length ? rows.map(j => `<button class="card" onclick="go('#/browse/${j.id}')">
       <div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span><span class="pill ${j.status === 'In Progress' ? 'running' : ''}">${esc(j.status)}</span></div>
       <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div>
       <div class="pr">${j.roll_total ? j.roll_done + ' of ' + j.roll_total + ' rolls done' + (j.roll_running ? ', ' + j.roll_running + ' in progress' : '') : 'No rolls set up yet'}</div></button>`).join('')
     : `<div class="empty">${q ? 'No jobs match that search.' : 'No open jobs in encoding right now.'}</div>`;
 }
+function who(r, st) { return st === 'done' ? r.completed_by : st === 'running' ? r.started_by : st === 'paused' ? r.paused_by : ''; }
 function drawJob() {
   if (!S.d || S.d.job.id !== route().job) { $('#jhead').innerHTML = '<div class="empty">Loading job...</div>'; $('#rolls').innerHTML = ''; return; }
   const {job: j, rolls} = S.d;
   $('#jhead').innerHTML = `<div class="hit"><div class="tk">${esc(j.job_ticket || j.job_number)}</div><div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div></div>`;
   $('#rolls').innerHTML = rolls.length ? rolls.map(r => { const st = rstate(r);
-    return `<button class="roll s-${st}" onclick="go('#/job/${j.id}/roll/${r.roll_number}')"><span class="n">${r.roll_number}</span><span class="body">
+    return `<button class="roll s-${st}" onclick="showCard(${j.id}, ${r.roll_number}, null)"><span class="n">${r.roll_number}</span><span class="body">
       <b>${RLAB[st]}${r.printer ? ' on ' + esc(r.printer) : ''}</b><span class="data">${r.serial_start ? fmt(r.serial_start) + ' - ' + fmt(r.serial_end) : ''}</span>
       <span style="color:var(--muted)">${fmt(r.quantity)} labels${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</span></span></button>`; }).join('')
     : '<div class="empty">No roll data for this job yet.</div>';
 }
-function who(r, st) { return st === 'done' ? r.completed_by : st === 'running' ? r.started_by : st === 'paused' ? r.paused_by : ''; }
-function drawRoll() {
-  const rt = route();
-  if (!S.d || S.d.job.id !== rt.job) { $('#rview').innerHTML = '<div class="empty">Loading roll...</div>'; return; }
-  const j = S.d.job, r = S.d.rolls.find(x => x.roll_number === rt.roll);
+function drawCard() {
+  $('#empty').hidden = !!S.cur;
+  if (!S.cur) { $('#rview').innerHTML = ''; return; }
+  if (!S.d || S.d.job.id !== S.cur.job) { $('#rview').innerHTML = '<div class="empty">Loading roll...</div>'; return; }
+  const j = S.d.job, r = S.d.rolls.find(x => x.roll_number === S.cur.roll);
   if (!r) { $('#rview').innerHTML = '<div class="empty">That roll was not found.</div>'; return; }
-  const st = rstate(r), sc = S.scan && S.scan.roll && S.scan.roll.job_id === j.id && S.scan.roll.roll_number === r.roll_number ? S.scan.roll : null;
+  const st = rstate(r), sc = S.cur.scan && S.cur.scan.roll && S.cur.scan.roll.roll_number === r.roll_number ? S.cur.scan.roll : null;
   const off = S.offline || S.busy, dis = off ? 'disabled' : '';
   const btn = (label, fn, cls) => `<button class="${cls || ''}" ${dis} onclick="${fn}">${label}</button>`;
   const acts = st === 'pending' ? btn('Start', 'startRoll()', 'main wide')
@@ -322,41 +360,42 @@ function drawRoll() {
 }
 function draw() {
   const rt = route();
-  if (S.picking || !S.operator || rt.test) return;
-  if (rt.job === null) drawList(); else if (rt.roll === null) drawJob(); else drawRoll();
+  if (S.picking || !S.operator || rt.view === 'test') return;
+  if (rt.view === 'browse') drawList(); else if (rt.view === 'job') drawJob(); else drawCard();
 }
 
 /* ── roll actions: every one sends the encoder's name; the server's own rules decide ── */
-let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action always uses this, never the current route
+let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action always uses this, never whatever is on screen later
 function openDlg(html, target) { DLG = target || null; const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
 function closeDlg() { DLG = null; const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
 const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
 async function act(fn) {
   S.busy = true; draw(); closeDlg();
   try { await fn(); toast('Saved as ' + S.operator); }
-  catch (e) { showMsg('bad', e.message); feedback(false); }
+  catch (e) { setMsg('bad', e.message); feedback(false); }
   S.busy = false; await refresh();
 }
-const here = () => ({job: route().job, roll: route().roll});
+const here = () => S.cur ? {job: S.cur.job, roll: S.cur.roll} : null;
 const setStatus = (t, status, note) => api(`/api/jobs/${t.job}/rolls/${t.roll}`, {status, operator: S.operator, note: note || ''});
 async function startRoll() {
-  const t = here();
+  const t = here(); if (!t) return;
   let pr = {printers: [], busy: []};
   try { pr = await api('/api/printers'); } catch (e) { return; }
-  if (dialogOpen() || location.hash !== '#/job/' + t.job + '/roll/' + t.roll) return;
+  if (dialogOpen() || !S.cur || S.cur.job !== t.job || S.cur.roll !== t.roll) return;   // the card changed while the list loaded
   const busy = {}; pr.busy.forEach(b => busy[b.printer.toLowerCase()] = b);
   openDlg('<h3>Which printer for roll ' + t.roll + '?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
     return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>', t);
   document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${t.job}/rolls/${t.roll}/printer`, {printer: b.dataset.printer, operator: S.operator})));
 }
 function pauseRoll() {
-  const t = here();
+  const t = here(); if (!t) return;
   openDlg('<h3>Leave roll ' + t.roll + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>', t);
   $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus(t, 'paused', note)); };
 }
-function resumeRoll() { const t = here(); act(() => setStatus(t, 'running')); }
+function resumeRoll() { const t = here(); if (t) act(() => setStatus(t, 'running')); }
 function confirmRoll(kind) {
-  const t = here(), word = kind === 'complete' ? 'Complete' : 'Reopen';
+  const t = here(); if (!t) return;
+  const word = kind === 'complete' ? 'Complete' : 'Reopen';
   openDlg(`<h3>${word} roll ${t.roll} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`, t);
   $('#cgo').onclick = () => act(() => setStatus(t, kind === 'complete' ? 'complete' : 'running'));
 }
@@ -365,25 +404,26 @@ document.addEventListener('keydown', e => {   // a scan's Enter must never press
 }, true);
 $('#q').addEventListener('input', e => { S.q = e.target.value; drawList(); });
 $('#q').addEventListener('keydown', e => {    // a scan that lands in the search box still counts as a scan
-  if (e.key === 'Enter' && /^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) { e.preventDefault(); collector.push(e.target.value, Date.now()); e.target.value = ''; S.q = ''; drawList(); }
+  if (e.key === 'Enter' && /^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) { e.preventDefault(); take(e.target.value); e.target.value = ''; S.q = ''; drawList(); }
 });
 window.addEventListener('offline', () => { S.offline = true; setBar(); draw(); });
 window.addEventListener('online', () => { S.offline = false; setBar(); refresh(); });
 function render() {
   const rt = route(), picking = S.picking || !S.operator;
-  $('#v-pick').hidden = !picking; $('#v-test').hidden = picking || !rt.test;
-  $('#v-home').hidden = picking || rt.test || rt.job !== null; $('#v-job').hidden = picking || rt.test || rt.job === null || rt.roll !== null;
-  $('#v-roll').hidden = picking || rt.test || rt.roll === null;
+  $('#v-pick').hidden = !picking; $('#v-test').hidden = picking || rt.view !== 'test';
+  $('#v-home').hidden = picking || rt.view !== 'scan'; $('#v-browse').hidden = picking || rt.view !== 'browse'; $('#v-job').hidden = picking || rt.view !== 'job';
   $('#scanbar').hidden = picking;
-  $('#back').hidden = picking || (rt.job === null && !rt.test);
+  $('#back').hidden = picking || rt.view === 'scan';
   $('#title').textContent = S.operator || 'Floor';
-  $('#sub').textContent = picking ? 'Choose your name' : (rt.test ? 'Scan test' : 'Tap to change name');
+  $('#sub').textContent = picking ? 'Choose your name' : rt.view === 'test' ? 'Scan test' : rt.view === 'scan' ? 'Tap to change name' : 'Browse jobs';
+  if (rt.view !== 'scan') clearMsg();
   if (picking) drawNames(); else { drawTest(); draw(); refresh(); setTimeout(focusScan, 60); }
 }
 function focusScan() { if (!$('#scanbar').hidden && !document.querySelector('[data-dialog]')) $('#scan').focus({preventScroll: true}); }
 document.addEventListener('click', e => { if (!e.target.closest('input,textarea,select')) setTimeout(focusScan, 0); });
-$('#back').onclick = () => { const rt = route(); go(rt.roll !== null ? '#/job/' + rt.job : '#/'); window.scrollTo(0, 0); };
-$('#testbtn').onclick = () => go(route().test ? '#/' : '#/test');
+$('#back').onclick = () => { go(route().view === 'job' ? '#/browse' : '#/'); window.scrollTo(0, 0); };
+$('#testbtn').onclick = () => go(route().view === 'test' ? '#/' : '#/test');
+$('#browse-btn').onclick = () => go('#/browse');
 setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
 setInterval(async () => { if (dialogOpen() || S.busy) return; try { await api('/api/stamp'); } catch (e) {} refresh(); }, 8000);
 
