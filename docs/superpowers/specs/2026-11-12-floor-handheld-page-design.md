@@ -1,5 +1,7 @@
 # Floor page for Zebra RFID handhelds — design
 
+> The screen flow in this spec is superseded by `2026-11-13-floor-scan-first-design.md` (scan is the home screen).
+
 Date: 2026-11-12 · Status: approved (scan rules added 2026-11-13)
 
 ## Purpose

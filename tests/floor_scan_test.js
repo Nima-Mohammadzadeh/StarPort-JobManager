@@ -7,7 +7,7 @@ const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'templates', 'floor.html'), 'utf8');
 const m = html.match(/\/\* scan-collector:start \*\/([\s\S]*?)\/\* scan-collector:end \*\//);
 assert.ok(m, 'scan-collector markers not found in templates/floor.html');
-const create = new Function(m[1] + '; return createScanCollector;')();
+const {createScanCollector: create, createAutoSubmit} = new Function(m[1] + '; return {createScanCollector, createAutoSubmit};')();
 
 const A = '300000000000000000000001';
 const B = '300000000000000000000002';
@@ -79,4 +79,86 @@ test('keystrokes with no open burst start nothing', () => {
   const c = create();
   c.activity(0); c.activity(50);
   assert.strictEqual(c.due(1000), null);
+});
+
+// Scan-first: a different tag is accepted straight after a used scan; only the same tag waits out the cooldown.
+test('different tag is accepted straight after a used scan', () => {
+  const c = create();
+  c.push(A, 0);
+  assert.strictEqual(c.due(400).kind, 'one');
+  assert.strictEqual(c.push(B, 500), true);
+  assert.deepStrictEqual(c.due(900), {kind: 'one', epc: B});
+});
+
+// Auto-submit: 24 hex characters then 150 ms of quiet counts as a scan, no Enter needed.
+test('auto: 24 hex then 150 ms of quiet submits once', () => {
+  const a = createAutoSubmit();
+  a.input(A, 0);
+  assert.strictEqual(a.due(149), null);
+  assert.strictEqual(a.due(150), A);
+  assert.strictEqual(a.due(151), null);
+});
+
+test('auto: a partial value never submits', () => {
+  const a = createAutoSubmit();
+  a.input(A.slice(0, 12), 0);
+  assert.strictEqual(a.due(5000), null);
+});
+
+test('auto: typing resets the timer', () => {
+  const a = createAutoSubmit();
+  a.input(A, 0); a.input(A, 100);
+  assert.strictEqual(a.due(249), null);
+  assert.strictEqual(a.due(250), A);
+});
+
+test('auto: lowercase hex counts, 25 characters and non-hex do not', () => {
+  let a = createAutoSubmit();
+  a.input(A.replace(/0/g, 'a'), 0);
+  assert.strictEqual(a.due(150), A.replace(/0/g, 'a'));
+  a = createAutoSubmit(); a.input(A + '0', 0);
+  assert.strictEqual(a.due(1000), null);
+  a = createAutoSubmit(); a.input('Z'.repeat(24), 0);
+  assert.strictEqual(a.due(1000), null);
+});
+
+test('auto: a value that stops matching is forgotten', () => {
+  const a = createAutoSubmit();
+  a.input(A, 0); a.input('', 50);
+  assert.strictEqual(a.due(1000), null);
+});
+
+// Review fix: with no Enter, anything that is not a clean 24-hex read must not sit in the field forever.
+test('stale: the same tag typed twice back to back is handed over as two tags', () => {
+  const a = createAutoSubmit();
+  a.input(A + A, 0);
+  assert.strictEqual(a.due(5000), null);                     // not exactly 24 hex: never auto-submitted
+  assert.deepStrictEqual(a.stale(999), null);
+  assert.deepStrictEqual(a.stale(1000), [A, A]);
+  assert.strictEqual(a.stale(2000), null);
+});
+
+test('stale: two different tags typed back to back are handed over as two tags', () => {
+  const a = createAutoSubmit();
+  a.input(A + B, 0);
+  assert.deepStrictEqual(a.stale(1000), [A, B]);
+});
+
+test('stale: a partial value is handed over whole after a second so the server can explain it', () => {
+  const a = createAutoSubmit();
+  a.input(A.slice(0, 12), 0);
+  assert.strictEqual(a.stale(999), null);
+  assert.deepStrictEqual(a.stale(1000), [A.slice(0, 12)]);
+});
+
+test('stale: typing keeps it waiting, an exact 24-hex value is left to due(), a cleared value is forgotten', () => {
+  let a = createAutoSubmit();
+  a.input('30', 0); a.input('3000', 800);
+  assert.strictEqual(a.stale(1700), null);
+  assert.deepStrictEqual(a.stale(1800), ['3000']);
+  a = createAutoSubmit(); a.input(A, 0);
+  assert.strictEqual(a.stale(5000), null);
+  assert.strictEqual(a.due(5000), A);
+  a = createAutoSubmit(); a.input('3000', 0); a.input('', 100);
+  assert.strictEqual(a.stale(5000), null);
 });
