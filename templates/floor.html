@@ -97,6 +97,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .emptyhome{text-align:center;padding:36px 14px}.emptyhome .big{font-size:34px;font-weight:800}.emptyhome p{color:var(--muted);margin:8px 0 20px}
 .browse{font-size:19px;font-weight:700;padding:16px 24px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
 .smsg.ok{background:var(--green);color:#fff}
+.smsg.float{position:fixed;left:12px;right:12px;bottom:12px;z-index:30;margin:0;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
 </style>
 </head>
@@ -136,7 +137,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 
 <script>
 /* scan-collector:start */
-const BURST_MS = 400, COOLDOWN_MS = 1500, AUTO_MS = 150;   // tune on a real device
+const BURST_MS = 400, COOLDOWN_MS = 1500, AUTO_MS = 150, STALE_MS = 1000;   // tune on a real device
 /* A trigger pull can send several tags. Reads that arrive close together are one burst: one distinct tag is
    used, two or more different tags are refused (none used). After a used scan, the same tag is ignored briefly
    (a held trigger); a different tag is accepted at once. */
@@ -162,17 +163,22 @@ function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}
   };
 }
 /* A complete read (exactly 24 hex characters) that then stays quiet for idleMs counts as a scan, so a Zebra
-   that does not send Enter still works. Returns the value once; anything else is forgotten. */
-function createAutoSubmit({idleMs = AUTO_MS} = {}) {
-  let value = null, at = 0;
+   that does not send Enter still works. Anything else left in the field (a partial read, the same tag typed twice,
+   two tags back to back) is handed over after staleMs so it can never jam the field: a multiple of 24 hex is
+   split into tags, other text goes whole so the server can explain it. */
+function createAutoSubmit({idleMs = AUTO_MS, staleMs = STALE_MS} = {}) {
+  let value = '', at = 0;
+  const exact = v => /^[0-9a-fA-F]{24}$/.test(v);
   return {
-    input(v, now) {
-      const t = String(v == null ? '' : v).trim();
-      if (/^[0-9a-fA-F]{24}$/.test(t)) { value = t; at = now; } else value = null;
-    },
+    input(v, now) { value = String(v == null ? '' : v).trim(); at = now; },
     due(now) {
-      if (value === null || now - at < idleMs) return null;
-      const t = value; value = null; return t;
+      if (!exact(value) || now - at < idleMs) return null;
+      const t = value; value = ''; return t;
+    },
+    stale(now) {
+      if (!value || exact(value) || now - at < staleMs) return null;
+      const t = value; value = '';
+      return /^[0-9a-fA-F]+$/.test(t) && t.length > 24 && t.length % 24 === 0 ? t.match(/.{24}/g) : [t];
     },
   };
 }
@@ -190,8 +196,8 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.displa
 async function api(url, body) {
   const opt = body === undefined ? {cache: 'no-store'} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), cache: 'no-store'};
   let r;
-  try { r = await fetch(url, opt); } catch (e) { S.offline = true; setBar(); throw new Error('No connection to the server'); }
-  S.offline = false; S.updated = new Date(); setBar();
+  try { r = await fetch(url, opt); } catch (e) { const was = S.offline; S.offline = true; setBar(); if (!was) draw(); throw new Error('No connection to the server'); }
+  const was = S.offline; S.offline = false; S.updated = new Date(); setBar(); if (was) draw();
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   return j;
@@ -258,8 +264,12 @@ function drawNames() {
 $('#who').onclick = async () => { S.picking = true; render(); try { await loadCfg(); drawNames(); } catch (e) {} };
 
 /* ── the roll on screen ── */
-function setMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${kind}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`; }
-function clearMsg() { $('#smsg').innerHTML = ''; }
+function setMsg(kind, msg, extra, ms) {      // ms: a transient message that floats over the screen and clears itself
+  clearTimeout(setMsg.t);
+  $('#smsg').innerHTML = `<div class="smsg ${kind}${ms ? ' float' : ''}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`;
+  if (ms) setMsg.t = setTimeout(clearMsg, ms);
+}
+function clearMsg() { clearTimeout(setMsg.t); $('#smsg').innerHTML = ''; }
 function showCard(job, roll, scan) {          // a found tag, or a roll tapped while browsing
   S.cur = {job, roll, scan}; S.seq++;
   if (S.d && S.d.job.id !== job) S.d = null;
@@ -287,8 +297,12 @@ $('#scan').addEventListener('keydown', e => {
 });
 $('#scan').addEventListener('input', () => { if (dialogOpen()) return; collector.activity(Date.now()); auto.input($('#scan').value, Date.now()); });
 setInterval(() => {
-  const now = Date.now(), a = auto.due(now);
-  if (a !== null && !dialogOpen()) { $('#scan').value = ''; take(a); }
+  const now = Date.now(), a = auto.due(now), st = a === null ? auto.stale(now) : null;
+  if (a !== null) {                            // a complete tag; it may have been typed into the scan field or the search box
+    if ($('#scan').value.trim() === a) $('#scan').value = '';
+    if ($('#q').value.trim() === a) { $('#q').value = ''; S.q = ''; drawList(); }
+    if (!dialogOpen()) take(a);
+  } else if (st) { $('#scan').value = ''; if (!dialogOpen()) st.forEach(take); }
   const d = collector.due(now);
   if (!d || dialogOpen()) return;
   if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); rejectScan(REJECT); drawTest(); return; }
@@ -299,7 +313,13 @@ async function lookup(raw) {
   const my = ++S.seq;
   let r;
   try { r = await api('/api/rewind/lookup', {raw, job_id: ''}); }
-  catch (e) { if (my !== S.seq) return; S.lastResult = 'No connection to the server'; setMsg('bad', 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.'); feedback(false); drawTest(); return; }
+  catch (e) {                                  // a scan that could not be looked up must not leave an old card with live buttons
+    if (my !== S.seq) return;
+    S.lastResult = e.message; feedback(false); drawTest();
+    if (route().view === 'test') return;
+    rejectScan(e.message === 'No connection to the server' ? 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.' : e.message);
+    return;
+  }
   if (my !== S.seq) return;                    // a newer scan or a tap replaced this one while it ran
   S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
   drawTest();
@@ -375,13 +395,13 @@ function draw() {
 
 /* ── roll actions: every one sends the encoder's name; the server's own rules decide ── */
 let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action always uses this, never whatever is on screen later
-function openDlg(html, target) { DLG = target || null; const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
-function closeDlg() { DLG = null; const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
+function openDlg(html, target) { DLG = target || null; $('#scan').value = ''; auto.input('', Date.now()); const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
+function closeDlg() { DLG = null; $('#scan').value = ''; auto.input('', Date.now()); const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
 const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
 async function act(fn, okText) {
   S.busy = true; draw(); closeDlg();
-  try { await fn(); setMsg('ok', okText); clearTimeout(act.t); act.t = setTimeout(() => { if ($('#smsg .smsg.ok')) clearMsg(); }, 3000); }
-  catch (e) { setMsg('bad', e.message); feedback(false); }
+  try { await fn(); setMsg('ok', okText, null, 3000); }
+  catch (e) { setMsg('bad', e.message, null, 6000); feedback(false); }
   S.busy = false; await refresh();
 }
 const here = () => S.cur ? {job: S.cur.job, roll: S.cur.roll} : null;
@@ -413,7 +433,7 @@ function confirmRoll(kind) {
 document.addEventListener('keydown', e => {   // a scan's Enter must never press a dialog button
   if (dialogOpen() && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); $('#scan').value = ''; }
 }, true);
-$('#q').addEventListener('input', e => { S.q = e.target.value; drawList(); });
+$('#q').addEventListener('input', e => { S.q = e.target.value; drawList(); if (/^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) auto.input(e.target.value, Date.now()); });
 $('#q').addEventListener('keydown', e => {    // a scan that lands in the search box still counts as a scan
   if (e.key === 'Enter' && /^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) { e.preventDefault(); take(e.target.value); e.target.value = ''; S.q = ''; drawList(); }
 });
@@ -435,7 +455,7 @@ document.addEventListener('click', e => { if (!e.target.closest('input,textarea,
 $('#back').onclick = () => { go(route().view === 'job' ? '#/browse' : '#/'); window.scrollTo(0, 0); };
 $('#testbtn').onclick = () => go(route().view === 'test' ? '#/' : '#/test');
 $('#browse-btn').onclick = () => go('#/browse');
-setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
+setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && !S.cur && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
 setInterval(async () => { if (dialogOpen() || S.busy) return; try { await api('/api/stamp'); } catch (e) {} refresh(); }, 8000);
 
 (async () => { try { await loadCfg(); } catch (e) {} render(); })();

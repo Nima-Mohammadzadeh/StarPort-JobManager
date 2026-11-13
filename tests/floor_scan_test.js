@@ -127,3 +127,38 @@ test('auto: a value that stops matching is forgotten', () => {
   a.input(A, 0); a.input('', 50);
   assert.strictEqual(a.due(1000), null);
 });
+
+// Review fix: with no Enter, anything that is not a clean 24-hex read must not sit in the field forever.
+test('stale: the same tag typed twice back to back is handed over as two tags', () => {
+  const a = createAutoSubmit();
+  a.input(A + A, 0);
+  assert.strictEqual(a.due(5000), null);                     // not exactly 24 hex: never auto-submitted
+  assert.deepStrictEqual(a.stale(999), null);
+  assert.deepStrictEqual(a.stale(1000), [A, A]);
+  assert.strictEqual(a.stale(2000), null);
+});
+
+test('stale: two different tags typed back to back are handed over as two tags', () => {
+  const a = createAutoSubmit();
+  a.input(A + B, 0);
+  assert.deepStrictEqual(a.stale(1000), [A, B]);
+});
+
+test('stale: a partial value is handed over whole after a second so the server can explain it', () => {
+  const a = createAutoSubmit();
+  a.input(A.slice(0, 12), 0);
+  assert.strictEqual(a.stale(999), null);
+  assert.deepStrictEqual(a.stale(1000), [A.slice(0, 12)]);
+});
+
+test('stale: typing keeps it waiting, an exact 24-hex value is left to due(), a cleared value is forgotten', () => {
+  let a = createAutoSubmit();
+  a.input('30', 0); a.input('3000', 800);
+  assert.strictEqual(a.stale(1700), null);
+  assert.deepStrictEqual(a.stale(1800), ['3000']);
+  a = createAutoSubmit(); a.input(A, 0);
+  assert.strictEqual(a.stale(5000), null);
+  assert.strictEqual(a.due(5000), A);
+  a = createAutoSubmit(); a.input('3000', 0); a.input('', 100);
+  assert.strictEqual(a.stale(5000), null);
+});
