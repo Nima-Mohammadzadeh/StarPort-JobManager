@@ -61,6 +61,7 @@ that roll, without going back to a desk PC.
   distinct tag, it is looked up. If it holds two or more different tags, the page shows a red message
   ("More than one tag read. Move closer to the one you want and pull again.") and takes none of them.
   Repeats of the same tag inside a burst count as one.
+  The page does no tag-text cleanup of its own beyond trimming whitespace; DataWedge is set to send a clean EPC.
 - **Gap between scans.** After a burst is accepted, input is ignored for `COOLDOWN_MS` (1500 ms), so a held
   trigger or a quick second pull does not stack results. A tag identical to the last accepted one is also
   ignored for that period. Both values are constants at the top of `floor.html` so they can be tuned on a device.

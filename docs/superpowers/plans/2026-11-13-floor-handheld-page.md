@@ -27,7 +27,7 @@
 ## Review Focus
 
 1. Empty encoder list: the page must say so and offer no way to type a name. Pinned in Task 4.
-2. Scan formatting variants (lowercase, `0x` prefix, trailing space or Tab, the same tag twice): treated as one tag. Pinned in Task 3.
+2. The same tag arriving twice in a burst (trigger held): treated as one tag. Pinned in Task 3.
 3. Server refuses a roll action (for example the roll is already done): its message is shown and the card is unchanged. Pinned in Task 5.
 4. A scan arriving while a confirm or printer dialog is open: ignored, never acts on the roll. Pinned in Task 5.
 5. Connection drops mid-shift: Offline state, buttons disabled, no queued actions. Pinned in Task 5.
@@ -99,14 +99,14 @@
 
 **Interfaces:**
 - Produces, in `floor.html`: `createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS}) -> {push(raw: string, now: number): boolean, due(now: number): null | {kind: "one", epc: string} | {kind: "many", epcs: string[]}}`.
-  - `push` normalises the raw text (remove whitespace, `:`, `-`, `_`; uppercase; drop a leading `0X`), ignores empty results and anything arriving before `cooldownUntil`, adds the rest to the current burst (distinct, in order) and returns whether it was taken.
+  - `push` trims the raw text (no other cleanup: DataWedge already sends a clean EPC), ignores empty results and anything arriving before `cooldownUntil`, adds the rest to the current burst (distinct, in order) and returns whether it was taken.
   - `due(now)` closes the burst once `now - lastPushAt >= burstMs`: one distinct tag returns `{kind:"one"}` and sets `cooldownUntil = now + cooldownMs`; two or more returns `{kind:"many"}` and sets no cooldown; otherwise `null`.
   - The code between the markers has no DOM access, so Node can evaluate it alone.
 
 - [ ] **Step 1: Write the failing tests** in `tests/floor_scan_test.js` (`node --test`; load the block by reading `templates/floor.html` and evaluating the text between the markers with `new Function`). Test names and assertions:
   - `one tag after the burst window`: push `"300000000000000000000001"` at t=0; `due(399)` is `null`; `due(400)` is `{kind:"one", epc:"300000000000000000000001"}`.
   - `same tag repeated is one tag`: pushes at t=0, 100, 200 of the same tag give `{kind:"one"}`.
-  - `formatting variants are the same tag`: `"0x3000...01"`, `"3000...01 "` (trailing space), lowercase and `"30:00:..."` all collapse to one tag.
+  - `surrounding whitespace is trimmed`: `" 3000...01\n"` counts as the tag `"3000...01"`.
   - `two different tags are rejected, none used`: two tags within 400 ms give `{kind:"many", epcs:[a, b]}`.
   - `cooldown after an accepted scan`: after a `one` result at t=400, `push(tag, 1000)` returns `false`; `push(tag, 1900)` returns `true`.
   - `no cooldown after a rejected burst`: after `many` at t=400, `push(tag, 450)` returns `true`.
