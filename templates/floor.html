@@ -121,15 +121,16 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 
 <script>
 /* scan-collector:start */
-const BURST_MS = 400, COOLDOWN_MS = 1500;   // tune on a real device
+const BURST_MS = 400, COOLDOWN_MS = 1500, AUTO_MS = 150;   // tune on a real device
 /* A trigger pull can send several tags. Reads that arrive close together are one burst: one distinct tag is
-   used, two or more different tags are refused (none used). After a used scan, input is ignored briefly. */
+   used, two or more different tags are refused (none used). After a used scan, the same tag is ignored briefly
+   (a held trigger); a different tag is accepted at once. */
 function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}) {
-  let tags = [], lastAt = 0, cooldownUntil = 0;
+  let tags = [], lastAt = 0, used = {tag: '', until: 0};
   return {
     push(raw, now) {
       const tag = String(raw == null ? '' : raw).trim();
-      if (!tag || now < cooldownUntil) return false;
+      if (!tag || (tag === used.tag && now < used.until)) return false;
       if (!tags.includes(tag)) tags.push(tag);
       lastAt = now;
       return true;
@@ -140,8 +141,23 @@ function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}
     due(now) {
       if (!tags.length || now - lastAt < burstMs) return null;
       const got = tags; tags = [];
-      if (got.length === 1) { cooldownUntil = now + cooldownMs; return {kind: 'one', epc: got[0]}; }
+      if (got.length === 1) { used = {tag: got[0], until: now + cooldownMs}; return {kind: 'one', epc: got[0]}; }
       return {kind: 'many', epcs: got};
+    },
+  };
+}
+/* A complete read (exactly 24 hex characters) that then stays quiet for idleMs counts as a scan, so a Zebra
+   that does not send Enter still works. Returns the value once; anything else is forgotten. */
+function createAutoSubmit({idleMs = AUTO_MS} = {}) {
+  let value = null, at = 0;
+  return {
+    input(v, now) {
+      const t = String(v == null ? '' : v).trim();
+      if (/^[0-9a-fA-F]{24}$/.test(t)) { value = t; at = now; } else value = null;
+    },
+    due(now) {
+      if (value === null || now - at < idleMs) return null;
+      const t = value; value = null; return t;
     },
   };
 }
