@@ -7,5 +7,30 @@
 </head>
 <body>
 <input id="scan" type="text" inputmode="none" autocomplete="off">
+<script>
+/* scan-collector:start */
+const BURST_MS = 400, COOLDOWN_MS = 1500;   // tune on a real device
+/* A trigger pull can send several tags. Reads that arrive close together are one burst: one distinct tag is
+   used, two or more different tags are refused (none used). After a used scan, input is ignored briefly. */
+function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}) {
+  let tags = [], lastAt = 0, cooldownUntil = 0;
+  return {
+    push(raw, now) {
+      const tag = String(raw == null ? '' : raw).trim();
+      if (!tag || now < cooldownUntil) return false;
+      if (!tags.includes(tag)) tags.push(tag);
+      lastAt = now;
+      return true;
+    },
+    due(now) {
+      if (!tags.length || now - lastAt < burstMs) return null;
+      const got = tags; tags = [];
+      if (got.length === 1) { cooldownUntil = now + cooldownMs; return {kind: 'one', epc: got[0]}; }
+      return {kind: 'many', epcs: got};
+    },
+  };
+}
+/* scan-collector:end */
+</script>
 </body>
 </html>
