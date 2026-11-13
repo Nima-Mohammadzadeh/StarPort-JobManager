@@ -157,6 +157,16 @@ def clean_printers(raw) -> str:
     return "\n".join(out[:24])
 
 
+def clean_encoders(raw) -> str:
+    """One encoder name per line (commas also split), trimmed, no repeats, at most 40 names of 40 characters."""
+    seen, out = set(), []
+    for part in re.split(r"[\n,;]+", str(raw or "")):
+        name = " ".join(part.split())[:40]
+        if name and name.lower() not in seen:
+            seen.add(name.lower()); out.append(name)
+    return "\n".join(out[:40])
+
+
 def get_setting(key, default=""):
     with DB.connect() as conn:
         row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
@@ -175,6 +185,7 @@ def get_settings() -> dict:
         "backup_keep":           int(s.get("backup_keep", "60") or 60),
         "rewind_base_url":       s.get("rewind_base_url", ""),
         "printers":              s.get("printers", DEFAULT_PRINTERS),
+        "encoders":              s.get("encoders", ""),
         "auto_archive_hours":    max(0, min(8760, int(s.get("auto_archive_hours", "32") or 0))),
     }
 
@@ -1232,6 +1243,14 @@ def api_printers():
     known = {n.lower() for n in names}
     extra = sorted({b["printer"] for b in busy if b["printer"].lower() not in known})
     return jsonify({"printers": names + extra, "busy": busy})
+
+
+@app.route("/api/floor/config")
+def api_floor_config():
+    """What the floor page (Zebra handhelds) needs to start: who can sign actions, and the printers."""
+    s = get_settings()
+    return jsonify({"encoders": [n for n in s["encoders"].split("\n") if n.strip()],
+                    "printers": [n for n in s["printers"].split("\n") if n.strip()]})
 
 
 @app.route("/api/jobs/<int:job_id>/rolls/bulk", methods=["POST"])
@@ -2762,7 +2781,7 @@ def api_settings_save():
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
                "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
-               "auto_archive_hours"}
+               "encoders", "auto_archive_hours"}
     with DB.connect() as conn:
         for k, v in data.items():
             if k in allowed:
@@ -2770,6 +2789,8 @@ def api_settings_save():
                     v = "1" if v in (True, "1", 1, "true") else "0"
                 if k == "printers":
                     v = clean_printers(v)
+                if k == "encoders":
+                    v = clean_encoders(v)
                 if k == "auto_archive_hours":
                     try:
                         v = max(0, min(8760, int(float(v))))
