@@ -1473,28 +1473,27 @@ def rewind_page():
     return render_template("rewind.html", version=APP_VERSION)
 
 
-def rewind_link():
+def rewind_link(path="/rewind"):
     """(url, where it came from, usable_by_other_devices). The address other devices
     should open: the one set in Settings, else the address this request used, else this
-    PC's network address."""
+    PC's network address. `path` is the page: /rewind or /floor."""
     base = (get_settings().get("rewind_base_url") or "").strip().rstrip("/")
     if base:
-        return (base if base.lower().startswith("http") else "http://" + base) + "/rewind", "set in Settings", True
+        return (base if base.lower().startswith("http") else "http://" + base) + path, "set in Settings", True
     host = request.host
     hostname = host.rsplit(":", 1)[0].strip("[]").lower() if not host.startswith("[") else "::1"
     if hostname not in ("localhost", "127.0.0.1", "::1"):
-        return f"http://{host}/rewind", "the address this page was opened with", True
+        return f"http://{host}{path}", "the address this page was opened with", True
     ips = _lan_ips()
     private = [i for i in ips if i.startswith(("10.", "192.168.")) or re.match(r"172\.(1[6-9]|2\d|3[01])\.", i)]
     pick = (private or ips or [None])[0]
     if pick:
-        return f"http://{pick}:{PORT}/rewind", "this PC's network address", True
-    return f"http://localhost:{PORT}/rewind", "this PC only", False
+        return f"http://{pick}:{PORT}{path}", "this PC's network address", True
+    return f"http://localhost:{PORT}{path}", "this PC only", False
 
 
-@app.route("/api/rewind/link")
-def api_rewind_link():
-    url, source, shareable = rewind_link()
+def _link_json(path):
+    url, source, shareable = rewind_link(path)
     try:
         import segno  # noqa: F401
         qr = True
@@ -1503,38 +1502,71 @@ def api_rewind_link():
     return jsonify({"url": url, "source": source, "shareable": shareable, "qr": qr})
 
 
-@app.route("/rewind/qr.svg")
-def rewind_qr_svg():
+def _qr_svg(path):
     try:
         import segno
     except ImportError:
         return Response("The QR package isn't installed. Run run.bat again, or: pip install segno", status=501)
     buf = io.BytesIO()
-    segno.make(rewind_link()[0], error="m").save(buf, kind="svg", scale=10, border=3, omitsize=True,
-                                                 dark="#111111", light="#ffffff")
+    segno.make(rewind_link(path)[0], error="m").save(buf, kind="svg", scale=10, border=3, omitsize=True,
+                                                     dark="#111111", light="#ffffff")
     return Response(buf.getvalue(), mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
-@app.route("/rewind/qr")
-def rewind_qr_sign():
-    """A printable sign with the QR code, to put up next to the rewind stations."""
-    url, source, shareable = rewind_link()
+def _qr_sign(path, title, subtitle, page_title):
+    """A printable sign with the QR code, to put up where the page is used."""
+    url, source, shareable = rewind_link(path)
     try:
         import segno  # noqa: F401
-        qr = '<img src="/rewind/qr.svg" alt="QR code" style="width:5.2in;height:5.2in">'
+        qr = f'<img src="{path}/qr.svg" alt="QR code" style="width:5.2in;height:5.2in">'
     except ImportError:
         qr = '<p style="font-size:14pt">The QR package isn\'t installed (run run.bat again). Type the address below instead.</p>'
     warn = ("" if shareable else '<p style="color:#a23b3b;font-size:13pt">This address only works on this PC. '
-            "Set the address the tablets use in Settings, or open this page from another PC.</p>")
-    html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Rewind: scan to open</title>
+            "Set the address the devices use in Settings, or open this page from another PC.</p>")
+    html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{page_title}: scan to open</title>
 <style>body{{font-family:"Segoe UI",Arial,sans-serif;text-align:center;margin:.5in;color:#111}}
 h1{{font-size:44pt;margin:.1in 0 0}}p.s{{font-size:18pt;margin:.05in 0 .25in;color:#444}}
 .u{{font-family:Consolas,monospace;font-size:20pt;margin-top:.15in;word-break:break-all}}
 @page{{size:letter;margin:.4in}}@media print{{button{{display:none}}}}</style></head><body>
-<h1>REWIND</h1><p class="s">Scan with the tablet camera, then pick the job you are rewinding</p>
+<h1>{title}</h1><p class="s">{subtitle}</p>
 {qr}<div class="u">{escape(url)}</div>{warn}
 <p><button onclick="print()" style="font-size:16pt;padding:8px 20px;margin-top:.2in">Print</button></p></body></html>"""
     return Response(html, mimetype="text/html")
+
+
+@app.route("/api/rewind/link")
+def api_rewind_link():
+    return _link_json("/rewind")
+
+
+@app.route("/rewind/qr.svg")
+def rewind_qr_svg():
+    return _qr_svg("/rewind")
+
+
+@app.route("/rewind/qr")
+def rewind_qr_sign():
+    return _qr_sign("/rewind", "REWIND", "Scan with the tablet camera, then pick the job you are rewinding", "Rewind")
+
+
+@app.route("/floor")
+def floor_page():
+    return render_template("floor.html", version=APP_VERSION)
+
+
+@app.route("/api/floor/link")
+def api_floor_link():
+    return _link_json("/floor")
+
+
+@app.route("/floor/qr.svg")
+def floor_qr_svg():
+    return _qr_svg("/floor")
+
+
+@app.route("/floor/qr")
+def floor_qr_sign():
+    return _qr_sign("/floor", "FLOOR", "Scan with the handheld camera, then pick your name", "Floor")
 
 
 _REWIND_FIELDS = """j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.job_type, j.upc, j.label_size,
