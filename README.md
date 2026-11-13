@@ -66,6 +66,16 @@ a second, empty one. A database newer than the app is refused the same way.
   Serial Magic types it in and the page jumps to that roll and shows which label it is,
   calling out the FIRST and LAST tag. The job list's search box also takes a scan.
   Lookups are read-only.
+- **Floor page (Zebra RFID handhelds)**: a page for encoders at `http://<host-ip>:5050/floor`, opened from its
+  own QR sign (Settings, Tablets and handhelds, Print QR sign). Names come from the **Encoders** box in Settings;
+  an encoder picks their name once, and it is recorded on every roll action. Pull the trigger on a tag and the page
+  opens its roll (with label number and FIRST/LAST) with big **Start / Pause / Resume / Complete / Reopen** buttons
+  and a printer picker; Complete and Reopen ask for a second tap. Only one tag is used per pull: if two different
+  tags arrive together the page refuses them, and after a scan it ignores input for a moment. The gear icon opens a
+  **Scan test** that shows exactly what the Zebra sent. Zebra setup (DataWedge profile): RFID Input on, memory bank
+  **EPC** only, hex-to-ASCII off, RSSI off, trigger mode Immediate, a short tag read duration; Keystroke Output on
+  with Enter appended and a 50 ms inter-character delay. Tune `BURST_MS` and `COOLDOWN_MS` at the top of
+  `templates/floor.html` if scans are refused or stack.
 - **Add data to a job**: if a job needs more labels after it was made, open it and choose **Add data**
   (standard, CDO and GO2 jobs; not archived ones). The preview shows the new serial range, rolls and files
   before anything is taken. The extra labels get new serials that are never reused (they may not sit next
@@ -105,6 +115,7 @@ is flagged as a conflict.
 | `lists.py` | Starter customer and label size lists |
 | `templates/index.html` | The desktop interface |
 | `templates/rewind.html` | The rewind operators' page (tablets, phones) |
+| `templates/floor.html` | The encoders' page for Zebra RFID handhelds |
 | `run.bat`, `run.sh` | Start the app |
 | `new_install.bat` | Make the empty database for a brand-new install (once) |
 | `import_old.py`, `.bat` | Bring data over from the old app |

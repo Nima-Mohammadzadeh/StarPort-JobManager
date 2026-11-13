@@ -80,6 +80,9 @@ def printer(j, n, name, who):
     post(f"/api/jobs/{j}/rolls/{n}/printer", {"printer": name, "operator": who})
 
 
+# The names the floor page (Zebra handhelds) offers.
+post("/api/settings", {"encoders": "Sam\nPriya\nDana"})
+
 # Running rolls are on printers (an encoder picks one when loading a roll).
 printer(a, 4, "Printer 1", "Priya")
 printer(b, 9, "Printer 2", "Sam")

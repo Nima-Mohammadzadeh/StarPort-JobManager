@@ -87,6 +87,25 @@ reset to `desktop` afterwards):
 Also glance at the Jobs drawer (Rolls section) and `/rewind` if the change touched shared roll
 logic or helpers.
 
+## Floor page (Zebra handhelds, `/floor`)
+
+Phone width (390x800). The demo seeds encoder names Sam, Priya and Dana. `/floor` shares the lookup and roll endpoints
+with `/rewind`; there is no scanner in the sandbox, so type a tag into the scan field and press Enter (Playwright:
+`fill` then `press('Enter')`). Take EPCs from `GET /api/rewind/jobs/<id>` (`epc_start`). Restart the sandbox after
+editing `floor.html`: Flask keeps the template in memory.
+
+1. **Names**: empty Encoders list shows "No encoder names are set up" and no input; with names, tap one: it shows in
+   the header and survives a reload; tapping it re-opens the picker.
+2. **Scan**: a valid EPC opens its roll with label number and FIRST/LAST; two different EPCs within 400 ms are refused
+   with "More than one tag read..."; a second scan inside 1.5 s of a used one is ignored; a tag of another job or
+   product shows the server's message and no buttons.
+3. **Roll actions**: Start asks for a printer (busy printers are marked), Pause takes an optional note, Resume, Complete
+   and Reopen need a second tap; the activity feed names the encoder; a roll finished elsewhere shows the server's
+   "already done" message and the card redraws.
+4. **Dialogs**: scans typed while a dialog is open do nothing (and their Enter never presses a button).
+5. **Offline**: set the browser offline: the banner shows, every action is disabled, and they return when it reconnects.
+6. **Scan test** (gear icon): shows the raw text, its length and the lookup result.
+
 ## Templates page (mock BarTender library)
 
 `mock_demo/seed_templates.py` fills `mock_demo/site/Master Templates/` with about 40 fake `.btw` files (random
