@@ -76,7 +76,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .why{font-size:14px;color:#6B4207;margin:-4px 0 8px}
 #dlg{position:fixed;inset:0;background:rgba(10,20,23,.55);z-index:40;display:flex;align-items:flex-end;justify-content:center;outline:none}
 #dlg[hidden]{display:none}
-#dlg .box{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px 22px}
+#dlg .box{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px 22px;max-height:90vh;overflow-y:auto}
 #dlg h3{margin:0 0 12px;font-size:20px}
 #dlg .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #dlg .opts button,#dlg .row button{font-size:19px;font-weight:700;padding:16px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
@@ -133,6 +133,9 @@ function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}
       lastAt = now;
       return true;
     },
+    activity(now) {                            // a keystroke while a burst is open keeps it open (slow typing, 50 ms per character)
+      if (tags.length) lastAt = now;
+    },
     due(now) {
       if (!tags.length || now - lastAt < burstMs) return null;
       const got = tags; tags = [];
@@ -181,7 +184,7 @@ function route() {
   return m ? {test: false, job: +m[1], roll: m[2] ? +m[2] : null} : {test: false, job: null, roll: null};
 }
 function go(h) { if (location.hash === h) render(); else location.hash = h; }
-window.addEventListener('hashchange', () => render());
+window.addEventListener('hashchange', () => { if (dialogOpen()) closeDlg(); render(); });
 
 /* ── who is using it ── */
 async function loadList() { S.jobs = (await api('/api/rewind/jobs?view=open')).jobs; }
@@ -221,6 +224,7 @@ $('#scan').addEventListener('keydown', e => {
   S.lastRaw = v; S.lastScanAt = Date.now(); drawTest();
   collector.push(v, Date.now());
 });
+$('#scan').addEventListener('input', () => { if (!dialogOpen()) collector.activity(Date.now()); });
 setInterval(() => {
   const d = collector.due(Date.now());
   if (!d) return;
@@ -231,10 +235,13 @@ function showMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${
 async function lookup(raw) {
   $('#smsg').innerHTML = '';
   let r;
+  const sentAt = location.hash;
   try { r = await api('/api/rewind/lookup', {raw, job_id: route().job || ''}); }
   catch (e) { S.lastResult = 'No connection to the server'; showMsg('bad', 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.'); feedback(false); drawTest(); return; }
   S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
   drawTest();
+  if (dialogOpen() || location.hash !== sentAt) return;     // the screen changed while the lookup ran: never act on it
+  if (route().test) { feedback(r.result === 'found'); return; }   // Scan test only shows the verdict
   if (r.result === 'found') { S.scan = r; feedback(true); go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); return; }
   feedback(false);
   showMsg(r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad', r.message,
@@ -302,8 +309,9 @@ function draw() {
 }
 
 /* ── roll actions: every one sends the encoder's name; the server's own rules decide ── */
-function openDlg(html) { const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
-function closeDlg() { const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
+let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action always uses this, never the current route
+function openDlg(html, target) { DLG = target || null; const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
+function closeDlg() { DLG = null; const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
 const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
 async function act(fn) {
   S.busy = true; draw(); closeDlg();
@@ -311,25 +319,28 @@ async function act(fn) {
   catch (e) { showMsg('bad', e.message); feedback(false); }
   S.busy = false; await refresh();
 }
-const curRoll = () => route().roll;
-const setStatus = (status, note) => api(`/api/jobs/${route().job}/rolls/${curRoll()}`, {status, operator: S.operator, note: note || ''});
+const here = () => ({job: route().job, roll: route().roll});
+const setStatus = (t, status, note) => api(`/api/jobs/${t.job}/rolls/${t.roll}`, {status, operator: S.operator, note: note || ''});
 async function startRoll() {
+  const t = here();
   let pr = {printers: [], busy: []};
   try { pr = await api('/api/printers'); } catch (e) { return; }
+  if (dialogOpen() || location.hash !== '#/job/' + t.job + '/roll/' + t.roll) return;
   const busy = {}; pr.busy.forEach(b => busy[b.printer.toLowerCase()] = b);
-  openDlg('<h3>Which printer?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
-    return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>');
-  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${route().job}/rolls/${curRoll()}/printer`, {printer: b.dataset.printer, operator: S.operator})));
+  openDlg('<h3>Which printer for roll ' + t.roll + '?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
+    return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>', t);
+  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${t.job}/rolls/${t.roll}/printer`, {printer: b.dataset.printer, operator: S.operator})));
 }
 function pauseRoll() {
-  openDlg('<h3>Leave roll ' + curRoll() + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>');
-  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus('paused', note)); };
+  const t = here();
+  openDlg('<h3>Leave roll ' + t.roll + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>', t);
+  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus(t, 'paused', note)); };
 }
-function resumeRoll() { act(() => setStatus('running')); }
+function resumeRoll() { const t = here(); act(() => setStatus(t, 'running')); }
 function confirmRoll(kind) {
-  const word = kind === 'complete' ? 'Complete' : 'Reopen';
-  openDlg(`<h3>${word} roll ${curRoll()} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`);
-  $('#cgo').onclick = () => act(() => setStatus(kind === 'complete' ? 'complete' : 'running'));
+  const t = here(), word = kind === 'complete' ? 'Complete' : 'Reopen';
+  openDlg(`<h3>${word} roll ${t.roll} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`, t);
+  $('#cgo').onclick = () => act(() => setStatus(t, kind === 'complete' ? 'complete' : 'running'));
 }
 document.addEventListener('keydown', e => {   // a scan's Enter must never press a dialog button
   if (dialogOpen() && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); $('#scan').value = ''; }

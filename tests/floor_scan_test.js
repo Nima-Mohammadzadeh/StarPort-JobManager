@@ -57,3 +57,26 @@ test('empty input is ignored', () => {
   assert.strictEqual(c.push('  ', 0), false);
   assert.strictEqual(c.due(1000), null);
 });
+
+// Review fix: with DataWedge's 50 ms inter-character delay a 24-character tag takes ~1.25 s to type, so
+// keystrokes (not only Enter) must keep a burst open.
+test('typing speed: two different tags typed back to back are refused', () => {
+  const c = create();
+  c.push(A, 0);                                        // tag 1 finished typing (Enter)
+  for (let t = 50; t <= 1250; t += 50) { c.activity(t); assert.strictEqual(c.due(t), null); }
+  c.push(B, 1250);                                     // tag 2 finished typing (Enter)
+  assert.strictEqual(c.due(1649), null);
+  assert.deepStrictEqual(c.due(1650), {kind: 'many', epcs: [A, B]});
+});
+
+test('typing speed: one tag still closes 400 ms after its Enter', () => {
+  const c = create();
+  c.push(A, 1250);
+  assert.deepStrictEqual(c.due(1650), {kind: 'one', epc: A});
+});
+
+test('keystrokes with no open burst start nothing', () => {
+  const c = create();
+  c.activity(0); c.activity(50);
+  assert.strictEqual(c.due(1000), null);
+});
