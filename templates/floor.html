@@ -3,10 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1B2A2E">
 <title>Floor</title>
+<style>
+:root{
+  --canvas:#EEF1F0; --surface:#FFFFFF; --sunk:#F6F8F7; --ink:#1B2A2E; --muted:#5E6E72;
+  --line:#D3DADB; --blue:#1F4E79; --blue-soft:#E3ECF4; --green:#2F7D4F; --green-soft:#E2F1E7;
+  --amber:#A8670F; --amber-soft:#FBEFD9; --red:#A23B3B; --run:#2F6EA8; --run-soft:#E4EFF9;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --data:Consolas,"Cascadia Mono",Menlo,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{font:16px/1.4 var(--sans);color:var(--ink);background:var(--canvas)}
+button,input{font:inherit;color:inherit}
+.data{font-family:var(--data);font-variant-numeric:tabular-nums}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:8px 10px;min-height:58px}
+.ib{background:none;border:0;color:#fff;font-size:24px;min-width:48px;height:48px;border-radius:12px;cursor:pointer;flex:0 0 auto}
+.ib:active{background:#2c4046}
+.ttl{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2;background:none;border:0;color:#fff;text-align:left;cursor:pointer;padding:4px 6px;border-radius:12px}
+.ttl:active{background:#2c4046}
+.ttl b{font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl span{font-size:13px;color:#B9C6C9}
+.sync{font-size:12px;color:#B9C6C9;text-align:right;line-height:1.25;flex:0 0 auto}
+.sync i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#58C27D;margin-right:5px}
+.sync.off i{background:#E8A33C}
+#banner{background:var(--amber-soft);color:#6B4207;padding:10px 14px;font-size:14.5px;border-bottom:1px solid #EBC983}
+main{max-width:900px;margin:0 auto;padding:12px 12px 90px}
+[hidden]{display:none !important}
+.scanbar{position:sticky;top:58px;z-index:9;background:var(--canvas);padding:8px 0 6px;margin:-4px 0 6px}
+.scanbar input{width:100%;font-family:var(--data);font-size:19px;padding:14px;border:2px solid var(--blue);border-radius:14px;background:#fff}
+.scanbar input:focus{outline:3px solid var(--blue-soft)}
+#hint{font-size:13.5px;color:var(--muted);margin-top:6px;min-height:18px}
+.smsg{border-radius:14px;padding:12px 14px;margin-top:8px;font-size:16px;font-weight:600}
+.smsg.bad{background:#B33A3A;color:#fff}.smsg.warn{background:#E0A526;color:#2B1D00}
+.smsg small{display:block;font-weight:400;margin-top:4px;word-break:break-all}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.names button{font-size:22px;font-weight:700;padding:22px 10px;border-radius:16px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:76px}
+.names button:active{background:var(--blue-soft)}
+.names button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+h2.pick{font-size:22px;margin:6px 2px 12px}
+.empty{padding:36px 14px;text-align:center;color:var(--muted);font-size:17px}
+.hit{border-radius:18px;padding:16px 18px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line)}
+.hit .tk{font-size:24px;font-weight:800}
+.hit .cu{font-size:18px;font-weight:700;margin-top:2px}
+.hit .it{font-size:15px;color:var(--muted)}
+.hit .lab{font-size:34px;font-weight:800;line-height:1.1;margin-top:12px}
+.hit .lab small{font-size:16px;font-weight:600;color:var(--muted)}
+.pos{display:inline-block;margin-top:8px;background:var(--green);color:#fff;font-weight:800;font-size:15px;padding:4px 10px;border-radius:8px}
+.kv{margin-top:14px}.kv .k{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kv .v{font-family:var(--data);font-size:18px;margin-top:2px;word-break:break-all}
+.tbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.tbox .raw{font-family:var(--data);font-size:20px;word-break:break-all;background:var(--sunk);border-radius:10px;padding:10px;margin:6px 0 12px;min-height:44px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
+</style>
 </head>
 <body>
-<input id="scan" type="text" inputmode="none" autocomplete="off">
+<header>
+  <button class="ib" id="back" aria-label="Back" hidden>&#8592;</button>
+  <button class="ttl" id="who" aria-label="Change name"><b id="title">Floor</b><span id="sub"></span></button>
+  <div class="sync" id="sync" aria-live="polite"></div>
+  <button class="ib" id="testbtn" aria-label="Scan test">&#9881;</button>
+</header>
+<div id="banner" hidden></div>
+<main>
+  <div class="scanbar" id="scanbar" hidden>
+    <input id="scan" type="text" inputmode="none" enterkeyhint="go" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pull the trigger to scan a tag" aria-label="Scan a tag">
+    <div id="hint" aria-live="polite"></div>
+    <div id="smsg" aria-live="assertive"></div>
+  </div>
+  <section id="v-pick" hidden><h2 class="pick">Who is using this scanner?</h2><div id="names"></div></section>
+  <section id="v-home" hidden><div class="empty">Scan a tag to open its roll.</div></section>
+  <section id="v-roll" hidden><div id="rview"></div></section>
+  <section id="v-test" hidden>
+    <div class="tbox">
+      <b>Scan test</b>
+      <p style="color:var(--muted);margin:6px 0 10px">Pull the trigger on a tag. This shows exactly what the scanner sent.</p>
+      <div class="kv"><div class="k">Received</div><div class="raw" id="t-raw">Nothing yet</div></div>
+      <div class="kv"><div class="k">Length</div><div class="v" id="t-len">-</div></div>
+      <div class="kv"><div class="k">Result</div><div class="v" id="t-res" style="font-family:var(--sans)">-</div></div>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
 <script>
 /* scan-collector:start */
 const BURST_MS = 400, COOLDOWN_MS = 1500;   // tune on a real device
@@ -31,6 +111,134 @@ function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}
   };
 }
 /* scan-collector:end */
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmt = n => (n === null || n === undefined || n === '') ? '-' : Number(n).toLocaleString();
+const OP_KEY = 'jm_floor_operator';
+const S = {operator: '', cfg: null, picking: false, offline: false, scan: null, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
+try { S.operator = localStorage.getItem(OP_KEY) || ''; } catch (e) {}
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
+async function api(url, body) {
+  const opt = body === undefined ? {cache: 'no-store'} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), cache: 'no-store'};
+  let r;
+  try { r = await fetch(url, opt); } catch (e) { S.offline = true; setBar(); throw new Error('No connection to the server'); }
+  S.offline = false; S.updated = new Date(); setBar();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+/* ── feedback ── */
+let audio = null;
+function feedback(good) {
+  try { if (navigator.vibrate) navigator.vibrate(good ? 40 : [120, 70, 120]); } catch (e) {}
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = good ? 880 : 220;
+    g.gain.setValueAtTime(.2, audio.currentTime); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + (good ? .14 : .4));
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + (good ? .14 : .4));
+  } catch (e) {}
+}
+
+/* ── routing: #/ · #/job/12 · #/job/12/roll/3 · #/test ── */
+function route() {
+  const h = location.hash || '#/';
+  if (h === '#/test') return {test: true, job: null, roll: null};
+  const m = h.match(/^#\/job\/(\d+)(?:\/roll\/(\d+))?$/);
+  return m ? {test: false, job: +m[1], roll: m[2] ? +m[2] : null} : {test: false, job: null, roll: null};
+}
+function go(h) { if (location.hash === h) render(); else location.hash = h; }
+window.addEventListener('hashchange', () => render());
+
+/* ── who is using it ── */
+async function loadCfg() { S.cfg = await api('/api/floor/config'); }
+function setOperator(name) {
+  S.operator = name; S.picking = false;
+  try { localStorage.setItem(OP_KEY, name); } catch (e) {}
+  render();
+}
+function drawNames() {
+  const names = (S.cfg && S.cfg.encoders) || [];
+  $('#names').innerHTML = !S.cfg ? '<div class="empty">Loading names...</div>'
+    : names.length ? '<div class="names">' + names.map(n => `<button class="${n === S.operator ? 'on' : ''}" data-name="${esc(n)}">${esc(n)}</button>`).join('') + '</div>'
+    : '<div class="empty">No encoder names are set up. Ask for names to be added in Settings.</div>';
+  document.querySelectorAll('#names button').forEach(b => b.onclick = () => setOperator(b.dataset.name));
+}
+$('#who').onclick = async () => { S.picking = true; render(); try { await loadCfg(); drawNames(); } catch (e) {} };
+
+/* ── scanning ── */
+const collector = createScanCollector();
+const REJECT = 'More than one tag read. Move closer to the one you want and pull again.';
+function visible(t) { return String(t).replace(/\t/g, '\u21E5').replace(/ /g, '\u00B7').replace(/\r|\n/g, '\u21B5'); }
+$('#scan').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = $('#scan').value; $('#scan').value = '';
+  S.lastRaw = v; S.lastScanAt = Date.now(); drawTest();
+  collector.push(v, Date.now());
+});
+setInterval(() => {
+  const d = collector.due(Date.now());
+  if (!d) return;
+  if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); showMsg('bad', REJECT); drawTest(); return; }
+  lookup(d.epc);
+}, 50);
+function showMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${kind}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`; }
+async function lookup(raw) {
+  $('#smsg').innerHTML = '';
+  let r;
+  try { r = await api('/api/rewind/lookup', {raw, job_id: route().job || ''}); }
+  catch (e) { S.lastResult = 'No connection to the server'; showMsg('bad', 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.'); feedback(false); drawTest(); return; }
+  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
+  drawTest();
+  if (r.result === 'found') { S.scan = r; feedback(true); go('#/job/' + r.roll.job_id + '/roll/' + r.roll.roll_number); return; }
+  feedback(false);
+  showMsg(r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad', r.message,
+          r.note ? esc(r.note) : (r.epc && r.epc.length === 24 ? `<span class="data">${esc(r.epc)}</span>` : ''));
+}
+
+/* ── drawing ── */
+function setBar() {
+  const el = $('#sync');
+  el.className = 'sync' + (S.offline ? ' off' : '');
+  el.innerHTML = '<i></i>' + (S.offline ? 'Offline' : 'Live') + (S.updated ? '<br>' + S.updated.toTimeString().slice(0, 8) : '');
+  const b = $('#banner'); b.hidden = !S.offline;
+  if (S.offline) b.textContent = 'No connection to the server. It will reconnect by itself.';
+}
+function drawTest() {
+  $('#t-raw').textContent = S.lastRaw == null ? 'Nothing yet' : visible(S.lastRaw);
+  $('#t-len').textContent = S.lastRaw == null ? '-' : String(S.lastRaw.length) + ' characters';
+  $('#t-res').textContent = S.lastResult || '-';
+}
+function drawRoll() {
+  const sc = S.scan, rt = route();
+  const x = sc && sc.roll && sc.roll.job_id === rt.job && sc.roll.roll_number === rt.roll ? sc.roll : null;
+  if (!x) { $('#rview').innerHTML = '<div class="empty">Scan a tag to open its roll.</div>'; return; }
+  $('#rview').innerHTML = `<div class="hit"><div class="tk">${esc(x.job_ticket || x.job_number)}</div><div class="cu">${esc(x.customer)}</div><div class="it">${esc(x.title)}</div>
+    <div class="lab">Roll ${x.roll_number} <small>of ${x.rolls_total}</small></div>
+    ${x.label_no ? `<div class="lab" style="font-size:22px">Label ${fmt(x.label_no)} <small>of ${fmt(x.quantity)}</small></div><span class="pos">${esc(String(x.position).toUpperCase())}</span>` : ''}
+    <div class="kv"><div class="k">Serials</div><div class="v">${fmt(x.serial_start)} - ${fmt(x.serial_end)}</div></div></div>`;
+}
+function render() {
+  const rt = route(), picking = S.picking || !S.operator;
+  $('#v-pick').hidden = !picking; $('#v-test').hidden = picking || !rt.test;
+  $('#v-home').hidden = picking || rt.test || rt.job !== null; $('#v-roll').hidden = picking || rt.test || rt.roll === null;
+  $('#scanbar').hidden = picking;
+  $('#back').hidden = picking || (rt.job === null && !rt.test);
+  $('#title').textContent = S.operator || 'Floor';
+  $('#sub').textContent = picking ? 'Choose your name' : (rt.test ? 'Scan test' : 'Tap to change name');
+  if (picking) drawNames(); else { if (rt.roll !== null) drawRoll(); drawTest(); setTimeout(focusScan, 60); }
+}
+function focusScan() { if (!$('#scanbar').hidden && !document.querySelector('[data-dialog]')) $('#scan').focus({preventScroll: true}); }
+document.addEventListener('click', e => { if (!e.target.closest('input,textarea,select')) setTimeout(focusScan, 0); });
+$('#back').onclick = () => { const rt = route(); go(rt.roll !== null ? '#/' : '#/'); window.scrollTo(0, 0); };
+$('#testbtn').onclick = () => go(route().test ? '#/' : '#/test');
+setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
+setInterval(async () => { try { await api('/api/stamp'); } catch (e) {} }, 8000);
+
+(async () => { try { await loadCfg(); } catch (e) {} render(); })();
 </script>
 </body>
 </html>
