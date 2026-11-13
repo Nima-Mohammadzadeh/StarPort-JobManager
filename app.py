@@ -157,6 +157,16 @@ def clean_printers(raw) -> str:
     return "\n".join(out[:24])
 
 
+def clean_encoders(raw) -> str:
+    """One encoder name per line (commas also split), trimmed, no repeats, at most 40 names of 40 characters."""
+    seen, out = set(), []
+    for part in re.split(r"[\n,;]+", str(raw or "")):
+        name = " ".join(part.split())[:40]
+        if name and name.lower() not in seen:
+            seen.add(name.lower()); out.append(name)
+    return "\n".join(out[:40])
+
+
 def get_setting(key, default=""):
     with DB.connect() as conn:
         row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
@@ -175,6 +185,7 @@ def get_settings() -> dict:
         "backup_keep":           int(s.get("backup_keep", "60") or 60),
         "rewind_base_url":       s.get("rewind_base_url", ""),
         "printers":              s.get("printers", DEFAULT_PRINTERS),
+        "encoders":              s.get("encoders", ""),
         "auto_archive_hours":    max(0, min(8760, int(s.get("auto_archive_hours", "32") or 0))),
     }
 
@@ -1234,6 +1245,14 @@ def api_printers():
     return jsonify({"printers": names + extra, "busy": busy})
 
 
+@app.route("/api/floor/config")
+def api_floor_config():
+    """What the floor page (Zebra handhelds) needs to start: who can sign actions, and the printers."""
+    s = get_settings()
+    return jsonify({"encoders": [n for n in s["encoders"].split("\n") if n.strip()],
+                    "printers": [n for n in s["printers"].split("\n") if n.strip()]})
+
+
 @app.route("/api/jobs/<int:job_id>/rolls/bulk", methods=["POST"])
 def api_rolls_bulk(job_id):
     """Set any selection of rolls to pending / running / complete in one go."""
@@ -1454,28 +1473,27 @@ def rewind_page():
     return render_template("rewind.html", version=APP_VERSION)
 
 
-def rewind_link():
+def rewind_link(path="/rewind"):
     """(url, where it came from, usable_by_other_devices). The address other devices
     should open: the one set in Settings, else the address this request used, else this
-    PC's network address."""
+    PC's network address. `path` is the page: /rewind or /floor."""
     base = (get_settings().get("rewind_base_url") or "").strip().rstrip("/")
     if base:
-        return (base if base.lower().startswith("http") else "http://" + base) + "/rewind", "set in Settings", True
+        return (base if base.lower().startswith("http") else "http://" + base) + path, "set in Settings", True
     host = request.host
     hostname = host.rsplit(":", 1)[0].strip("[]").lower() if not host.startswith("[") else "::1"
     if hostname not in ("localhost", "127.0.0.1", "::1"):
-        return f"http://{host}/rewind", "the address this page was opened with", True
+        return f"http://{host}{path}", "the address this page was opened with", True
     ips = _lan_ips()
     private = [i for i in ips if i.startswith(("10.", "192.168.")) or re.match(r"172\.(1[6-9]|2\d|3[01])\.", i)]
     pick = (private or ips or [None])[0]
     if pick:
-        return f"http://{pick}:{PORT}/rewind", "this PC's network address", True
-    return f"http://localhost:{PORT}/rewind", "this PC only", False
+        return f"http://{pick}:{PORT}{path}", "this PC's network address", True
+    return f"http://localhost:{PORT}{path}", "this PC only", False
 
 
-@app.route("/api/rewind/link")
-def api_rewind_link():
-    url, source, shareable = rewind_link()
+def _link_json(path):
+    url, source, shareable = rewind_link(path)
     try:
         import segno  # noqa: F401
         qr = True
@@ -1484,38 +1502,71 @@ def api_rewind_link():
     return jsonify({"url": url, "source": source, "shareable": shareable, "qr": qr})
 
 
-@app.route("/rewind/qr.svg")
-def rewind_qr_svg():
+def _qr_svg(path):
     try:
         import segno
     except ImportError:
         return Response("The QR package isn't installed. Run run.bat again, or: pip install segno", status=501)
     buf = io.BytesIO()
-    segno.make(rewind_link()[0], error="m").save(buf, kind="svg", scale=10, border=3, omitsize=True,
-                                                 dark="#111111", light="#ffffff")
+    segno.make(rewind_link(path)[0], error="m").save(buf, kind="svg", scale=10, border=3, omitsize=True,
+                                                     dark="#111111", light="#ffffff")
     return Response(buf.getvalue(), mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
-@app.route("/rewind/qr")
-def rewind_qr_sign():
-    """A printable sign with the QR code, to put up next to the rewind stations."""
-    url, source, shareable = rewind_link()
+def _qr_sign(path, title, subtitle, page_title):
+    """A printable sign with the QR code, to put up where the page is used."""
+    url, source, shareable = rewind_link(path)
     try:
         import segno  # noqa: F401
-        qr = '<img src="/rewind/qr.svg" alt="QR code" style="width:5.2in;height:5.2in">'
+        qr = f'<img src="{path}/qr.svg" alt="QR code" style="width:5.2in;height:5.2in">'
     except ImportError:
         qr = '<p style="font-size:14pt">The QR package isn\'t installed (run run.bat again). Type the address below instead.</p>'
     warn = ("" if shareable else '<p style="color:#a23b3b;font-size:13pt">This address only works on this PC. '
-            "Set the address the tablets use in Settings, or open this page from another PC.</p>")
-    html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Rewind: scan to open</title>
+            "Set the address the devices use in Settings, or open this page from another PC.</p>")
+    html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{page_title}: scan to open</title>
 <style>body{{font-family:"Segoe UI",Arial,sans-serif;text-align:center;margin:.5in;color:#111}}
 h1{{font-size:44pt;margin:.1in 0 0}}p.s{{font-size:18pt;margin:.05in 0 .25in;color:#444}}
 .u{{font-family:Consolas,monospace;font-size:20pt;margin-top:.15in;word-break:break-all}}
 @page{{size:letter;margin:.4in}}@media print{{button{{display:none}}}}</style></head><body>
-<h1>REWIND</h1><p class="s">Scan with the tablet camera, then pick the job you are rewinding</p>
+<h1>{title}</h1><p class="s">{subtitle}</p>
 {qr}<div class="u">{escape(url)}</div>{warn}
 <p><button onclick="print()" style="font-size:16pt;padding:8px 20px;margin-top:.2in">Print</button></p></body></html>"""
     return Response(html, mimetype="text/html")
+
+
+@app.route("/api/rewind/link")
+def api_rewind_link():
+    return _link_json("/rewind")
+
+
+@app.route("/rewind/qr.svg")
+def rewind_qr_svg():
+    return _qr_svg("/rewind")
+
+
+@app.route("/rewind/qr")
+def rewind_qr_sign():
+    return _qr_sign("/rewind", "REWIND", "Scan with the tablet camera, then pick the job you are rewinding", "Rewind")
+
+
+@app.route("/floor")
+def floor_page():
+    return render_template("floor.html", version=APP_VERSION)
+
+
+@app.route("/api/floor/link")
+def api_floor_link():
+    return _link_json("/floor")
+
+
+@app.route("/floor/qr.svg")
+def floor_qr_svg():
+    return _qr_svg("/floor")
+
+
+@app.route("/floor/qr")
+def floor_qr_sign():
+    return _qr_sign("/floor", "FLOOR", "Scan with the handheld camera, then pick your name", "Floor")
 
 
 _REWIND_FIELDS = """j.id, j.job_number, j.job_ticket, j.customer, j.title, j.status, j.job_type, j.upc, j.label_size,
@@ -1561,7 +1612,7 @@ def api_rewind_job(job_id):
         rolls = ensure_rolls(conn, full)
         notes = _notes(conn, job_id)
     keep = ("roll_number", "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
-            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by")
+            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by", "printer")
     return jsonify({"job": job, "rolls": [{k: r.get(k) for k in keep} for r in rolls], "notes": notes,
                     "total_qty": production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None})
 
@@ -2762,7 +2813,7 @@ def api_settings_save():
     data = request.get_json(silent=True) or {}
     allowed = {"btw_template_dir", "default_overage_pct", "backup_dir",
                "backup_interval_hours", "backup_auto", "backup_keep", "rewind_base_url", "printers",
-               "auto_archive_hours"}
+               "encoders", "auto_archive_hours"}
     with DB.connect() as conn:
         for k, v in data.items():
             if k in allowed:
@@ -2770,6 +2821,8 @@ def api_settings_save():
                     v = "1" if v in (True, "1", 1, "true") else "0"
                 if k == "printers":
                     v = clean_printers(v)
+                if k == "encoders":
+                    v = clean_encoders(v)
                 if k == "auto_archive_hours":
                     try:
                         v = max(0, min(8760, int(float(v))))

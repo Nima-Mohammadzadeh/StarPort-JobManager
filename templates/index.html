@@ -1224,7 +1224,7 @@ html[data-theme=dark]{--on-fill:#06161A; --amber-ink:#EBC98A; --red-ink:#F5B1AB;
       <button data-sec="printers" onclick="setSettingsSection('printers')">Printers</button>
       <button data-sec="shared" onclick="setSettingsSection('shared')">Shared settings</button>
       <button data-sec="pc" onclick="setSettingsSection('pc')">This PC</button>
-      <button data-sec="tablets" onclick="setSettingsSection('tablets')">Tablets (rewind)</button>
+      <button data-sec="tablets" onclick="setSettingsSection('tablets')">Tablets and handhelds</button>
       <button data-sec="import" onclick="setSettingsSection('import')">Import old app</button>
     </nav>
     <div class="set-body">
@@ -1265,6 +1265,27 @@ html[data-theme=dark]{--on-fill:#06161A; --amber-ink:#EBC98A; --red-ink:#F5B1AB;
             <button class="btn primary" onclick="saveRewind(this)">Save address</button>
             <a class="btn" href="/rewind/qr" target="_blank">Print QR sign</a>
             <a class="btn" href="/rewind" target="_blank">Open the page</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-sec="tablets" id="encoders-panel">
+      <h2>Encoders (floor page)</h2>
+      <p class="d">One name per line. On the floor page, an encoder picks their name from this list, and it is recorded against every roll action they take.</p>
+      <label class="f">Encoder names<textarea class="i" id="s-encoders" rows="5" placeholder="Sam&#10;Ann"></textarea></label>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEncoders()">Save names</button></div>
+    </div>
+    <div class="panel" data-sec="tablets" id="floor-panel">
+      <h2>Floor page for Zebra handhelds</h2>
+      <details class="more"><summary>About this</summary><p class="d">A page for encoders carrying a Zebra RFID handheld. They scan this QR code with the handheld's camera, pick their name, then pull the trigger on a tag to open its roll and start, pause or complete it.
+        It uses the same address as the rewind page above. It isn't in this menu.</p></details>
+      <div class="rw-box">
+        <div class="rw-qr" id="fl-qr"></div>
+        <div class="rw-info">
+          <div class="data" id="fl-url" style="font-size:15px;word-break:break-all"></div>
+          <div class="fieldmsg" id="fl-note"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <a class="btn" href="/floor/qr" target="_blank">Print QR sign</a>
+            <a class="btn" href="/floor" target="_blank">Open the page</a></div>
         </div>
       </div>
     </div>
@@ -2596,8 +2617,8 @@ async function loadSettings() {
   await loadMeta(); const s = META.settings;
   $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct; $('#s-autoarch').value = s.auto_archive_hours;
   $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
-  $('#s-printers').value = s.printers || '';
-  loadDataPanel(); loadBackups(); showHelperState(); loadRewind();
+  $('#s-printers').value = s.printers || ''; $('#s-encoders').value = s.encoders || '';
+  loadDataPanel(); loadBackups(); showHelperState(); loadRewind(); loadFloorLink();
   setSettingsSection(pref('setsec', 'data'));
 }
 function setSettingsSection(k) {
@@ -2610,6 +2631,10 @@ async function saveShared(btn) {
   btn.disabled = true;
   try { await api('/api/settings', {method: 'POST', body: {btw_template_dir: $('#s-btw').value.trim(), default_overage_pct: $('#s-ovg').value || 0, auto_archive_hours: $('#s-autoarch').value === '' ? 32 : $('#s-autoarch').value}}); await loadMeta(); toast('Shared settings saved'); }
   catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+}
+async function saveEncoders() {
+  try { await api('/api/settings', {method: 'POST', body: {encoders: $('#s-encoders').value}}); await loadMeta(); $('#s-encoders').value = META.settings.encoders; toast('Encoder names saved'); }
+  catch (e) { toast(e.message, true); }
 }
 async function savePrinters() {
   try { await api('/api/settings', {method: 'POST', body: {printers: $('#s-printers').value}}); await loadMeta(); $('#s-printers').value = META.settings.printers; toast('Printers saved'); loadPrinters(); }
@@ -3356,9 +3381,18 @@ async function loadRewind() {
     n.textContent = d.shareable ? `Address taken from ${d.source}.` : 'This address only works on this PC. Open Settings from another PC, or type the host PC\'s address below.';
   } catch (e) { $('#rw-note').textContent = e.message; }
 }
+async function loadFloorLink() {
+  try {
+    const d = await api('/api/floor/link');
+    $('#fl-url').textContent = d.url;
+    $('#fl-qr').innerHTML = d.qr ? `<img alt="QR code for the floor page" src="/floor/qr.svg?t=${Date.now()}">` : 'QR needs one extra package. Run run.bat again.';
+    const n = $('#fl-note'); n.className = 'fieldmsg ' + (d.shareable ? 'ok' : 'bad');
+    n.textContent = d.shareable ? `Address taken from ${d.source}.` : 'This address only works on this PC. Set the address the tablets use in the rewind panel above.';
+  } catch (e) { $('#fl-note').textContent = e.message; }
+}
 async function saveRewind(btn) {
   btn.disabled = true;
-  try { await api('/api/settings', {method: 'POST', body: {rewind_base_url: $('#rw-base').value.trim()}}); await loadMeta(); toast('Address saved'); loadRewind(); }
+  try { await api('/api/settings', {method: 'POST', body: {rewind_base_url: $('#rw-base').value.trim()}}); await loadMeta(); toast('Address saved'); loadRewind(); loadFloorLink(); }
   catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
 }
 
