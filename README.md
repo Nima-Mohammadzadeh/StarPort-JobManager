@@ -67,15 +67,19 @@ a second, empty one. A database newer than the app is refused the same way.
   calling out the FIRST and LAST tag. The job list's search box also takes a scan.
   Lookups are read-only.
 - **Floor page (Zebra RFID handhelds)**: a page for encoders at `http://<host-ip>:5050/floor`, opened from its
-  own QR sign (Settings, Tablets and handhelds, Print QR sign). Names come from the **Encoders** box in Settings;
-  an encoder picks their name once, and it is recorded on every roll action. Pull the trigger on a tag and the page
-  opens its roll (with label number and FIRST/LAST) with big **Start / Pause / Resume / Complete / Reopen** buttons
-  and a printer picker; Complete and Reopen ask for a second tap. Only one tag is used per pull: if two different
-  tags arrive together the page refuses them, and after a scan it ignores input for a moment. The gear icon opens a
+  own QR sign (Settings, Tablets and handhelds, Print QR sign). Scanning is the front door: pull the trigger on any
+  tag and its roll appears on the home screen at once (job, roll, state, label number with FIRST or LAST), with one
+  big button for the next step (**Start**, **Complete**, **Resume** or **Reopen**) and Pause and Change printer
+  beneath. Scan another tag and the card is replaced. A scan the page cannot use (unknown tag, two tags together)
+  clears the card and shows a red message, so no button can act on the wrong roll. **Browse jobs** is there for the
+  rare time there is no tag to hand. Names come from the **Encoders** box in Settings; an encoder picks theirs once and
+  it is recorded on every roll action. **Auto-submit:** a complete 24-character EPC goes through by itself after
+  150 ms, so Enter is optional (if the Zebra sends it, it still works). Only one tag is used per pull; the same tag
+  is ignored for 1.5 s after use (a held trigger) but a different tag is accepted at once. The gear icon opens a
   **Scan test** that shows exactly what the Zebra sent. Zebra setup (DataWedge profile): RFID Input on, memory bank
   **EPC** only, hex-to-ASCII off, RSSI off, trigger mode Immediate, a short tag read duration; Keystroke Output on
-  with Enter appended and a 50 ms inter-character delay. Tune `BURST_MS` and `COOLDOWN_MS` at the top of
-  `templates/floor.html` if scans are refused or stack.
+  with a 50 ms inter-character delay (Append ENTER is optional). Tune `AUTO_MS`, `BURST_MS` and `COOLDOWN_MS` at the
+  top of `templates/floor.html` if scans are refused or stack.
 - **Add data to a job**: if a job needs more labels after it was made, open it and choose **Add data**
   (standard, CDO and GO2 jobs; not archived ones). The preview shows the new serial range, rolls and files
   before anything is taken. The extra labels get new serials that are never reused (they may not sit next

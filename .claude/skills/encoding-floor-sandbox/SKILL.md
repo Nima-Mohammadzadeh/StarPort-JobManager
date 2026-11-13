@@ -89,22 +89,27 @@ logic or helpers.
 
 ## Floor page (Zebra handhelds, `/floor`)
 
-Phone width (390x800). The demo seeds encoder names Sam, Priya and Dana. `/floor` shares the lookup and roll endpoints
-with `/rewind`; there is no scanner in the sandbox, so type a tag into the scan field and press Enter (Playwright:
-`fill` then `press('Enter')`). Take EPCs from `GET /api/rewind/jobs/<id>` (`epc_start`). Restart the sandbox after
-editing `floor.html`: Flask keeps the template in memory.
+Design for 360x640 (also check 320x533). The demo seeds encoder names Sam, Priya and Dana. `/floor` shares the lookup and
+roll endpoints with `/rewind`; there is no scanner in the sandbox, so type a tag into the scan field (Playwright:
+`fill`, with no Enter, to prove auto-submit). Take EPCs from `GET /api/rewind/jobs/<id>` (`epc_start`). Restart the
+sandbox after editing `floor.html`: Flask keeps the template in memory. Run tests with
+`-o tmp_path_retention_policy=none --basetemp=<scratch>`: every test copies the repo, and pytest otherwise keeps
+three sessions of copies and can fill the disk.
 
-1. **Names**: empty Encoders list shows "No encoder names are set up" and no input; with names, tap one: it shows in
-   the header and survives a reload; tapping it re-opens the picker.
-2. **Scan**: a valid EPC opens its roll with label number and FIRST/LAST; two different EPCs within 400 ms are refused
-   with "More than one tag read..."; a second scan inside 1.5 s of a used one is ignored; a tag of another job or
-   product shows the server's message and no buttons.
-3. **Roll actions**: Start asks for a printer (busy printers are marked), Pause takes an optional note, Resume, Complete
-   and Reopen need a second tap; the activity feed names the encoder; a roll finished elsewhere shows the server's
-   "already done" message and the card redraws.
-4. **Dialogs**: scans typed while a dialog is open do nothing (and their Enter never presses a button).
-5. **Offline**: set the browser offline: the banner shows, every action is disabled, and they return when it reconnects.
-6. **Scan test** (gear icon): shows the raw text, its length and the lookup result.
+1. **Names**: an empty Encoders list shows "No encoder names are set up" and no input; with names, tap one: it shows in the
+   header and survives a reload; tapping it re-opens the picker.
+2. **Scan is home**: the empty state says "Scan a tag" with a Browse jobs button. A valid EPC typed with no Enter shows its
+   roll in place within about a second; a different tag replaces the card straight away; the same tag is ignored for 1.5 s.
+3. **Rejections**: an unknown tag, or two different tags inside 400 ms, clear the card and show a red message with no buttons.
+4. **Roll actions**: one big primary button per state (Start, Complete, Resume, Reopen); Start asks for a printer (busy ones are
+   marked), Pause takes an optional note, Complete and Reopen need a second tap; each action shows a green
+   "Completed roll 4 as Sam" style line that clears itself; a roll finished elsewhere shows the server's "already done" message.
+5. **Dialogs**: a scan typed while a dialog is open does nothing; the dialog closes if the card changes.
+6. **Fit**: the primary button is fully on screen in every state at 360x640 and 320x533; card text is at least 16px (serials at
+   least 13px), buttons at least 56px high, the roll number at least 48px.
+7. **Offline**: set the browser offline: the banner shows, every action is disabled, and they return when it reconnects.
+8. **Browse**: Browse jobs, a job, a roll: its card shows on the home screen; Back returns.
+9. **Scan test** (gear icon): a good tag stays on the test screen and shows "Found"; the raw text and length are shown.
 
 ## Templates page (mock BarTender library)
 

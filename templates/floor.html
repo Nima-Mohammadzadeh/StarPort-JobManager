@@ -18,8 +18,8 @@ html,body{margin:0;min-height:100%}
 body{font:16px/1.4 var(--sans);color:var(--ink);background:var(--canvas)}
 button,input{font:inherit;color:inherit}
 .data{font-family:var(--data);font-variant-numeric:tabular-nums}
-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:8px 10px;min-height:58px}
-.ib{background:none;border:0;color:#fff;font-size:24px;min-width:48px;height:48px;border-radius:12px;cursor:pointer;flex:0 0 auto}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:4px 8px;min-height:52px}
+.ib{background:none;border:0;color:#fff;font-size:24px;min-width:44px;height:44px;border-radius:12px;cursor:pointer;flex:0 0 auto}
 .ib:active{background:#2c4046}
 .ttl{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2;background:none;border:0;color:#fff;text-align:left;cursor:pointer;padding:4px 6px;border-radius:12px}
 .ttl:active{background:#2c4046}
@@ -29,13 +29,13 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;
 .sync i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#58C27D;margin-right:5px}
 .sync.off i{background:#E8A33C}
 #banner{background:var(--amber-soft);color:#6B4207;padding:10px 14px;font-size:14.5px;border-bottom:1px solid #EBC983}
-main{max-width:900px;margin:0 auto;padding:12px 12px 90px}
+main{max-width:900px;margin:0 auto;padding:8px 12px 90px}
 [hidden]{display:none !important}
-.scanbar{position:sticky;top:58px;z-index:9;background:var(--canvas);padding:8px 0 6px;margin:-4px 0 6px}
-.scanbar input{width:100%;font-family:var(--data);font-size:19px;padding:14px;border:2px solid var(--blue);border-radius:14px;background:#fff}
+.scanbar{position:sticky;top:52px;z-index:9;background:var(--canvas);padding:6px 0 4px;margin:0 0 4px}
+.scanbar input{width:100%;font-family:var(--data);font-size:17px;padding:10px 12px;border:2px solid var(--blue);border-radius:14px;background:#fff}
 .scanbar input:focus{outline:3px solid var(--blue-soft)}
-#hint{font-size:13.5px;color:var(--muted);margin-top:6px;min-height:18px}
-.smsg{border-radius:14px;padding:12px 14px;margin-top:8px;font-size:16px;font-weight:600}
+#hint{font-size:14px;color:var(--muted);margin-top:4px}#hint:empty{display:none}
+.smsg{border-radius:14px;padding:10px 12px;margin-top:6px;font-size:17px;font-weight:600}
 .smsg.bad{background:#B33A3A;color:#fff}.smsg.warn{background:#E0A526;color:#2B1D00}
 .smsg small{display:block;font-weight:400;margin-top:4px;word-break:break-all}
 .names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -69,9 +69,9 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .roll .n{flex:0 0 50px;font-size:34px;font-weight:800;text-align:center;line-height:1}
 .roll .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:15px}
 .roll.s-done{border-left-color:var(--green)}.roll.s-running{border-left-color:#4F8FCB}.roll.s-paused{border-left-color:var(--amber)}
-.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
-.acts button{font-size:19px;font-weight:700;padding:16px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:64px}
-.acts button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.acts button{font-size:19px;font-weight:700;padding:10px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:56px}
+.acts button.main{background:var(--blue);color:#fff;border-color:var(--blue);min-height:68px;font-size:22px}
 .acts button.wide{grid-column:1 / -1}
 .acts button:disabled{opacity:.4;cursor:not-allowed}
 .why{font-size:14px;color:#6B4207;margin:-4px 0 8px}
@@ -85,6 +85,15 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 #dlg .row{display:flex;gap:10px;margin-top:14px}#dlg .row button{flex:1}
 #dlg .row button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
 #dlg textarea{width:100%;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.hit.st-pending{border-top:8px solid #CBD3D5}.hit.st-running{border-top:8px solid #4F8FCB}.hit.st-paused{border-top:8px solid var(--amber)}.hit.st-done{border-top:8px solid var(--green)}
+.line1{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line1 .tk,.line1 .cu{font-size:18px;font-weight:700;display:inline;margin:0}
+.rowline{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 8px;margin-top:6px}
+.roll-no{font-size:52px;font-weight:800;line-height:1;white-space:nowrap}
+.rowline .pill{font-size:16px;padding:6px 12px;margin-left:0}
+.lab2{font-size:20px;font-weight:700;margin-top:6px}.lab2 small{font-size:16px;font-weight:600;color:var(--muted)}
+.hit .it{font-size:16px;margin-top:4px}.hit .pos{font-size:16px;margin:0 0 0 6px;vertical-align:middle}
+.ser{margin-top:4px}.ser .kv{margin-top:4px}.ser .kv .k{font-size:12px}
 .emptyhome{text-align:center;padding:36px 14px}.emptyhome .big{font-size:34px;font-weight:800}.emptyhome p{color:var(--muted);margin:8px 0 20px}
 .browse{font-size:19px;font-weight:700;padding:16px 24px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
 .smsg.ok{background:var(--green);color:#fff}
@@ -345,14 +354,14 @@ function drawCard() {
   const off = S.offline || S.busy, dis = off ? 'disabled' : '';
   const btn = (label, fn, cls) => `<button class="${cls || ''}" ${dis} onclick="${fn}">${label}</button>`;
   const acts = st === 'pending' ? btn('Start', 'startRoll()', 'main wide')
-    : st === 'running' ? btn('Complete', 'confirmRoll(\'complete\')', 'main') + btn('Pause', 'pauseRoll()') + btn('Change printer', 'startRoll()', 'wide')
-    : st === 'paused' ? btn('Resume', 'resumeRoll()', 'main') + btn('Complete', 'confirmRoll(\'complete\')')
-    : btn('Reopen', 'confirmRoll(\'reopen\')', 'wide');
-  $('#rview').innerHTML = `<div class="hit"><div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span><span class="pill ${st}">${RLAB[st]}</span></div>
-    <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div>
-    <div class="lab">Roll ${r.roll_number} <small>of ${S.d.rolls.length}</small></div>
-    <div class="it">${r.printer ? 'On ' + esc(r.printer) : 'No printer'}${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</div>
-    ${sc && sc.label_no ? `<div class="lab" style="font-size:22px">Label ${fmt(sc.label_no)} <small>of ${fmt(r.quantity)}</small></div><span class="pos">${esc(String(sc.position).toUpperCase())}</span>` : ''}
+    : st === 'running' ? btn('Complete', 'confirmRoll(\'complete\')', 'main wide') + btn('Pause', 'pauseRoll()') + btn('Change printer', 'startRoll()')
+    : st === 'paused' ? btn('Resume', 'resumeRoll()', 'main wide') + btn('Complete', 'confirmRoll(\'complete\')', 'wide')
+    : btn('Reopen', 'confirmRoll(\'reopen\')', 'main wide');
+  const label = sc && sc.label_no ? `<div class="lab2">Label ${fmt(sc.label_no)} <small>of ${fmt(r.quantity)}</small><span class="pos">${esc(String(sc.position).toUpperCase())}</span></div>` : '';
+  $('#rview').innerHTML = `<div class="hit st-${st}"><div class="line1"><span class="tk">${esc(j.job_ticket || j.job_number)}</span> · <span class="cu">${esc(j.customer)}</span></div>
+    <div class="rowline"><div class="roll-no">Roll ${r.roll_number}</div><span class="pill ${st}">${RLAB[st]}</span></div>
+    ${label}
+    <div class="it">${S.d.rolls.length} rolls · ${r.printer ? 'On ' + esc(r.printer) : 'No printer'}${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</div>
     <div class="ser"><div class="kv"><div class="k">First serial</div><div class="v">${fmt(r.serial_start)}</div></div>
       <div class="kv"><div class="k">Last serial</div><div class="v">${fmt(r.serial_end)}</div></div></div></div>
     ${off ? `<div class="why">${S.offline ? 'No connection to the server, so actions are off.' : 'Working...'}</div>` : ''}
@@ -369,9 +378,9 @@ let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action a
 function openDlg(html, target) { DLG = target || null; const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
 function closeDlg() { DLG = null; const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
 const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
-async function act(fn) {
+async function act(fn, okText) {
   S.busy = true; draw(); closeDlg();
-  try { await fn(); toast('Saved as ' + S.operator); }
+  try { await fn(); setMsg('ok', okText); clearTimeout(act.t); act.t = setTimeout(() => { if ($('#smsg .smsg.ok')) clearMsg(); }, 3000); }
   catch (e) { setMsg('bad', e.message); feedback(false); }
   S.busy = false; await refresh();
 }
@@ -382,22 +391,24 @@ async function startRoll() {
   let pr = {printers: [], busy: []};
   try { pr = await api('/api/printers'); } catch (e) { return; }
   if (dialogOpen() || !S.cur || S.cur.job !== t.job || S.cur.roll !== t.roll) return;   // the card changed while the list loaded
+  const cr = S.d && S.d.rolls.find(x => x.roll_number === t.roll), moving = !!cr && rstate(cr) !== 'pending';
   const busy = {}; pr.busy.forEach(b => busy[b.printer.toLowerCase()] = b);
   openDlg('<h3>Which printer for roll ' + t.roll + '?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
     return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>', t);
-  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${t.job}/rolls/${t.roll}/printer`, {printer: b.dataset.printer, operator: S.operator})));
+  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${t.job}/rolls/${t.roll}/printer`, {printer: b.dataset.printer, operator: S.operator}),
+    (moving ? 'Moved roll ' + t.roll + ' to ' : 'Started roll ' + t.roll + ' on ') + b.dataset.printer + ' as ' + S.operator));
 }
 function pauseRoll() {
   const t = here(); if (!t) return;
   openDlg('<h3>Leave roll ' + t.roll + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>', t);
-  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus(t, 'paused', note)); };
+  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus(t, 'paused', note), 'Paused roll ' + t.roll + ' as ' + S.operator); };
 }
-function resumeRoll() { const t = here(); if (t) act(() => setStatus(t, 'running')); }
+function resumeRoll() { const t = here(); if (t) act(() => setStatus(t, 'running'), 'Resumed roll ' + t.roll + ' as ' + S.operator); }
 function confirmRoll(kind) {
   const t = here(); if (!t) return;
   const word = kind === 'complete' ? 'Complete' : 'Reopen';
   openDlg(`<h3>${word} roll ${t.roll} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`, t);
-  $('#cgo').onclick = () => act(() => setStatus(t, kind === 'complete' ? 'complete' : 'running'));
+  $('#cgo').onclick = () => act(() => setStatus(t, kind === 'complete' ? 'complete' : 'running'), (kind === 'complete' ? 'Completed' : 'Reopened') + ' roll ' + t.roll + ' as ' + S.operator);
 }
 document.addEventListener('keydown', e => {   // a scan's Enter must never press a dialog button
   if (dialogOpen() && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); $('#scan').value = ''; }
