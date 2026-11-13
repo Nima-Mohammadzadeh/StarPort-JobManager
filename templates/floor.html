@@ -51,6 +51,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .hit .lab{font-size:34px;font-weight:800;line-height:1.1;margin-top:12px}
 .hit .lab small{font-size:16px;font-weight:600;color:var(--muted)}
 .pos{display:inline-block;margin-top:8px;background:var(--green);color:#fff;font-weight:800;font-size:15px;padding:4px 10px;border-radius:8px}
+.ser{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}.ser .kv .v{font-size:clamp(13px,4.4vw,16px);white-space:nowrap}
 .kv{margin-top:14px}.kv .k{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .kv .v{font-family:var(--data);font-size:18px;margin-top:2px;word-break:break-all}
 .tbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
@@ -298,7 +299,8 @@ function drawRoll() {
     <div class="lab">Roll ${r.roll_number} <small>of ${S.d.rolls.length}</small></div>
     <div class="it">${r.printer ? 'On ' + esc(r.printer) : 'No printer'}${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</div>
     ${sc && sc.label_no ? `<div class="lab" style="font-size:22px">Label ${fmt(sc.label_no)} <small>of ${fmt(r.quantity)}</small></div><span class="pos">${esc(String(sc.position).toUpperCase())}</span>` : ''}
-    <div class="kv"><div class="k">Serials</div><div class="v">${fmt(r.serial_start)} - ${fmt(r.serial_end)}</div></div></div>
+    <div class="ser"><div class="kv"><div class="k">First serial</div><div class="v">${fmt(r.serial_start)}</div></div>
+      <div class="kv"><div class="k">Last serial</div><div class="v">${fmt(r.serial_end)}</div></div></div></div>
     ${off ? `<div class="why">${S.offline ? 'No connection to the server, so actions are off.' : 'Working...'}</div>` : ''}
     <div class="acts">${acts}</div>`;
 }
