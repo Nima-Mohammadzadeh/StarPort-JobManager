@@ -55,6 +55,35 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .kv .v{font-family:var(--data);font-size:18px;margin-top:2px;word-break:break-all}
 .tbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
 .tbox .raw{font-family:var(--data);font-size:20px;word-break:break-all;background:var(--sunk);border-radius:10px;padding:10px;margin:6px 0 12px;min-height:44px}
+.sb input{width:100%;font-size:18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:10px}
+.card{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.card:active{background:#F3F7FA}
+.jt{display:flex;align-items:center;gap:8px}
+.jt .tk{font-size:22px;font-weight:800}
+.pill{margin-left:auto;padding:3px 11px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.pill.running{background:var(--run-soft);color:var(--run)}.pill.done{background:var(--green-soft);color:var(--green)}.pill.paused{background:var(--amber-soft);color:var(--amber)}
+.cu{font-size:18px;font-weight:700;margin-top:2px}.it{font-size:15px;color:var(--muted);margin-top:1px}
+.pr{margin-top:8px;font-size:14.5px;color:var(--muted)}
+.roll{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:7px solid #CBD3D5;border-radius:16px;padding:12px 14px;margin-bottom:10px;cursor:pointer;min-height:64px}
+.roll .n{flex:0 0 50px;font-size:34px;font-weight:800;text-align:center;line-height:1}
+.roll .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:15px}
+.roll.s-done{border-left-color:var(--green)}.roll.s-running{border-left-color:#4F8FCB}.roll.s-paused{border-left-color:var(--amber)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.acts button{font-size:19px;font-weight:700;padding:16px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:64px}
+.acts button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
+.acts button.wide{grid-column:1 / -1}
+.acts button:disabled{opacity:.4;cursor:not-allowed}
+.why{font-size:14px;color:#6B4207;margin:-4px 0 8px}
+#dlg{position:fixed;inset:0;background:rgba(10,20,23,.55);z-index:40;display:flex;align-items:flex-end;justify-content:center;outline:none}
+#dlg[hidden]{display:none}
+#dlg .box{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px 22px}
+#dlg h3{margin:0 0 12px;font-size:20px}
+#dlg .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#dlg .opts button,#dlg .row button{font-size:19px;font-weight:700;padding:16px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
+#dlg .opts button small{display:block;font-size:12.5px;font-weight:600;color:var(--amber)}
+#dlg .row{display:flex;gap:10px;margin-top:14px}#dlg .row button{flex:1}
+#dlg .row button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
+#dlg textarea{width:100%;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:12px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
 </style>
 </head>
@@ -73,7 +102,8 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
     <div id="smsg" aria-live="assertive"></div>
   </div>
   <section id="v-pick" hidden><h2 class="pick">Who is using this scanner?</h2><div id="names"></div></section>
-  <section id="v-home" hidden><div class="empty">Scan a tag to open its roll.</div></section>
+  <section id="v-home" hidden><div class="sb"><input id="q" type="search" placeholder="Search ticket or customer" autocomplete="off" autocapitalize="off" aria-label="Search jobs"></div><div id="cards"></div></section>
+  <section id="v-job" hidden><div id="jhead"></div><div id="rolls"></div></section>
   <section id="v-roll" hidden><div id="rview"></div></section>
   <section id="v-test" hidden>
     <div class="tbox">
@@ -85,6 +115,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
     </div>
   </section>
 </main>
+<div id="dlg" tabindex="-1" hidden></div>
 <div id="toast" role="status"></div>
 
 <script>
@@ -116,7 +147,7 @@ const $ = s => document.querySelector(s);
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmt = n => (n === null || n === undefined || n === '') ? '-' : Number(n).toLocaleString();
 const OP_KEY = 'jm_floor_operator';
-const S = {operator: '', cfg: null, picking: false, offline: false, scan: null, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
+const S = {jobs: [], d: null, q: '', busy: false, operator: '', cfg: null, picking: false, offline: false, scan: null, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
 try { S.operator = localStorage.getItem(OP_KEY) || ''; } catch (e) {}
 
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
@@ -153,6 +184,16 @@ function go(h) { if (location.hash === h) render(); else location.hash = h; }
 window.addEventListener('hashchange', () => render());
 
 /* ── who is using it ── */
+async function loadList() { S.jobs = (await api('/api/rewind/jobs?view=open')).jobs; }
+async function loadJob(id) { S.d = await api('/api/rewind/jobs/' + id); }
+async function refresh() {
+  const rt = route();
+  try { if (!rt.test && !S.picking && S.operator) { if (rt.job === null) await loadList(); else await loadJob(rt.job); } } catch (e) {}
+  draw();
+}
+const dialogOpen = () => !$('#dlg').hidden;
+const rstate = r => (r.status === 'complete' || r.status === 'verified') ? 'done' : r.status === 'running' ? 'running' : r.status === 'paused' ? 'paused' : 'pending';
+const RLAB = {done: 'Done', running: 'In progress', paused: 'Left in progress', pending: 'Not started'};
 async function loadCfg() { S.cfg = await api('/api/floor/config'); }
 function setOperator(name) {
   S.operator = name; S.picking = false;
@@ -176,6 +217,7 @@ $('#scan').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   const v = $('#scan').value; $('#scan').value = '';
+  if (dialogOpen()) return;
   S.lastRaw = v; S.lastScanAt = Date.now(); drawTest();
   collector.push(v, Date.now());
 });
@@ -183,7 +225,7 @@ setInterval(() => {
   const d = collector.due(Date.now());
   if (!d) return;
   if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); showMsg('bad', REJECT); drawTest(); return; }
-  lookup(d.epc);
+  if (!dialogOpen()) lookup(d.epc);
 }, 50);
 function showMsg(kind, msg, extra) { $('#smsg').innerHTML = `<div class="smsg ${kind}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`; }
 async function lookup(raw) {
@@ -212,31 +254,109 @@ function drawTest() {
   $('#t-len').textContent = S.lastRaw == null ? '-' : String(S.lastRaw.length) + ' characters';
   $('#t-res').textContent = S.lastResult || '-';
 }
-function drawRoll() {
-  const sc = S.scan, rt = route();
-  const x = sc && sc.roll && sc.roll.job_id === rt.job && sc.roll.roll_number === rt.roll ? sc.roll : null;
-  if (!x) { $('#rview').innerHTML = '<div class="empty">Scan a tag to open its roll.</div>'; return; }
-  $('#rview').innerHTML = `<div class="hit"><div class="tk">${esc(x.job_ticket || x.job_number)}</div><div class="cu">${esc(x.customer)}</div><div class="it">${esc(x.title)}</div>
-    <div class="lab">Roll ${x.roll_number} <small>of ${x.rolls_total}</small></div>
-    ${x.label_no ? `<div class="lab" style="font-size:22px">Label ${fmt(x.label_no)} <small>of ${fmt(x.quantity)}</small></div><span class="pos">${esc(String(x.position).toUpperCase())}</span>` : ''}
-    <div class="kv"><div class="k">Serials</div><div class="v">${fmt(x.serial_start)} - ${fmt(x.serial_end)}</div></div></div>`;
+function drawList() {
+  const q = S.q.toLowerCase().trim();
+  const rows = S.jobs.filter(j => !q || [j.job_ticket, j.customer, j.title, j.job_number, j.upc].join(' ').toLowerCase().includes(q));
+  $('#cards').innerHTML = rows.length ? rows.map(j => `<button class="card" onclick="go('#/job/${j.id}')">
+      <div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span><span class="pill ${j.status === 'In Progress' ? 'running' : ''}">${esc(j.status)}</span></div>
+      <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div>
+      <div class="pr">${j.roll_total ? j.roll_done + ' of ' + j.roll_total + ' rolls done' + (j.roll_running ? ', ' + j.roll_running + ' in progress' : '') : 'No rolls set up yet'}</div></button>`).join('')
+    : `<div class="empty">${q ? 'No jobs match that search.' : 'No open jobs in encoding right now.'}</div>`;
 }
+function drawJob() {
+  if (!S.d || S.d.job.id !== route().job) { $('#jhead').innerHTML = '<div class="empty">Loading job...</div>'; $('#rolls').innerHTML = ''; return; }
+  const {job: j, rolls} = S.d;
+  $('#jhead').innerHTML = `<div class="hit"><div class="tk">${esc(j.job_ticket || j.job_number)}</div><div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div></div>`;
+  $('#rolls').innerHTML = rolls.length ? rolls.map(r => { const st = rstate(r);
+    return `<button class="roll s-${st}" onclick="go('#/job/${j.id}/roll/${r.roll_number}')"><span class="n">${r.roll_number}</span><span class="body">
+      <b>${RLAB[st]}${r.printer ? ' on ' + esc(r.printer) : ''}</b><span class="data">${r.serial_start ? fmt(r.serial_start) + ' - ' + fmt(r.serial_end) : ''}</span>
+      <span style="color:var(--muted)">${fmt(r.quantity)} labels${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</span></span></button>`; }).join('')
+    : '<div class="empty">No roll data for this job yet.</div>';
+}
+function who(r, st) { return st === 'done' ? r.completed_by : st === 'running' ? r.started_by : st === 'paused' ? r.paused_by : ''; }
+function drawRoll() {
+  const rt = route();
+  if (!S.d || S.d.job.id !== rt.job) { $('#rview').innerHTML = '<div class="empty">Loading roll...</div>'; return; }
+  const j = S.d.job, r = S.d.rolls.find(x => x.roll_number === rt.roll);
+  if (!r) { $('#rview').innerHTML = '<div class="empty">That roll was not found.</div>'; return; }
+  const st = rstate(r), sc = S.scan && S.scan.roll && S.scan.roll.job_id === j.id && S.scan.roll.roll_number === r.roll_number ? S.scan.roll : null;
+  const off = S.offline || S.busy, dis = off ? 'disabled' : '';
+  const btn = (label, fn, cls) => `<button class="${cls || ''}" ${dis} onclick="${fn}">${label}</button>`;
+  const acts = st === 'pending' ? btn('Start', 'startRoll()', 'main wide')
+    : st === 'running' ? btn('Complete', 'confirmRoll(\'complete\')', 'main') + btn('Pause', 'pauseRoll()') + btn('Change printer', 'startRoll()', 'wide')
+    : st === 'paused' ? btn('Resume', 'resumeRoll()', 'main') + btn('Complete', 'confirmRoll(\'complete\')')
+    : btn('Reopen', 'confirmRoll(\'reopen\')', 'wide');
+  $('#rview').innerHTML = `<div class="hit"><div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span><span class="pill ${st}">${RLAB[st]}</span></div>
+    <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div>
+    <div class="lab">Roll ${r.roll_number} <small>of ${S.d.rolls.length}</small></div>
+    <div class="it">${r.printer ? 'On ' + esc(r.printer) : 'No printer'}${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</div>
+    ${sc && sc.label_no ? `<div class="lab" style="font-size:22px">Label ${fmt(sc.label_no)} <small>of ${fmt(r.quantity)}</small></div><span class="pos">${esc(String(sc.position).toUpperCase())}</span>` : ''}
+    <div class="kv"><div class="k">Serials</div><div class="v">${fmt(r.serial_start)} - ${fmt(r.serial_end)}</div></div></div>
+    ${off ? `<div class="why">${S.offline ? 'No connection to the server, so actions are off.' : 'Working...'}</div>` : ''}
+    <div class="acts">${acts}</div>`;
+}
+function draw() {
+  const rt = route();
+  if (S.picking || !S.operator || rt.test) return;
+  if (rt.job === null) drawList(); else if (rt.roll === null) drawJob(); else drawRoll();
+}
+
+/* ── roll actions: every one sends the encoder's name; the server's own rules decide ── */
+function openDlg(html) { const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
+function closeDlg() { const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
+const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
+async function act(fn) {
+  S.busy = true; draw(); closeDlg();
+  try { await fn(); toast('Saved as ' + S.operator); }
+  catch (e) { showMsg('bad', e.message); feedback(false); }
+  S.busy = false; await refresh();
+}
+const curRoll = () => route().roll;
+const setStatus = (status, note) => api(`/api/jobs/${route().job}/rolls/${curRoll()}`, {status, operator: S.operator, note: note || ''});
+async function startRoll() {
+  let pr = {printers: [], busy: []};
+  try { pr = await api('/api/printers'); } catch (e) { return; }
+  const busy = {}; pr.busy.forEach(b => busy[b.printer.toLowerCase()] = b);
+  openDlg('<h3>Which printer?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
+    return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>');
+  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${route().job}/rolls/${curRoll()}/printer`, {printer: b.dataset.printer, operator: S.operator})));
+}
+function pauseRoll() {
+  openDlg('<h3>Leave roll ' + curRoll() + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>');
+  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus('paused', note)); };
+}
+function resumeRoll() { act(() => setStatus('running')); }
+function confirmRoll(kind) {
+  const word = kind === 'complete' ? 'Complete' : 'Reopen';
+  openDlg(`<h3>${word} roll ${curRoll()} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`);
+  $('#cgo').onclick = () => act(() => setStatus(kind === 'complete' ? 'complete' : 'running'));
+}
+document.addEventListener('keydown', e => {   // a scan's Enter must never press a dialog button
+  if (dialogOpen() && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); $('#scan').value = ''; }
+}, true);
+$('#q').addEventListener('input', e => { S.q = e.target.value; drawList(); });
+$('#q').addEventListener('keydown', e => {    // a scan that lands in the search box still counts as a scan
+  if (e.key === 'Enter' && /^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) { e.preventDefault(); collector.push(e.target.value, Date.now()); e.target.value = ''; S.q = ''; drawList(); }
+});
+window.addEventListener('offline', () => { S.offline = true; setBar(); draw(); });
+window.addEventListener('online', () => { S.offline = false; setBar(); refresh(); });
 function render() {
   const rt = route(), picking = S.picking || !S.operator;
   $('#v-pick').hidden = !picking; $('#v-test').hidden = picking || !rt.test;
-  $('#v-home').hidden = picking || rt.test || rt.job !== null; $('#v-roll').hidden = picking || rt.test || rt.roll === null;
+  $('#v-home').hidden = picking || rt.test || rt.job !== null; $('#v-job').hidden = picking || rt.test || rt.job === null || rt.roll !== null;
+  $('#v-roll').hidden = picking || rt.test || rt.roll === null;
   $('#scanbar').hidden = picking;
   $('#back').hidden = picking || (rt.job === null && !rt.test);
   $('#title').textContent = S.operator || 'Floor';
   $('#sub').textContent = picking ? 'Choose your name' : (rt.test ? 'Scan test' : 'Tap to change name');
-  if (picking) drawNames(); else { if (rt.roll !== null) drawRoll(); drawTest(); setTimeout(focusScan, 60); }
+  if (picking) drawNames(); else { drawTest(); draw(); refresh(); setTimeout(focusScan, 60); }
 }
 function focusScan() { if (!$('#scanbar').hidden && !document.querySelector('[data-dialog]')) $('#scan').focus({preventScroll: true}); }
 document.addEventListener('click', e => { if (!e.target.closest('input,textarea,select')) setTimeout(focusScan, 0); });
-$('#back').onclick = () => { const rt = route(); go(rt.roll !== null ? '#/' : '#/'); window.scrollTo(0, 0); };
+$('#back').onclick = () => { const rt = route(); go(rt.roll !== null ? '#/job/' + rt.job : '#/'); window.scrollTo(0, 0); };
 $('#testbtn').onclick = () => go(route().test ? '#/' : '#/test');
 setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
-setInterval(async () => { try { await api('/api/stamp'); } catch (e) {} }, 8000);
+setInterval(async () => { if (dialogOpen() || S.busy) return; try { await api('/api/stamp'); } catch (e) {} refresh(); }, 8000);
 
 (async () => { try { await loadCfg(); } catch (e) {} render(); })();
 </script>

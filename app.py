@@ -1612,7 +1612,7 @@ def api_rewind_job(job_id):
         rolls = ensure_rolls(conn, full)
         notes = _notes(conn, job_id)
     keep = ("roll_number", "quantity", "serial_start", "serial_end", "epc_start", "epc_end", "status",
-            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by")
+            "started_at", "started_by", "paused_at", "paused_by", "completed_at", "completed_by", "printer")
     return jsonify({"job": job, "rolls": [{k: r.get(k) for k in keep} for r in rolls], "notes": notes,
                     "total_qty": production_qty(job["quantity"] or 0, job["overage_pct"] or 0) if job["quantity"] else None})
 

@@ -59,3 +59,14 @@ def test_floor_qr_routes(jm):
     sign = client(jm).get("/floor/qr")
     assert sign.status_code == 200
     assert b"FLOOR" in sign.data and b"http://10.0.0.5:5050/floor" in sign.data
+
+
+# ── Task 5: the roll card needs to know each roll's printer ───────────────────
+def test_rewind_job_rolls_include_printer(jm):
+    job = jm.job(1, qty=3000)
+    jid = job["job"]["id"]
+    r = client(jm).post(f"/api/jobs/{jid}/rolls/1/printer", json={"printer": "Printer 2", "operator": "Sam"})
+    assert r.status_code == 200
+    rolls = client(jm).get(f"/api/rewind/jobs/{jid}").get_json()["rolls"]
+    assert rolls[0]["printer"] == "Printer 2"
+    assert rolls[1]["printer"] is None
