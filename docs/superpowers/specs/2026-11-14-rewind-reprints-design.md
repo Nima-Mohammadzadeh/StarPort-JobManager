@@ -1,6 +1,6 @@
 # Rewind page: reprint requests and sequence check — design
 
-Date: 2026-11-14 · Status: awaiting approval · Scope: standard jobs (UPC + serials) only
+Date: 2026-11-14 · Status: awaiting approval (builder check done) · Scope: standard jobs (UPC + serials) only
 
 ## Intent and why
 
@@ -22,6 +22,8 @@ should also be able to spot-check a roll's sequence by scanning, and have the ap
 - Real faults seen in practice: a stretch of labels printed twice (data repeats a stretch); data restarting (for example a roll bigger than its data file); invalid data from encoding.
 - When a repeated stretch is found, rewinders cut out the repeats and the encoding team reprints any missing labels; the two sides talk in person at that point. The app does not work out "what's missing" by itself.
 - Request flow: approach A (below). Standard jobs only for now.
+- Physical rolls end exactly at the app's planned roll boundaries.
+- Two rewinders can work on the same job at the same time.
 
 ## Goals
 
@@ -68,7 +70,7 @@ should also be able to spot-check a roll's sequence by scanning, and have the ap
 - `reprint_requests`: id, job_id (references jobs, cascade on delete), seq (1, 2, 3 … per job), status, created_by, created_at,
   sent_by, sent_at, file_path, file_error, printed_by, printed_at.
   - status: `draft` (collecting marks) → `building` → `ready` (file made) → `printed`; or `failed` (file could not be made; can be retried).
-  - At most one `draft` per job. Marks from any rewinder on that job go into it.
+  - At most one `draft` per job **per rewinder** (`created_by`). Each rewinder's marks go into their own draft, and Send sends only theirs.
 - `reprint_items`: id, request_id (cascade), roll_number, serial_from, serial_to, reason, marked_by, marked_at.
   A single label has serial_from = serial_to. A range is inclusive.
 - Both tables are covered by backups automatically (they live in the app database). Deleting a job removes its requests.
@@ -89,7 +91,7 @@ The roll view gets three modes, shown as chips above the scan box; Look up is th
   - **Send reprint request** (shows "Send 7 labels from rolls 3, 7"): one tap, then a confirmation line. Disabled when empty.
 - **Sequence check:** see below.
 - Any mark, removal or send needs a rewinder name; the page asks for one first if none is set.
-- Above the job's rolls (and on the job list card) the rewind page shows "Reprint draft: N labels" and "Sent: waiting / printed".
+- Above the job's rolls (and on the job list card) the rewind page shows the current rewinder's "Reprint draft: N labels" and the job's "Sent: waiting / printed".
 
 ### Sequence check
 
@@ -98,7 +100,9 @@ Runs on the tablet only; nothing is stored. It applies to the roll that is open.
 - The first two scans on the roll that are at least 2 labels apart set the direction (up or down). Until then nothing is flagged.
 - **Silent:** any move in the roll's direction, of any size. Scanning the same label again.
 - **Stops the rewinder (red, must be dismissed):** a tag from another roll of this job, from another job, or not issued by Job Manager.
-  These are always real problems ("invalid data from encoding").
+  These are always real problems, because physical rolls end exactly at the planned boundaries. When the tag is from an
+  earlier roll of the same job (a move against the direction), the message adds the likely cause: "Label 2,940 is from roll 6.
+  The data may have repeated or restarted here." 
 - **Warns, never blocks (yellow, in the scan list):** a move against the direction.
   - If it lands within the first 10 labels of the roll or of a data file: "Data may have restarted at label N after label M."
   - Otherwise: "Went back K labels: possible repeated stretch, labels A to B."
@@ -125,8 +129,8 @@ Runs on the tablet only; nothing is stored. It applies to the roll that is open.
 - Jobs list and Roll tracking cards show "N reprints waiting" for jobs with requests in `building`, `ready` or `failed`.
 - The job (drawer and Roll tracking panel) gets a **Reprints** section: each request with its number, rolls, label count, who sent
   it and when, status, and for `ready`: the file name, **Copy path**, **Open folder**, and **Mark printed** (asks who, like other
-  actions); for `failed`: the reason and **Retry**. Printed requests stay listed, greyed, for history. A draft in progress shows as
-  "Rewinder collecting: N labels" with no actions.
+  actions); for `failed`: the reason and **Retry**. Printed requests stay listed, greyed, for history. Drafts in progress show as
+  "Dana collecting: N labels", one line per rewinder, with no actions.
 - The record numbers (file name and row number within it) of each label are listed under the request, for anyone who prefers
   Select Records in the original file.
 
@@ -140,7 +144,6 @@ Runs on the tablet only; nothing is stored. It applies to the roll that is open.
 
 ## My calls (not from you; check these)
 
-- One draft per job, shared by rewinders on that job, rather than one per rewinder.
 - Ranges must be on one roll; reasons are optional chips.
 - "Restart" means landing within the first 10 labels of the roll or a data file.
 - Reprint files go in a top-level `Reprints` folder of the job, not inside `Data`, so nothing that reads `Data` picks them up.
@@ -151,7 +154,8 @@ Runs on the tablet only; nothing is stored. It applies to the roll that is open.
 ## Testing
 
 - Unit tests (pytest): migration step 2 creates the tables and is idempotent across a backup/restore; marking, removing, range
-  validation (same roll, in order either way), refusing other-job and duplicate labels, one draft per job; Send moves to building;
+  validation (same roll, in order either way), refusing other-job and duplicate labels, one draft per job per rewinder (two
+  rewinders on one job send independently); Send moves to building;
   the worker builds a file whose rows equal the marked rows exactly (xlsx and csv sources, multiple data files, an `_ADD` file),
   fails cleanly when the folder is missing or a row is not found, never modifies the source files, takes no serials; Mark printed
   and Retry; job delete removes requests.
