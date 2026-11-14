@@ -105,8 +105,9 @@ three sessions of copies and can fill the disk.
    marked), Pause takes an optional note, Complete and Reopen need a second tap; each action shows a green
    "Completed roll 4 as Sam" style line that clears itself; a roll finished elsewhere shows the server's "already done" message.
 5. **Dialogs**: a scan typed while a dialog is open does nothing; the dialog closes if the card changes.
-6. **Fit**: the primary button is fully on screen in every state at 360x640 and 320x533; card text is at least 16px (serials at
-   least 13px), buttons at least 56px high, the roll number at least 48px.
+6. **Fit** (handheld density, 2026-11-14): the primary button is fully on screen in every state at 360x640 and 320x533; card
+   text is at least 12.5px (small badges at least 11px, serials at least 12px), buttons at least 44px high (the main one 46px),
+   the roll number at least 28px. Don't shrink buttons below 44px: mis-taps start on a handheld below that.
 7. **Offline**: set the browser offline: the banner shows, every action is disabled, and they return when it reconnects.
 8. **Browse**: Browse jobs, a job, a roll: its card shows on the home screen; Back returns.
 9. **Scan test** (gear icon): a good tag stays on the test screen and shows "Found"; the raw text and length are shown.
