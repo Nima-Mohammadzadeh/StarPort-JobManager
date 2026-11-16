@@ -368,10 +368,11 @@ async function lookup(raw) {
     return;
   }
   if (my !== S.seq) return;                    // a newer scan or a tap replaced this one while it ran
-  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
+  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number
+    : r.result === 'job' ? 'Job ticket ' + r.job_ticket + ': ' + (r.customer || '') : r.message;
   drawTest();
   if (dialogOpen()) return;
-  if (route().view === 'test') { feedback(r.result === 'found'); return; }   // Scan test only shows the verdict
+  if (route().view === 'test') { feedback(r.result === 'found' || r.result === 'job'); return; }   // Scan test only shows the verdict
   if (r.result === 'found') { feedback(true); showCard(r.roll.job_id, r.roll.roll_number, r); return; }
   if (r.result === 'job') { feedback(true); openJob(r.job_id); return; }   // a ticket from the traveler's barcode
   feedback(false);

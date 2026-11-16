@@ -122,3 +122,8 @@ def test_lookup_tag_unchanged(jm):
     assert r["result"] == "found" and r["roll"]["roll_number"] == 1
     jm.job(3, ticket=roll["epc_start"])                       # a ticket that happens to equal a tag's text
     assert lookup(jm, roll["epc_start"])["result"] == "found"
+
+
+def test_lookup_text_that_cannot_be_a_tag_says_only_no_job(jm):
+    r = lookup(jm, "acme")
+    assert r["result"] == "invalid" and r["message"] == "No job with ticket acme."

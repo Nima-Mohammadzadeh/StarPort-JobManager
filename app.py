@@ -1657,6 +1657,8 @@ def _lookup(conn, raw, job_id=None):
                        customer=j["customer"], title=j["title"], status=j["status"])
         if jobs:
             return res("job_archived", f"Ticket {jobs[0]['job_ticket']} is archived. Restore it in Job Manager first.")
+        if not re.fullmatch(r"[0-9A-F]+", t) and len(re.findall(r"(?<![0-9A-F])[0-9A-F]{24}(?![0-9A-F])", t)) != 1:
+            return res("invalid", f"No job with ticket {ticket[:40]}.")     # plain text: it can't be a tag either
         prefix = f"No job with ticket {ticket[:40]}. If that was a tag: "
 
     if not t:
