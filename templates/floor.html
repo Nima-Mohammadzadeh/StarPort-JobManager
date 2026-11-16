@@ -99,6 +99,7 @@ h2.pick{font-size:22px;margin:6px 2px 12px}
 .smsg.ok{background:var(--green);color:#fff}
 .smsg.float{position:fixed;left:12px;right:12px;bottom:12px;z-index:30;margin:0;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
+#jhead .jhint{font-size:13px;color:var(--muted);margin:2px 2px 6px}
 /* Handheld density (approved 2026-11-14): tighter sizes for Zebra screens. Buttons stay at least 44px tall. */
 header{min-height:40px;padding:2px 6px}
 .ib{min-width:36px;height:36px;font-size:18px}
@@ -316,6 +317,12 @@ function showCard(job, roll, scan) {          // a found tag, or a roll tapped w
   clearMsg(); if (dialogOpen()) closeDlg();
   go('#/');
 }
+function openJob(id) {                        // no roll card: nothing on screen can act on the roll that was open
+  S.cur = null; S.seq++;
+  if (dialogOpen()) closeDlg();
+  clearMsg();
+  go('#/browse/' + id);
+}
 function rejectScan(text, extra, kind) {       // nothing the encoder could act on: no card, so no buttons
   S.cur = null; S.d = null; S.seq++;
   if (dialogOpen()) closeDlg();
@@ -361,11 +368,13 @@ async function lookup(raw) {
     return;
   }
   if (my !== S.seq) return;                    // a newer scan or a tap replaced this one while it ran
-  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number : r.message;
+  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number
+    : r.result === 'job' ? 'Job ticket ' + r.job_ticket + ': ' + (r.customer || '') : r.message;
   drawTest();
   if (dialogOpen()) return;
-  if (route().view === 'test') { feedback(r.result === 'found'); return; }   // Scan test only shows the verdict
+  if (route().view === 'test') { feedback(r.result === 'found' || r.result === 'job'); return; }   // Scan test only shows the verdict
   if (r.result === 'found') { feedback(true); showCard(r.roll.job_id, r.roll.roll_number, r); return; }
+  if (r.result === 'job') { feedback(true); openJob(r.job_id); return; }   // a ticket from the traveler's barcode
   feedback(false);
   rejectScan(r.message, r.note ? esc(r.note) : (r.epc && r.epc.length === 24 ? `<span class="data">${esc(r.epc)}</span>` : ''),
              r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad');
@@ -397,7 +406,8 @@ function who(r, st) { return st === 'done' ? r.completed_by : st === 'running' ?
 function drawJob() {
   if (!S.d || S.d.job.id !== route().job) { $('#jhead').innerHTML = '<div class="empty">Loading job...</div>'; $('#rolls').innerHTML = ''; return; }
   const {job: j, rolls} = S.d;
-  $('#jhead').innerHTML = `<div class="hit"><div class="tk">${esc(j.job_ticket || j.job_number)}</div><div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div></div>`;
+  $('#jhead').innerHTML = `<div class="hit"><div class="tk">${esc(j.job_ticket || j.job_number)}</div><div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div></div>
+    <div class="jhint">Scan a tag or tap a roll</div>`;
   $('#rolls').innerHTML = rolls.length ? rolls.map(r => { const st = rstate(r);
     return `<button class="roll s-${st}" onclick="showCard(${j.id}, ${r.roll_number}, null)"><span class="n">${r.roll_number}</span><span class="body">
       <b>${RLAB[st]}${r.printer ? ' on ' + esc(r.printer) : ''}</b><span class="data">${r.serial_start ? fmt(r.serial_start) + ' - ' + fmt(r.serial_end) : ''}</span>

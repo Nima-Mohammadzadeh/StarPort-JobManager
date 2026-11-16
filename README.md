@@ -64,7 +64,8 @@ a second, empty one. A database newer than the app is refused the same way.
   They pick a job from the open jobs in encoding (new jobs appear by themselves within
   seconds), see every roll as on the printed sheet, and **scan a tag with the fob**:
   Serial Magic types it in and the page jumps to that roll and shows which label it is,
-  calling out the FIRST and LAST tag. The job list's search box also takes a scan.
+  calling out the FIRST and LAST tag. The job list's search box also takes a scan, and a **ticket number typed there
+  and Enter** opens that job (typing without Enter just filters the list); the scan box inside a job takes a ticket too.
   Lookups are read-only.
 - **Floor page (Zebra RFID handhelds)**: a page for encoders at `http://<host-ip>:5050/floor`, opened from its
   own QR sign (Settings, Tablets and handhelds, Print QR sign). Scanning is the front door: pull the trigger on any
@@ -72,7 +73,8 @@ a second, empty one. A database newer than the app is refused the same way.
   big button for the next step (**Start**, **Complete**, **Resume** or **Reopen**) and Pause and Change printer
   beneath. Scan another tag and the card is replaced. A scan the page cannot use (unknown tag, two tags together)
   clears the card and shows a red message, so no button can act on the wrong roll. **Browse jobs** is there for the
-  rare time there is no tag to hand. Names come from the **Encoders** box in Settings; an encoder picks theirs once and
+  rare time there is no tag to hand. **Scan the traveler's barcode** (the job ticket) and the page opens that job's
+  rolls; for this, Barcode Input must be on in the Zebra's DataWedge profile (with Keystroke Output and Enter, as for tags). Names come from the **Encoders** box in Settings; an encoder picks theirs once and
   it is recorded on every roll action. **Auto-submit:** a complete 24-character EPC goes through by itself after
   150 ms, so Enter is optional (if the Zebra sends it, it still works). Only one tag is used per pull; the same tag
   is ignored for 1.5 s after use (a held trigger) but a different tag is accepted at once. The gear icon opens a
