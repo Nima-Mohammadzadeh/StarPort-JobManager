@@ -197,6 +197,12 @@ async function lookup(raw, fromList) {
     if (location.hash === h) render(); else go(h);
     return;
   }
+  if (r.result === 'job') {                    // a ticket number: open that job
+    feedback(true);
+    if (fromList) { $('#q').value = ''; S.q = ''; drawList(); }
+    go('#/job/' + r.job_id);
+    return;
+  }
   feedback(false);
   const warn = r.result === 'other_job' || r.result === 'ambiguous';
   box.innerHTML = `<div class="smsg ${warn ? 'warn' : 'bad'}">${esc(r.message)}${r.note ? `<small>${esc(r.note)}</small>` : ''}
@@ -209,9 +215,14 @@ function fromScanBox() { clearTimeout(scanTimer); const v = $('#scan').value.tri
 $('#scanf').addEventListener('submit', e => { e.preventDefault(); fromScanBox(); });
 $('#scan').addEventListener('input', () => { clearTimeout(scanTimer); if (HEX24($('#scan').value)) scanTimer = setTimeout(fromScanBox, 200); });
 /* on the job list, the search box also takes a scan */
-function fromSearch() { clearTimeout(scanTimer); const v = $('#q').value.trim(); if (!HEX24(v) && !/^[0-9a-fA-F]{20,}$/.test(v.replace(/[\s:\-]/g, ''))) return false;
+function fromSearch(byEnter) {
+  clearTimeout(scanTimer); const v = $('#q').value.trim();
+  if (!HEX24(v) && !/^[0-9a-fA-F]{20,}$/.test(v.replace(/[\s:\-]/g, ''))) {
+    if (byEnter && v) { lookup(v, true); return true; }   // Enter on anything else: it may be a job ticket; the list stays filtered
+    return false;
+  }
   $('#q').value = ''; S.q = ''; drawList(); lookup(v, true); return true; }
-$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fromSearch(); } });
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fromSearch(true); } });
 $('#q').addEventListener('input', () => { clearTimeout(scanTimer); if (HEX24($('#q').value)) scanTimer = setTimeout(fromSearch, 200); });
 function focusScan() { if (route().job !== null) setTimeout(() => $('#scan').focus({preventScroll: true}), 60); }
 

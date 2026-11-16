@@ -110,7 +110,11 @@ three sessions of copies and can fill the disk.
    the roll number at least 28px. Don't shrink buttons below 44px: mis-taps start on a handheld below that.
 7. **Offline**: set the browser offline: the banner shows, every action is disabled, and they return when it reconnects.
 8. **Browse**: Browse jobs, a job, a roll: its card shows on the home screen; Back returns.
-9. **Scan test** (gear icon): a good tag stays on the test screen and shows "Found"; the raw text and length are shown.
+9. **Ticket**: type `40133` and Enter (and once without Enter): the job's roll list opens with "Scan a tag or tap a roll" and
+   any roll card is cleared; `99999` says "No job with ticket 99999"; an archived job's ticket says it is archived. On
+   `/rewind`, `40133` + Enter in the list's search box opens the job, typing without Enter only filters, and the scan box
+   inside a job also takes a ticket.
+10. **Scan test** (gear icon): a good tag stays on the test screen and shows "Found"; the raw text and length are shown.
 
 ## Templates page (mock BarTender library)
 
