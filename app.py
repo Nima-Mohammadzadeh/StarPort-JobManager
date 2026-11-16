@@ -1639,9 +1639,25 @@ def _lookup(conn, raw, job_id=None):
     """What is this tag? Read-only: nothing is recorded."""
     t = _clean_epc(raw)
     out = {"raw": (raw or "")[:60], "epc": t, "note": None}
+    prefix = ""
 
     def res(result, message, **extra):
-        return {**out, "result": result, "message": message, **extra}
+        return {**out, "result": result, "message": (prefix + message) if message else message, **extra}
+
+    # Not a tag: it may be a job ticket (scanned from the traveler's barcode, or typed).
+    ticket = " ".join((raw or "").split())
+    if ticket and not re.fullmatch(r"[0-9A-F]{24}", t):
+        jobs = [dict(r) for r in conn.execute(
+            """SELECT id, job_number, job_ticket, customer, title, status, archived_at FROM jobs
+               WHERE LOWER(TRIM(job_ticket))=? AND status!='Cancelled' ORDER BY id DESC""", (ticket.lower(),))]
+        live = [j for j in jobs if not j["archived_at"]]
+        if live:
+            j = live[0]
+            return res("job", "", job_id=j["id"], job_ticket=j["job_ticket"], job_number=j["job_number"],
+                       customer=j["customer"], title=j["title"], status=j["status"])
+        if jobs:
+            return res("job_archived", f"Ticket {jobs[0]['job_ticket']} is archived. Restore it in Job Manager first.")
+        prefix = f"No job with ticket {ticket[:40]}. If that was a tag: "
 
     if not t:
         return res("invalid", "Nothing was scanned.")

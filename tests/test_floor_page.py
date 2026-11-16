@@ -70,3 +70,55 @@ def test_rewind_job_rolls_include_printer(jm):
     rolls = client(jm).get(f"/api/rewind/jobs/{jid}").get_json()["rolls"]
     assert rolls[0]["printer"] == "Printer 2"
     assert rolls[1]["printer"] is None
+
+
+# ── Scan or type a job ticket (2026-11-16) ────────────────────────────────────
+def lookup(jm, raw):
+    return client(jm).post("/api/rewind/lookup", json={"raw": raw, "job_id": ""}).get_json()
+
+
+def test_lookup_ticket_opens_job(jm):
+    a = jm.job(1, ticket="40133")["job"]
+    b = jm.job(2, ticket="AB-77")["job"]
+    for raw in ("40133", " 40133 "):
+        r = lookup(jm, raw)
+        assert r["result"] == "job" and r["job_id"] == a["id"] and r["job_ticket"] == "40133"
+        assert r["customer"] == "Acme" and r["message"] == ""
+    assert lookup(jm, "ab-77")["job_id"] == b["id"]
+
+
+def test_lookup_ticket_completed_job_opens(jm):
+    a = jm.job(1, ticket="40133")["job"]
+    assert client(jm).patch(f"/api/jobs/{a['id']}", json={"status": "Complete"}).status_code == 200
+    r = lookup(jm, "40133")
+    assert r["result"] == "job" and r["status"] == "Complete"
+
+
+def test_lookup_ticket_archived(jm):
+    a = jm.job(1, ticket="40133")["job"]
+    assert client(jm).post(f"/api/jobs/{a['id']}/archive", json={}).status_code == 200
+    r = lookup(jm, "40133")
+    assert r["result"] == "job_archived"
+    assert r["message"] == "Ticket 40133 is archived. Restore it in Job Manager first."
+
+
+def test_lookup_ticket_ignores_cancelled(jm):
+    old = jm.job(1, ticket="40133")["job"]
+    assert client(jm).patch(f"/api/jobs/{old['id']}", json={"status": "Cancelled"}).status_code == 200
+    new = jm.job(2, ticket="40133")["job"]
+    assert lookup(jm, "40133")["job_id"] == new["id"]
+
+
+def test_lookup_unknown_ticket_keeps_tag_message(jm):
+    r = lookup(jm, "4013")
+    assert r["result"] == "invalid"
+    assert r["message"].startswith("No job with ticket 4013. If that was a tag: That is 4 characters")
+
+
+def test_lookup_tag_unchanged(jm):
+    a = jm.job(1, qty=200)["job"]
+    roll = client(jm).get(f"/api/rewind/jobs/{a['id']}").get_json()["rolls"][0]
+    r = lookup(jm, roll["epc_start"])
+    assert r["result"] == "found" and r["roll"]["roll_number"] == 1
+    jm.job(3, ticket=roll["epc_start"])                       # a ticket that happens to equal a tag's text
+    assert lookup(jm, roll["epc_start"])["result"] == "found"
