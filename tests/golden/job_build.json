@@ -481,14 +481,14 @@
    "additions": [],
    "folders": [
     "./",
-    "GO2/",
-    "GO2/<DATE> - G300/",
-    "GO2/<DATE> - G300/Data/",
-    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
-    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
-    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
-    "GO2/<DATE> - G300/Print/",
-    "GO2/<DATE> - G300/Proof/"
+    "Go2Partners/",
+    "Go2Partners/<DATE> - G300/",
+    "Go2Partners/<DATE> - G300/Data/",
+    "Go2Partners/<DATE> - G300/Data/G300_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "Go2Partners/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "Go2Partners/<DATE> - G300/Print/",
+    "Go2Partners/<DATE> - G300/Proof/"
    ],
    "job_number_last": [
     "1"
@@ -502,7 +502,7 @@
      "customer": "GO2",
      "data_sheet": "go2_rand",
      "due_date": null,
-     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
      "id": 1,
      "inlay_type": null,
      "job_number": "JOB-0001",
@@ -840,14 +840,14 @@
    "additions": [],
    "folders": [
     "./",
-    "GO2/",
-    "GO2/<DATE> - G300/",
-    "GO2/<DATE> - G300/Data/",
-    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
-    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
-    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
-    "GO2/<DATE> - G300/Print/",
-    "GO2/<DATE> - G300/Proof/"
+    "Go2Partners/",
+    "Go2Partners/<DATE> - G300/",
+    "Go2Partners/<DATE> - G300/Data/",
+    "Go2Partners/<DATE> - G300/Data/G300_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "Go2Partners/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "Go2Partners/<DATE> - G300/Print/",
+    "Go2Partners/<DATE> - G300/Proof/"
    ],
    "job_number_last": [
     "1"
@@ -861,7 +861,7 @@
      "customer": "GO2",
      "data_sheet": "go2_rand",
      "due_date": null,
-     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
      "id": 1,
      "inlay_type": null,
      "job_number": "JOB-0001",
@@ -1439,7 +1439,7 @@
     "customer": "GO2",
     "data_sheet": "go2_rand",
     "due_date": null,
-    "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+    "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
     "id": 1,
     "inlay_type": null,
     "job_number": "JOB-0001",
@@ -1499,15 +1499,15 @@
    ],
    "folders": [
     "./",
-    "GO2/",
-    "GO2/<DATE> - G300/",
-    "GO2/<DATE> - G300/Data/",
-    "GO2/<DATE> - G300/Data/G300_ADD1_Serials.xlsx",
-    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
-    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
-    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
-    "GO2/<DATE> - G300/Print/",
-    "GO2/<DATE> - G300/Proof/"
+    "Go2Partners/",
+    "Go2Partners/<DATE> - G300/",
+    "Go2Partners/<DATE> - G300/Data/",
+    "Go2Partners/<DATE> - G300/Data/G300_ADD1_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Data/G300_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "Go2Partners/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "Go2Partners/<DATE> - G300/Print/",
+    "Go2Partners/<DATE> - G300/Proof/"
    ],
    "job_number_last": [
     "1"
@@ -1521,7 +1521,7 @@
      "customer": "GO2",
      "data_sheet": "go2_rand",
      "due_date": null,
-     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
      "id": 1,
      "inlay_type": null,
      "job_number": "JOB-0001",
@@ -1929,14 +1929,14 @@
    "additions": [],
    "folders": [
     "./",
-    "GO2/",
-    "GO2/<DATE> - G300/",
-    "GO2/<DATE> - G300/Data/",
-    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
-    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
-    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
-    "GO2/<DATE> - G300/Print/",
-    "GO2/<DATE> - G300/Proof/"
+    "Go2Partners/",
+    "Go2Partners/<DATE> - G300/",
+    "Go2Partners/<DATE> - G300/Data/",
+    "Go2Partners/<DATE> - G300/Data/G300_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "Go2Partners/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "Go2Partners/<DATE> - G300/Print/",
+    "Go2Partners/<DATE> - G300/Proof/"
    ],
    "job_number_last": [
     "1"
@@ -1950,7 +1950,7 @@
      "customer": "GO2",
      "data_sheet": "go2_rand",
      "due_date": null,
-     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
      "id": 1,
      "inlay_type": null,
      "job_number": "JOB-0001",
@@ -5088,7 +5088,7 @@
    "additions": [],
    "folders": [
     "./",
-    "GO2/"
+    "Go2Partners/"
    ],
    "job_number_last": [
     "0"
@@ -5197,7 +5197,7 @@
  "new_go2": {
   "answer": {
    "db_split": [],
-   "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+   "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
    "job": {
     "archived_at": null,
     "completed_at": null,
@@ -5206,7 +5206,7 @@
     "customer": "GO2",
     "data_sheet": "go2_rand",
     "due_date": null,
-    "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+    "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
     "id": 1,
     "inlay_type": null,
     "job_number": "JOB-0001",
@@ -5247,14 +5247,14 @@
    "additions": [],
    "folders": [
     "./",
-    "GO2/",
-    "GO2/<DATE> - G300/",
-    "GO2/<DATE> - G300/Data/",
-    "GO2/<DATE> - G300/Data/G300_Serials.xlsx",
-    "GO2/<DATE> - G300/Encoding Checklist - JOB-0001.html",
-    "GO2/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
-    "GO2/<DATE> - G300/Print/",
-    "GO2/<DATE> - G300/Proof/"
+    "Go2Partners/",
+    "Go2Partners/<DATE> - G300/",
+    "Go2Partners/<DATE> - G300/Data/",
+    "Go2Partners/<DATE> - G300/Data/G300_Serials.xlsx",
+    "Go2Partners/<DATE> - G300/Encoding Checklist - JOB-0001.html",
+    "Go2Partners/<DATE> - G300/GO2-G300-JOB-0001-QualityControl.html",
+    "Go2Partners/<DATE> - G300/Print/",
+    "Go2Partners/<DATE> - G300/Proof/"
    ],
    "job_number_last": [
     "1"
@@ -5268,7 +5268,7 @@
      "customer": "GO2",
      "data_sheet": "go2_rand",
      "due_date": null,
-     "folder_path": "<ROOT>/customers/GO2/<DATE> - G300",
+     "folder_path": "<ROOT>/customers/Go2Partners/<DATE> - G300",
      "id": 1,
      "inlay_type": null,
      "job_number": "JOB-0001",

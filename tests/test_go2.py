@@ -61,15 +61,16 @@ def test_random_sheet_splits_with_overage(jm):
     assert len(set(allepc)) == 1020 and all(e.startswith("E2004") for e in allepc)
 
 
-@pytest.mark.parametrize("name", ["GO2", "go2", "Go2", "gO2", "  go2 "])
-def test_any_capitalization_of_go2_is_accepted(jm, name):
+@pytest.mark.parametrize("name", ["GO2", "go2", "Go2", "gO2", "  go2 ", "GO 2", "go-2", "Go2Partners",
+                                  "Go2 Partners LLC", "G0 2", "Go Two"])
+def test_any_way_of_writing_go2_is_accepted(jm, name):
     res, code = _go2(jm, 20, "go2_rand", 10, customer=name)
     assert code == 201 and res["job"]["data_sheet"] == "go2_rand", res
     assert res["job"]["customer"] == "GO2"                  # one customer, one folder
-    assert os.path.basename(os.path.dirname(res["folder_path"])) == "GO2"
+    assert os.path.basename(os.path.dirname(res["folder_path"])) == "Go2Partners"
 
 
-@pytest.mark.parametrize("name", ["Acme", "GO23", "GO 2", ""])
+@pytest.mark.parametrize("name", ["Acme", "GO23", "G2 ID Source", "Go Partners", ""])
 def test_other_customers_cannot_take_the_go2_sheet(jm, name):
     res, code = _go2(jm, 21, "go2_rand", 10, customer=name)
     assert code == 400

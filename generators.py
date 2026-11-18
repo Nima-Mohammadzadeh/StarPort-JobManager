@@ -173,8 +173,8 @@ GO2_EPC_LEN = len(GO2_PREFIX) + GO2_RAND_LEN       # 24
 
 
 def is_go2_customer(name) -> bool:
-    """GO2 in any capitalization, ignoring surrounding spaces."""
-    return (name or "").strip().lower() == GO2_CUSTOMER
+    """GO2 however it is written (go 2, Go2Partners, G0 2 …), see customers.py."""
+    return sheet_customer(name) == "GO2"
 
 
 def go2_random_epcs(count: int, exclude=()) -> list:
@@ -337,6 +337,106 @@ def verify_cdo_file(path: str, start_serial: int, expected_rows: int) -> None:
             raise ValueError(f"{name}: row {i + 2} should be {want} / {cdo_epc(want)}, found {serial!r} / {epc!r}")
 
 
+# ── Venture Research data sheet ───────────────────────────────────────────────
+# Every Venture Research sheet on the share (4 x 2, 4 x 3.125, 6 x 2) has the same three
+# columns: Prefix | Serial | EPC, where Prefix is always 34083328448A2E, Serial is a running
+# number written as 10 digits with leading zeros (text, so the zeros stay), and EPC is the two
+# joined (24 hex characters). All sizes share ONE running series: 10001-10020 (proof),
+# 10021-60020 (1943978), 60021-160020 (1943979), 160021-360020 (1943977), 360021-380020
+# (1998128). The numbers come from sheet_serials.py, which never hands the same one out twice
+# and also checks the Venture Research share folder for sheets made by hand. Old sheets built
+# the EPC with =A2&B2; these are written as plain values.
+VENTURE_SHEET = "venture_seq"
+VENTURE_PREFIX = "34083328448A2E"
+VENTURE_SERIAL_LEN = 10
+VENTURE_EPC_LEN = len(VENTURE_PREFIX) + VENTURE_SERIAL_LEN      # 24
+VENTURE_MAX_SERIAL = 10 ** VENTURE_SERIAL_LEN - 1
+
+
+def venture_serial(serial: int) -> str:
+    return format(int(serial), f"0{VENTURE_SERIAL_LEN}d")
+
+
+def venture_epc(serial: int) -> str:
+    return VENTURE_PREFIX + venture_serial(serial)
+
+
+def _write_venture_xlsx(path, start, rows, sheet_title):
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_title)
+    ws.append(["Prefix", "Serial", "EPC"])
+    for n in range(start, start + rows):
+        s = venture_serial(n)
+        ws.append([VENTURE_PREFIX, s, VENTURE_PREFIX + s])
+    wb.save(path)
+
+
+def verify_venture_file(path: str, start_serial: int, expected_rows: int) -> None:
+    """Re-open a written Venture Research sheet and check every row. Raises ValueError on any problem."""
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True)
+    try:
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+    finally:
+        wb.close()
+    name = os.path.basename(path)
+    if len(rows) != expected_rows:
+        raise ValueError(f"{name}: expected {expected_rows:,} rows, found {len(rows):,}")
+    for i, r in enumerate(rows):
+        want = int(start_serial) + i
+        if tuple(r[:3]) != (VENTURE_PREFIX, venture_serial(want), venture_epc(want)):
+            raise ValueError(f"{name}: row {i + 2} should be {VENTURE_PREFIX} / {venture_serial(want)} / "
+                             f"{venture_epc(want)}, found {tuple(r[:3])!r}")
+
+
+def generate_venture_files(job_dir: str, label: str, start_serial: int, total_qty: int, qty_db: int | None) -> dict:
+    """Write the Venture Research sheet(s) for serials start..start+total-1 into <job_dir>/Data and verify each."""
+    if not XLSX_AVAILABLE:
+        raise RuntimeError("openpyxl is needed to write the Venture Research data sheet")
+    total_qty, serial = int(total_qty), int(start_serial)
+    if serial + total_qty - 1 > VENTURE_MAX_SERIAL:
+        raise ValueError(f"Venture Research serials stop at {VENTURE_MAX_SERIAL:,} (10 digits)")
+    data_dir = os.path.join(job_dir, "Data")
+    os.makedirs(data_dir, exist_ok=True)
+    split = db_file_split(total_qty, qty_db)
+    files = []
+    try:
+        for idx, (rows, name) in enumerate(zip(split, go2_file_names(label, len(split))), start=1):
+            path = os.path.join(data_dir, name)
+            files.append(path)
+            _write_venture_xlsx(path, serial, rows, f"DB{idx}" if len(split) > 1 else "Sheet1")
+            verify_venture_file(path, serial, rows)
+            serial += rows
+    except Exception:
+        for p in files:
+            try: os.remove(p)
+            except OSError: pass
+        raise
+    return {"files": files, "file_count": len(files), "split": split,
+            "start_serial": int(start_serial), "end_serial": serial - 1}
+
+
+def venture_serials_in_row(row):
+    """Venture serials a row of any sheet holds: a full 34083328448A2E… EPC, or the prefix in one
+    cell with the serial in the next (also when Excel turned the serial into a number)."""
+    out, row = [], list(row or ())
+    for i, v in enumerate(row):
+        if not isinstance(v, str):
+            continue
+        v = v.strip().upper()
+        if len(v) == VENTURE_EPC_LEN and v.startswith(VENTURE_PREFIX) and v[len(VENTURE_PREFIX):].isdigit():
+            out.append(int(v[len(VENTURE_PREFIX):]))
+        elif v == VENTURE_PREFIX and i + 1 < len(row):
+            nxt = row[i + 1]
+            if isinstance(nxt, bool):
+                continue
+            if isinstance(nxt, (int, float)) and float(nxt).is_integer() and 0 < nxt <= VENTURE_MAX_SERIAL:
+                out.append(int(nxt))
+            elif isinstance(nxt, str) and nxt.strip().isdigit() and len(nxt.strip()) <= VENTURE_SERIAL_LEN:
+                out.append(int(nxt.strip()))
+    return sorted(set(out))              # Prefix+Serial and EPC in one row are the same tag
+
+
 # Limits for a data sheet job, so one request can't tie the PC up writing files nobody can open.
 SHEET_MAX_LABELS = 20_000_000          # one job
 EXCEL_MAX_DATA_ROWS = 1_048_575        # Excel holds 1,048,576 rows per sheet, one of them the header
@@ -360,33 +460,44 @@ DATA_SHEETS = {
     GO2_SHEET: {"customer": "GO2", "label": "GO2: random EPC (E2004 + 19 random hex)",
                 "detail": "GO2 random EPC (E2004…)", "sequential": False},
     CDO_SHEET: {"customer": "CDO", "label": "CDO: serial + 8-digit hex EPC, counts up, never repeats",
-                "detail": "CDO sequential serial + 8-digit hex EPC", "sequential": True},
+                "detail": "CDO sequential serial + 8-digit hex EPC", "sequential": True,
+                "hint": "Serial counts up in one running series and is never reused. The EPC is the serial as 8 hex digits.",
+                "epc_note": "EPC = 8 hex digits"},
+    VENTURE_SHEET: {"customer": "Venture Research",
+                    "label": "Venture Research: 34083328448A2E + 10-digit serial, counts up, never repeats",
+                    "detail": "Venture Research prefix 34083328448A2E + 10-digit serial", "sequential": True,
+                    "hint": "Prefix 34083328448A2E + the serial as 10 digits. One running series for every "
+                            "label size, never reused (sheets already on the share are checked too).",
+                    "epc_note": "EPC = 34083328448A2E + 10 digits"},
 }
+
+# The EPC each sequential sheet writes for a serial.
+SEQ_EPC = {CDO_SHEET: cdo_epc, VENTURE_SHEET: venture_epc}
 
 
 def sheet_customer(name):
-    """Canonical customer name ("GO2", "CDO") for a name typed in any capitalization, else None."""
-    n = (name or "").strip().lower()
-    for cfg in DATA_SHEETS.values():
-        if n == cfg["customer"].lower():
-            return cfg["customer"]
-    return None
+    """Canonical data-sheet customer ("GO2", "CDO", "Venture Research") for a name typed any way
+    (customers.py: case, spaces, punctuation, Inc/LLC, aliases, small misspellings), else None."""
+    import customers
+    c = customers.canonical(name)
+    return c if any(cfg["customer"] == c for cfg in DATA_SHEETS.values()) else None
 
 
 def sheet_for_customer(name):
-    n = (name or "").strip().lower()
-    return next((k for k, c in DATA_SHEETS.items() if c["customer"].lower() == n), None)
+    c = sheet_customer(name)
+    return next((k for k, cfg in DATA_SHEETS.items() if cfg["customer"] == c), None) if c else None
 
 
-def roll_plan_seq(start_serial: int, total_qty: int, lpr: int, first_roll: int = 1) -> list:
-    """Rolls for a sequential data sheet: a serial range and 8-hex EPC range per roll."""
+def roll_plan_seq(start_serial: int, total_qty: int, lpr: int, first_roll: int = 1, epc=cdo_epc) -> list:
+    """Rolls for a sequential data sheet: a serial range and EPC range per roll (`epc` turns a serial
+    into that sheet's EPC; CDO's 8 hex digits unless told otherwise)."""
     if not (start_serial and total_qty and lpr and lpr > 0):
         return []
     rolls, cur, n, left = [], int(start_serial), int(first_roll), int(total_qty)
     while left > 0:
         q = min(lpr, left)
         rolls.append({"roll_number": n, "quantity": q, "serial_start": cur, "serial_end": cur + q - 1,
-                      "epc_start": cdo_epc(cur), "epc_end": cdo_epc(cur + q - 1)})
+                      "epc_start": epc(cur), "epc_end": epc(cur + q - 1)})
         cur += q; left -= q; n += 1
     return rolls
 

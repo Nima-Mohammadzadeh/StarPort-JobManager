@@ -2077,15 +2077,30 @@ function setJobType(t) {
   updateSummary(); runMatch();
 }
 /* Customer data sheets. The sheet picker always shows on Special jobs. Typing a customer that has a sheet (GO2, CDO,
-   any capitalization) switches to Special and selects that customer's sheet. */
+   Venture Research, written any way: "go 2", "Go2Partners", "venture", "Ventrue Research Inc") switches to Special and
+   selects that customer's sheet. The server decides what a name means (/api/customer-match, the same rule create_job uses). */
 const sheetDefs = () => (META && META.data_sheets) || [];
-const sheetForCustomer = () => { const n = N('customer').value.trim().toLowerCase(); const d = sheetDefs().find(x => x.customer.toLowerCase() === n); return d ? d.key : ''; };
+const NO_CUST = {name: null, customer: null, sheet: '', how: null, folder: null};
+let N_CUST = NO_CUST;
+let N_CUST_SEQ = 0;
+const custMatched = () => N_CUST.name === N('customer').value ? N_CUST : NO_CUST;
+const sheetForCustomer = () => custMatched().sheet || '';
 const sheetDef = k => sheetDefs().find(x => x.key === k);
+const sheetNext = k => ((META && META.sheet_next) || {})[k];
+function matchCustomer() {
+  const name = N('customer').value, seq = ++N_CUST_SEQ;
+  if (name === N_CUST.name) return Promise.resolve();
+  if (!name.trim()) { N_CUST = {...NO_CUST, name}; return Promise.resolve(); }
+  return api('/api/customer-match?name=' + encodeURIComponent(name))
+    .then(r => { if (seq === N_CUST_SEQ && N('customer').value === name) N_CUST = {name, customer: r.customer, sheet: r.sheet || '', how: r.how, folder: r.folder}; })
+    .catch(() => {});
+}
 let N_SHEET_AUTO = '', N_AUTO_SPECIAL = false;
 function fillSheetOptions() {
   N('sheet').innerHTML = sheetDefs().map(d => `<option value="${esc(d.key)}">${esc(d.label)}</option>`).join('') + '<option value="">None</option>';
 }
-function syncSheet() {
+function syncSheet() { matchCustomer().then(syncSheetNow); }
+function syncSheetNow() {
   const want = sheetForCustomer();
   if (want && want !== N_SHEET_AUTO) {
     if (N_TYPE === 'standard' && !N('upc').value.trim()) { setJobType('special'); N_AUTO_SPECIAL = true; }
@@ -2101,16 +2116,17 @@ function syncSheet() {
 }
 function sheetProblem() {
   const k = N('sheet').value, d = sheetDef(k); if (!d) return '';
-  const cust = N('customer').value.trim();
-  return cust.toLowerCase() === d.customer.toLowerCase() ? '' : `This sheet is only for customer ${d.customer}. Change the customer to ${d.customer} or choose None.`;
+  return custMatched().customer === d.customer ? '' : `This sheet is only for customer ${d.customer}. Change the customer to ${d.customer} or choose None.`;
 }
 function sheetChanged() {
   const v = N('sheet').value, d = sheetDef(v), prob = sheetProblem();
   $('#n-qtydb-wrap').style.visibility = (N_TYPE === 'standard' || v) ? '' : 'hidden';
   $('#n-sheet-hint').style.color = prob ? 'var(--red)' : '';
+  const m = custMatched(), typed = N('customer').value.trim();
+  const matched = d && m.customer === d.customer && typed !== d.customer ? `“${typed}” is ${d.customer}. ` : '';
   $('#n-sheet-hint').textContent = prob || (!d ? 'No data sheet will be written for this job.'
-    : d.sequential ? `Serial counts up in one running series and is never reused. The EPC is the serial as 8 hex digits. Next free serial: ${fmt(META.cdo_next)}.`
-    : 'Every EPC starts with E2004 and is unique. The numbers are written as fixed values and never change.');
+    : matched + (d.sequential ? `${d.hint} Next free serial: ${fmt(sheetNext(v))}.`
+    : 'Every EPC starts with E2004 and is unique. The numbers are written as fixed values and never change.'));
   updateSummary();
 }
 N('sheet').addEventListener('change', sheetChanged);
@@ -2125,7 +2141,8 @@ function openNewJob() {
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
   renderTemplateMatch();
   updateSummary(); openOv('ov-new'); setTimeout(() => N('ticket').focus(), 30);
-  api('/api/meta').then(m => { META.cdo_next = m.cdo_next; sheetChanged(); }).catch(() => {});   // the CDO series moves as jobs are made
+  N_CUST = NO_CUST;
+  api('/api/meta').then(m => { META.cdo_next = m.cdo_next; META.sheet_next = m.sheet_next; sheetChanged(); }).catch(() => {});   // the CDO / Venture series move as jobs are made
 }
 function updateSummary() {
   const qty = +N('qty').value || 0, ov = +N('ov').value || 0, lpr = +N('lpr').value || 0, per = +N('qtydb').value || 0;
@@ -2143,14 +2160,14 @@ function updateSummary() {
   const sheet = N('sheet').value;
   if (N_TYPE === 'special' && qty && !sheet) rows.push(['Serials', 'None (special job)']);
   const sd = sheetDef(sheet);
-  if (sd && qty) rows.push(sd.sequential ? ['Serials', `${fmt(META.cdo_next)} – ${fmt(META.cdo_next + total - 1)} (EPC = 8 hex digits)`]
+  if (sd && qty) rows.push(sd.sequential ? ['Serials', `${fmt(sheetNext(sheet))} – ${fmt(sheetNext(sheet) + total - 1)} (${sd.epc_note})`]
                                          : ['EPCs', `${fmt(total)} random, all E2004…`]);
   if (sheet && qty) rows.push(['Data files', dbSplit(total, per).map(fmt).join(' + ')]);
   if (qty && N('upc').value) {
     const s = dbSplit(total, per); rows.push(['DB files', s.map(fmt).join(' + ')]);
     if (s.length > 1 && s[s.length - 1] < per * 0.1) spill = `The last DB file only holds ${fmt(s[s.length - 1])} rows because overage pushed past ${fmt(per)}. Leave Qty per DB file blank for a single file.`;
   }
-  const cust = (sheetDef(sheetForCustomer()) || {}).customer || N('customer').value.trim();
+  const cust = custMatched().folder || custMatched().customer || N('customer').value.trim();
   if (cust) {
     const po = N('po').value.trim(), tk = N('ticket').value.trim();
     const d = new Date(); const ds = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.${String(d.getFullYear()).slice(2)}`;
@@ -2269,6 +2286,7 @@ N('ticket').addEventListener('input', debounce(checkTicket, 300));
 let N_OFFLINE = null;
 const body_mode = () => (N_TYPE === 'standard' && N('upc').value.trim()) ? N_SMODE : '';
 async function submitNewJob(allowDup = false, offline = null) {
+  await matchCustomer();                 // the sheet check below needs the customer as the server reads it
   const body = {
     job_type: N_TYPE, created_by: N('by').value.trim(),
     offline_confirm: !!offline, offline_start: offline || '',

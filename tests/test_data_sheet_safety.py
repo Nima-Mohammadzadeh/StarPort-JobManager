@@ -11,7 +11,7 @@ import pytest
 from openpyxl import load_workbook
 
 FIRST = 3_768_677_565
-SHEETS = [("CDO", "cdo_seq"), ("GO2", "go2_rand")]
+SHEETS = [("CDO", "cdo_seq"), ("GO2", "go2_rand"), ("Venture Research", "venture_seq")]
 
 
 def body(customer, sheet, n, qty=50, **kw):
@@ -124,6 +124,7 @@ def test_file_split_that_stays_under_excels_limit_is_accepted(jm, monkeypatch, c
     calls = []
     monkeypatch.setattr(jm.app, "generate_go2_files", lambda *a, **k: calls.append(a) or {})
     monkeypatch.setattr(jm.app, "generate_cdo_files", lambda *a, **k: calls.append(a) or {})
+    monkeypatch.setattr(jm.app, "generate_venture_files", lambda *a, **k: calls.append(a) or {})
     r = post(jm, body(customer, sheet, 8, qty=1_048_576, qty_db=500_000))
     assert r.status_code == 201, r.get_json()
     assert len(calls) == 1
@@ -139,8 +140,8 @@ def test_label_size_cannot_walk_out_of_the_job_folders(jm, customer, sheet, bad)
     assert set(os.listdir(os.path.dirname(jm.customers))) == before, "something was written outside the job folders"
     assert r.status_code == 201, r.get_json()
     folder = r.get_json()["folder_path"]
-    assert inside(os.path.join(jm.customers, customer), folder), folder
-    rel = os.path.relpath(os.path.realpath(folder), os.path.realpath(os.path.join(jm.customers, customer)))
+    assert inside(os.path.join(jm.customers, jm.app.CUST.folder_for(customer)), folder), folder
+    rel = os.path.relpath(os.path.realpath(folder), os.path.realpath(os.path.join(jm.customers, jm.app.CUST.folder_for(customer))))
     assert len(rel.split(os.sep)) == 2, rel          # <label size>\<date - ticket>
 
 
@@ -241,8 +242,10 @@ def test_failed_sheet_leaves_no_job_folder_or_files(jm, monkeypatch, customer, s
     import generators as g
     monkeypatch.setattr(g, "verify_go2_file", lambda *a: (_ for _ in ()).throw(ValueError("disk full")))
     monkeypatch.setattr(g, "verify_cdo_file", lambda *a: (_ for _ in ()).throw(ValueError("disk full")))
+    monkeypatch.setattr(g, "verify_venture_file", lambda *a: (_ for _ in ()).throw(ValueError("disk full")))
     monkeypatch.setattr(jm.app, "generate_go2_files", g.generate_go2_files)
     monkeypatch.setattr(jm.app, "generate_cdo_files", g.generate_cdo_files)
+    monkeypatch.setattr(jm.app, "generate_venture_files", g.generate_venture_files)
     r = post(jm, body(customer, sheet, 15))
     assert r.status_code == 500 and "nothing was created" in r.get_json()["error"]
     assert job_rows(jm) == [] and folders_on_disk(jm) == []

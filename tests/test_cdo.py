@@ -145,4 +145,5 @@ def test_cdo_standard_job_cannot_take_it(jm):
 
 def test_meta_lists_both_sheets(jm):
     r = jm.app.app.test_client().get("/api/meta").get_json()
-    assert {d["key"] for d in r["data_sheets"]} == {"go2_rand", "cdo_seq"} and r["cdo_next"] == FIRST
+    assert {d["key"] for d in r["data_sheets"]} == {"go2_rand", "cdo_seq", "venture_seq"} and r["cdo_next"] == FIRST
+    assert r["sheet_next"]["cdo_seq"] == FIRST

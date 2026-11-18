@@ -1,4 +1,4 @@
-# Job Manager 3.3 — encoding team edition
+# Job Manager 3.4 — encoding team edition
 
 One host PC runs the app. Everyone else uses it in a browser at `http://<host-ip>:5050`.
 The full guide (how it works, where everything is stored, how it compares with the old
@@ -19,10 +19,18 @@ app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
 
 ## Updating the app
 
-Close the app, copy the new files over the existing Job Manager folder, and start `run.bat`.
-`local.db`, `serial_registry`, `config.ini` and `backups` are yours and are not part of the app files,
-so they stay as they are. The first start after an update brings the database up to date by itself
-(it prints `updated to version N`).
+Build the update on the development PC with `python make_update.py`. It takes the code straight from
+git (`main`) into `dist\JobManager-<version>-update\`, with an `UPDATE-NOTES.txt`, and refuses to finish
+if a database, `config.ini`, serial registry, backup or job file would be in it. On the host: close the
+app, copy the **contents of that folder** over the existing Job Manager folder (Replace files, never a
+mirror or sync-with-delete), and start `run.bat`; it prints `Job Manager <version> is running.`
+
+Never copy the development folder itself: it can hold its own `local.db`, `config.ini` and
+`serial_registry`, which would replace the live ones. On the host, `local.db`, `serial_registry`,
+`config.ini` and `backups` are yours and are not part of the app files, so they stay as they are.
+The first start after an update brings the database up to date by itself (it prints `updated to version N`).
+The app version (`APP_VERSION` in `app.py`, shown in the app and recorded in every backup) is not the
+database version: 3.4 needs no database change.
 
 Job Manager never creates a database by itself. If it is started from a folder that has no database
 (for example a new copy unzipped somewhere else), it stops and says so instead of quietly starting
@@ -45,8 +53,22 @@ a second, empty one. A database newer than the app is refused the same way.
   ended, so a number is never used twice. The series is kept in the database, `serial_registry/data_sheets/cdo_seq.txt`
   and `sheet_serial_journal.csv` in the backup folder; the next number is past the highest of the three. A job
   that fails after taking numbers leaves a marked gap, never a repeat. It stops at `FFFFFFFF`.
+- **Venture Research data sheet** (customer Venture Research only): `Prefix | Serial | EPC`, the same layout
+  as every Venture sheet on the share. Prefix is always `34083328448A2E`, Serial is 10 digits with leading
+  zeros (kept as text), EPC is the two joined (24 hex), written as values (old sheets used `=A2&B2`). All label
+  sizes share one running series: the share holds 10,001–380,020, so the first job starts at 380,021. Kept like
+  the CDO series (`serial_registry/data_sheets/venture_seq.txt`), and on top of that every `.xlsx`/`.xlsm`/`.csv`
+  under `Customers Encoding Files\Venture Research` is read, so a sheet made by hand still pushes the series
+  past its numbers. Files are re-read only when they change (cache: `venture_seq_share_scan.json`), the highest
+  number ever seen is kept after a file is removed, and a file that can't be read stops the job until it is
+  fixed or moved (it might hold numbers). Jobs are filed under `Venture Research`.
 - **Picking a sheet**: the Customer data sheet box always shows on Special jobs. Typing a customer that has a sheet
-  (GO2, CDO, any capitalization) switches to Special and selects it; a sheet only works for its own customer.
+  switches to Special and selects it; a sheet only works for its own customer. The name is matched however it is
+  written (`customers.py`): case, spaces, punctuation, Inc/LLC, 0 for O, aliases and small misspellings, so
+  `go 2`, `Go2Partners LLC`, `G0 2`, `Go Two` are GO2 (filed under `Go2Partners`) and `venture`,
+  `Ventrue Research, Inc.` are Venture Research. Short names must match exactly and a misspelling may not change a
+  digit, so `G2 ID Source`, `GO23` and `Go Partners` stay their own customers. Editing a job's customer follows the
+  same rule.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel
   the old job first to redo it). The form warns as soon as the ticket is typed, and
   the server refuses even if two people enter it at the same instant.
@@ -128,4 +150,6 @@ is flagged as a conflict.
 | `seed_serials.py`, `.bat` | Find serials used before the app and reserve them |
 | `backup.py` | Snapshot zips and their serial check |
 | `restore_backup.py`, `.bat` | Emergency restore (see RESTORE.md) |
+| `customers.py` | Recognises GO2, CDO and Venture Research however the name is typed |
+| `make_update.py` | Build the code-only update folder for the host PC |
 | `tests/` | Automated tests (`pip install pytest`, then `python -m pytest -q`) |
