@@ -1244,6 +1244,20 @@ html[data-theme=dark]{--on-fill:#06161A; --amber-ink:#EBC98A; --red-ink:#F5B1AB;
         It's stored in this browser only.</p></details>
       <div class="grid2"><label class="f">Default name on this PC<input class="i" id="s-operator" maxlength="40" placeholder="e.g. Nima" list="dl-names"></label></div>
     </div>
+    <div class="panel" data-sec="pc" id="autoprint-panel">
+      <h2>Print roll sheets when a job is created</h2>
+      <details class="more"><summary>About this</summary><p class="d">When you create a job that has rolls (one job or a batch), its roll tracking sheet prints by itself on this PC.
+        A browser can only print without a dialog when it is started with silent printing on, so a one-time setup makes a <b>Job Manager</b> shortcut on the desktop.
+        It opens Job Manager in its own window, and that window sends roll sheets straight to this PC's default printer. Change the default printer in Windows Settings, Printers.
+        No admin rights are needed and nothing runs in the background. Other printing from that window also skips the dialog.</p></details>
+      <label class="ck" style="display:flex;gap:8px;font-size:13.5px;margin-bottom:8px"><input type="checkbox" id="s-autoprint" onchange="setAutoPrint(this.checked)"> Print the roll tracking sheet when I create a job on this PC</label>
+      <div id="print-state" class="helper-state"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <a class="btn primary" href="/helper/print-shortcut.cmd">Download shortcut setup for this PC</a>
+      </div>
+      <p class="d" style="margin:10px 0 0">Run the downloaded file once. Windows may warn about a downloaded file; choose More info, then Run anyway.
+        It opens Job Manager in the new window; use the desktop shortcut from then on and enter your name there once.</p>
+    </div>
     <div class="panel" data-sec="printers" id="printers-panel">
       <h2>Printers</h2>
       <p class="d">One printer name per line. Encoders pick one of these on a roll to say where it is running. Running rolls show their printer in the list.</p>
@@ -2303,6 +2317,7 @@ async function submitNewJob(allowDup = false, offline = null) {
     }
     toast(`${r.job_number} created` + (r.serial_alloc ? ` — serials ${fmt(r.serial_alloc.start)}–${fmt(r.serial_alloc.end)}` : ''));
     r.warnings.forEach(w => toast(w, true));
+    if (r.rolls) printRollSheets([{id: r.job.id, number: r.job_number}]);
     STATUS_FILTER = 'all'; if (!$('#v-rolls').classList.contains('on')) { showView('jobs'); await loadJobs(); openJob(r.job.id); } else loadFloor();
     loadMeta();
   } catch (e) {
@@ -2386,6 +2401,7 @@ async function submitBatch() {
     });
     $('#b-msg').textContent = `${d.created} created` + (d.failed ? `, ${d.failed} not created` : '');
     if (d.created) { loadJobs(); loadMeta(); }
+    printRollSheets(d.results.filter(res => res.ok && res.rolls && res.job_id).map(res => ({id: res.job_id, number: res.job_number})));
   } catch (e) { $('#b-msg').textContent = e.message; }
   finally { btn.textContent = 'Create jobs'; validateBatch(true); }
 }
@@ -2618,7 +2634,7 @@ async function loadSettings() {
   $('#s-operator').value = operator(); $('#s-btw').value = s.btw_template_dir; $('#s-ovg').value = s.default_overage_pct; $('#s-autoarch').value = s.auto_archive_hours;
   $('#s-bdir').value = s.backup_dir; $('#s-bint').value = s.backup_interval_hours; $('#s-bkeep').value = s.backup_keep; $('#s-bauto').value = s.backup_auto ? '1' : '0';
   $('#s-printers').value = s.printers || ''; $('#s-encoders').value = s.encoders || '';
-  loadDataPanel(); loadBackups(); showHelperState(); loadRewind(); loadFloorLink();
+  loadDataPanel(); loadBackups(); showHelperState(); showPrintState(); loadRewind(); loadFloorLink();
   setSettingsSection(pref('setsec', 'data'));
 }
 function setSettingsSection(k) {
@@ -3182,6 +3198,53 @@ function showHelperState() {
     : '<span class="pill st-pending">Not set up on this PC</span> Open folder copies the path instead.';
 }
 function setHelper(on) { localStorage.setItem('jm_helper', on ? '1' : '0'); showHelperState(); toast(on ? 'Open folder will open Explorer on this PC' : 'Open folder will copy the path on this PC'); }
+
+/* ───────────────────────── roll sheet auto-print (per PC) ─────────────────────────
+   A new job's roll tracking sheet prints by itself from a hidden frame. In the window opened by the
+   Job Manager desktop shortcut (Settings, This PC) the browser runs with silent printing, so the
+   sheet goes straight to this PC's default printer. In an ordinary browser window the print dialog
+   opens instead. Sheets print one after another, never two at once. */
+const lsGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+if (new URLSearchParams(location.search).get('silentprint') === '1') {
+  lsSet('jm_silentprint', '1'); history.replaceState(null, '', location.pathname + location.hash);
+}
+const autoPrintOn = () => lsGet('jm_autoprint') !== '0';
+const silentPrint = () => lsGet('jm_silentprint') === '1';
+const PRINT_Q = []; let PRINT_BUSY = false;
+function printRollSheets(jobs) {
+  if (!autoPrintOn() || !jobs.length) return;
+  PRINT_Q.push(...jobs); pumpPrint();
+}
+function pumpPrint() {
+  if (PRINT_BUSY || !PRINT_Q.length) return;
+  PRINT_BUSY = true;
+  const job = PRINT_Q.shift(), f = document.createElement('iframe');
+  f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;height:11in;border:0';
+  let done = false;
+  const next = () => { if (done) return; done = true; setTimeout(() => { f.remove(); PRINT_BUSY = false; pumpPrint(); }, 1500); };
+  f.onload = () => {
+    try {
+      const w = f.contentWindow; w.addEventListener('afterprint', next);
+      if (silentPrint()) toast(`Roll sheet for ${job.number} sent to the printer`);
+      w.focus(); w.print();
+    } catch (e) { toast(`Roll sheet for ${job.number} didn't print: ${e.message}`, true); }
+    next();
+  };
+  f.onerror = () => { toast(`Roll sheet for ${job.number} didn't load. Print it from the job.`, true); next(); };
+  f.src = `/jobs/${job.id}/roll-sheet`;
+  document.body.appendChild(f);
+}
+function showPrintState() {
+  $('#s-autoprint').checked = autoPrintOn();
+  $('#print-state').innerHTML = !autoPrintOn()
+    ? '<span class="pill st-cancelled">Off on this PC</span> Print roll sheets from the job when you need them.'
+    : silentPrint()
+      ? '<span class="pill st-complete">Straight to the printer</span> This window prints new roll sheets to this PC\'s default printer, no dialog.'
+      : '<span class="pill st-pending">Print dialog opens</span> This window shows the print dialog for each new roll sheet. Use the shortcut below to skip it.';
+}
+function setAutoPrint(on) { lsSet('jm_autoprint', on ? '1' : '0'); showPrintState(); toast(on ? 'New roll sheets will print on this PC' : 'New roll sheets won\'t print by themselves on this PC'); }
 
 /* ───────────────────────── serial records status (header) ───────────────────────── */
 function showSerialStatus(h) {

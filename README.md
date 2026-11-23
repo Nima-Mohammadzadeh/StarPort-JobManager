@@ -89,6 +89,11 @@ a second, empty one. A database newer than the app is refused the same way.
   files and rolls are never changed. A completed job reopens. The job's own quantity and start serial stay
   as ordered; each addition is kept in the `job_additions` table, which the serial safety nets, backups
   and the restore tool all read.
+- **Roll sheet prints by itself**: creating a job that has rolls (one job or a batch) prints its roll tracking
+  sheet on the PC that made it. For no print dialog at all, run the one-time setup in Settings, This PC,
+  **Download shortcut setup for this PC**: it puts a **Job Manager** shortcut on the desktop that opens the app in its
+  own Edge (or Chrome) window with silent printing, so sheets go straight to that PC's default printer. In an ordinary
+  browser window the print dialog opens instead. Each PC can switch it off in the same panel.
 - **Roll tracking**: pick any roll; Complete, Left in progress (with a note), Reopen.
   The app asks who did it at that moment. Nobody signs in.
 - **Tools**: roll tracker sheet, checklist, encoding database, serial lookup.
