@@ -23,6 +23,7 @@ import tempfile
 import threading
 import subprocess
 import io
+import base64
 from html import escape
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -1021,7 +1022,7 @@ def api_batch_create():
     results = []
     for i, row in enumerate(rows):
         if not isinstance(row, dict):
-            results.append({"row": i, "ok": False, "job_number": None, "template": None,
+            results.append({"row": i, "ok": False, "job_number": None, "job_id": None, "rolls": 0, "template": None,
                             "error": "This row isn't a job", "duplicate_of": None, "warnings": []})
             continue
         picked = None
@@ -1035,7 +1036,10 @@ def api_batch_create():
             res, code = create_job(row)
         except Exception as e:
             res, code = {"error": str(e)}, 500
-        results.append({"row": i, "ok": code == 201, "job_number": res.get("job_number"),
+        made = code == 201
+        results.append({"row": i, "ok": made, "job_number": res.get("job_number"),
+                        "job_id": (res.get("job") or {}).get("id") if made else None,
+                        "rolls": res.get("rolls", 0) if made else 0,
                         "template": picked if code == 201 and (res.get("job") or {}).get("template_path") else None,
                         "error": res.get("error"), "duplicate_of": res.get("duplicate_of"),
                         "warnings": res.get("warnings", [])})
@@ -1942,6 +1946,60 @@ def helper_installer():
     body = "\r\n".join(lines) + "\r\n"
     return Response(body, mimetype="application/octet-stream",
                     headers={"Content-Disposition": "attachment; filename=JobManager-OpenFolder-setup.cmd"})
+
+
+_PRINT_SHORTCUT_PS = r'''$ErrorActionPreference = 'Stop'
+$url = '__URL__'
+$exe = @(
+  "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+  "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+  "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+  "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+  "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $exe) { throw 'Neither Microsoft Edge nor Google Chrome was found on this PC.' }
+$dir = Join-Path $env:LOCALAPPDATA 'JobManager\PrintWindow'
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$a = "--user-data-dir=`"$dir`" --kiosk-printing --no-first-run --no-default-browser-check --app=$url"
+$lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Job Manager.lnk'
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+$s.TargetPath = $exe
+$s.Arguments = $a
+$s.IconLocation = "$exe,0"
+$s.Description = 'Job Manager: roll tracking sheets print straight to the default printer'
+$s.Save()
+Write-Host "Shortcut made on the desktop: $lnk"
+try {
+  $p = (Get-CimInstance Win32_Printer -Filter 'Default=TRUE' | Select-Object -First 1).Name
+  if ($p) { Write-Host "Sheets will print to this PC's default printer: $p" }
+  else { Write-Host 'This PC has no default printer yet. Set one in Windows Settings, Printers.' }
+} catch { }
+Start-Process -FilePath $exe -ArgumentList $a
+'''
+
+
+@app.route("/helper/print-shortcut.cmd")
+def helper_print_shortcut():
+    """One-time, per-PC setup (no admin rights): a desktop shortcut that opens Job Manager in its own
+    Edge (or Chrome) window with silent printing on, so the roll tracking sheet printed when a job is
+    created goes straight to this PC's default printer with no print dialog. The window has its own
+    browser profile because the silent-printing switch is ignored by a browser that is already open."""
+    host = request.host if re.fullmatch(r"[A-Za-z0-9.\-]+(:\d{1,5})?|\[[0-9A-Fa-f:]+\](:\d{1,5})?", request.host or "") \
+        else f"localhost:{PORT}"
+    ps = _PRINT_SHORTCUT_PS.replace("__URL__", f"http://{host}/?silentprint=1")
+    enc = base64.b64encode(ps.encode("utf-16-le")).decode("ascii")
+    lines = ["@echo off",
+             "echo Making the Job Manager shortcut for this PC (roll sheets print without a dialog)...",
+             f"powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand {enc}",
+             "if errorlevel 1 (echo Setup failed. & pause & exit /b 1)",
+             "echo.",
+             "echo Done. From now on, open Job Manager with the Job Manager shortcut on the desktop.",
+             "echo Close other Job Manager tabs. Enter your name once in that window.",
+             "echo To undo it, delete the shortcut.",
+             "echo.",
+             "pause"]
+    return Response("\r\n".join(lines) + "\r\n", mimetype="application/octet-stream",
+                    headers={"Content-Disposition": "attachment; filename=JobManager-PrintShortcut-setup.cmd"})
 
 
 @app.route("/api/jobs/<int:job_id>/open-folder", methods=["POST"])
