@@ -87,3 +87,12 @@ def validate_and_prepare():
         else:
             os.makedirs(Z_DRIVE_BASE, exist_ok=True)
     print("=" * 64 + "\n")
+
+# Optional unified Proof Library. No path is created or substituted automatically.
+PROOF_ROOT = _norm(_get('proofs','root'))
+PROOF_BOOK = _norm(_get('proofs','workbook'))
+PROOF_ADMIN_DIGEST = _get('proofs','admin_key_sha256')
+try:
+    PROOF_INTERVAL = max(30, int(_get('proofs','interval','60')))
+except ValueError:
+    PROOF_INTERVAL = 60

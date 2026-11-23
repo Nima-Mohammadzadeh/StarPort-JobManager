@@ -1,0 +1,21 @@
+test_actual_master_and_search (__main__.ProofWorkflow.test_actual_master_and_search) ... ok
+test_authorization (__main__.ProofWorkflow.test_authorization) ... ok
+test_flask_blueprint_when_available (__main__.ProofWorkflow.test_flask_blueprint_when_available) ... skipped 'Flask not installed in this environment'
+test_locked_workbook (__main__.ProofWorkflow.test_locked_workbook) ... ok
+test_missing_never_falls_back (__main__.ProofWorkflow.test_missing_never_falls_back) ... ok
+test_no_snapshot_for_wrong_job_or_outside_root (__main__.ProofWorkflow.test_no_snapshot_for_wrong_job_or_outside_root) ... ok
+test_pending_and_changed_pdf (__main__.ProofWorkflow.test_pending_and_changed_pdf) ... ok
+test_pending_not_visible (__main__.ProofWorkflow.test_pending_not_visible) ... ok
+test_scan_lock_and_invalid_candidate (__main__.ProofWorkflow.test_scan_lock_and_invalid_candidate) ... ok
+test_scan_publish_revision_job_capture (__main__.ProofWorkflow.test_scan_publish_revision_job_capture) ... ok
+test_second_reader_refreshes (__main__.ProofWorkflow.test_second_reader_refreshes) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 9.899s
+
+OK (skipped=1)
+
+Python compile check: PASS
+Browser JavaScript syntax check (node --check): PASS
+Full original Job Manager test suite: NOT RUN (Flask/Waitress/segno unavailable, package download unavailable).
+Windows/network/browser integration: NOT RUN; run Test_Proof_Workflow.bat and setup acceptance checklist.

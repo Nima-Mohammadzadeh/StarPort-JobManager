@@ -48,7 +48,7 @@ from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
 
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 DEFAULT_TEMPLATE_DIR = r"Z:\3 Encoding and Printing Files\Master Templates"
 STATUSES    = ["Pending", "In Progress", "On Hold", "Complete", "Cancelled"]
 JUNK_PO     = {"0", "00", "000", "na", "n/a", "none", "-", "--", "tbd", "x"}
@@ -3500,6 +3500,30 @@ def tool_database():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# Native proof workspace; independent of serial allocation, job creation and DB migrations.
+from proofing.service import ProofService
+from proofing.routes import install as install_proof_routes
+from config import PROOF_ROOT, PROOF_BOOK, PROOF_ADMIN_DIGEST, PROOF_INTERVAL
+PROOF_SERVICE = ProofService(PROOF_ROOT, PROOF_BOOK, PROOF_ADMIN_DIGEST, PROOF_INTERVAL)
+
+def _proof_job(job_id):
+    with DB.connect() as conn:
+        return _load_job(conn, job_id)
+
+def _attach_proof(job_id, pid):
+    with DB.connect() as conn:
+        job = _load_job(conn, job_id)
+        if not job: raise LookupError('Job not found.')
+        if not job.get('folder_path'): raise ValueError('Job has no folder.')
+        path, created = PROOF_SERVICE.attach(pid, job, Z_DRIVE_BASE)
+        if created:
+            log_activity(conn, 'proof', job_id, f'{job_label(job)}: captured reviewed proof {pid}')
+            conn.commit()
+        return {'ok': True, 'created': created, 'path': 'Proof/' + path.name}
+
+install_proof_routes(app, PROOF_SERVICE, _proof_job, _attach_proof)
+
+
 @app.errorhandler(500)
 def _err500(e):
     if request.path.startswith("/api/"):
@@ -3547,6 +3571,7 @@ if __name__ == "__main__":
     start_template_sync()
     start_serial_keeper()
     start_auto_archive()
+    PROOF_SERVICE.start()
     print(f"[APP] Job Manager {APP_VERSION} is running.")
     print(f"      On this PC open:   http://localhost:{PORT}")
     for ip in _lan_ips():

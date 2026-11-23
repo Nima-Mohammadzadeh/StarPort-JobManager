@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1B2A2E">
+<title>Floor</title>
+<style>
+:root{
+  --canvas:#EEF1F0; --surface:#FFFFFF; --sunk:#F6F8F7; --ink:#1B2A2E; --muted:#5E6E72;
+  --line:#D3DADB; --blue:#1F4E79; --blue-soft:#E3ECF4; --green:#2F7D4F; --green-soft:#E2F1E7;
+  --amber:#A8670F; --amber-soft:#FBEFD9; --red:#A23B3B; --run:#2F6EA8; --run-soft:#E4EFF9;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --data:Consolas,"Cascadia Mono",Menlo,"Roboto Mono",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{font:16px/1.4 var(--sans);color:var(--ink);background:var(--canvas)}
+button,input{font:inherit;color:inherit}
+.data{font-family:var(--data);font-variant-numeric:tabular-nums}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:4px 8px;min-height:52px}
+.ib{background:none;border:0;color:#fff;font-size:24px;min-width:44px;height:44px;border-radius:12px;cursor:pointer;flex:0 0 auto}
+.ib:active{background:#2c4046}
+.ttl{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2;background:none;border:0;color:#fff;text-align:left;cursor:pointer;padding:4px 6px;border-radius:12px}
+.ttl:active{background:#2c4046}
+.ttl b{font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl span{font-size:13px;color:#B9C6C9}
+.sync{font-size:12px;color:#B9C6C9;text-align:right;line-height:1.25;flex:0 0 auto}
+.sync i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#58C27D;margin-right:5px}
+.sync.off i{background:#E8A33C}
+#banner{background:var(--amber-soft);color:#6B4207;padding:10px 14px;font-size:14.5px;border-bottom:1px solid #EBC983}
+main{max-width:900px;margin:0 auto;padding:8px 12px 90px}
+[hidden]{display:none !important}
+.scanbar{position:sticky;top:52px;z-index:9;background:var(--canvas);padding:6px 0 4px;margin:0 0 4px}
+.scanbar input{width:100%;font-family:var(--data);font-size:17px;padding:10px 12px;border:2px solid var(--blue);border-radius:14px;background:#fff}
+.scanbar input:focus{outline:3px solid var(--blue-soft)}
+#hint{font-size:14px;color:var(--muted);margin-top:4px}#hint:empty{display:none}
+.smsg{border-radius:14px;padding:10px 12px;margin-top:6px;font-size:17px;font-weight:600}
+.smsg.bad{background:#B33A3A;color:#fff}.smsg.warn{background:#E0A526;color:#2B1D00}
+.smsg small{display:block;font-weight:400;margin-top:4px;word-break:break-all}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.names button{font-size:22px;font-weight:700;padding:22px 10px;border-radius:16px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:76px}
+.names button:active{background:var(--blue-soft)}
+.names button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+h2.pick{font-size:22px;margin:6px 2px 12px}
+.empty{padding:36px 14px;text-align:center;color:var(--muted);font-size:17px}
+.hit{border-radius:18px;padding:16px 18px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line)}
+.hit .tk{font-size:24px;font-weight:800}
+.hit .cu{font-size:18px;font-weight:700;margin-top:2px}
+.hit .it{font-size:15px;color:var(--muted)}
+.hit .lab{font-size:34px;font-weight:800;line-height:1.1;margin-top:12px}
+.hit .lab small{font-size:16px;font-weight:600;color:var(--muted)}
+.pos{display:inline-block;margin-top:8px;background:var(--green);color:#fff;font-weight:800;font-size:15px;padding:4px 10px;border-radius:8px}
+.ser{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}.ser .kv .v{font-size:clamp(13px,4.4vw,16px);white-space:nowrap}
+.kv{margin-top:14px}.kv .k{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kv .v{font-family:var(--data);font-size:18px;margin-top:2px;word-break:break-all}
+.tbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.tbox .raw{font-family:var(--data);font-size:20px;word-break:break-all;background:var(--sunk);border-radius:10px;padding:10px;margin:6px 0 12px;min-height:44px}
+.sb input{width:100%;font-size:18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:10px}
+.card{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.card:active{background:#F3F7FA}
+.jt{display:flex;align-items:center;gap:8px}
+.jt .tk{font-size:22px;font-weight:800}
+.pill{margin-left:auto;padding:3px 11px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.pill.running{background:var(--run-soft);color:var(--run)}.pill.done{background:var(--green-soft);color:var(--green)}.pill.paused{background:var(--amber-soft);color:var(--amber)}
+.cu{font-size:18px;font-weight:700;margin-top:2px}.it{font-size:15px;color:var(--muted);margin-top:1px}
+.pr{margin-top:8px;font-size:14.5px;color:var(--muted)}
+.roll{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:7px solid #CBD3D5;border-radius:16px;padding:12px 14px;margin-bottom:10px;cursor:pointer;min-height:64px}
+.roll .n{flex:0 0 50px;font-size:34px;font-weight:800;text-align:center;line-height:1}
+.roll .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:15px}
+.roll.s-done{border-left-color:var(--green)}.roll.s-running{border-left-color:#4F8FCB}.roll.s-paused{border-left-color:var(--amber)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.acts button{font-size:19px;font-weight:700;padding:10px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;min-height:56px}
+.acts button.main{background:var(--blue);color:#fff;border-color:var(--blue);min-height:68px;font-size:22px}
+.acts button.wide{grid-column:1 / -1}
+.acts button:disabled{opacity:.4;cursor:not-allowed}
+.why{font-size:14px;color:#6B4207;margin:-4px 0 8px}
+#dlg{position:fixed;inset:0;background:rgba(10,20,23,.55);z-index:40;display:flex;align-items:flex-end;justify-content:center;outline:none}
+#dlg[hidden]{display:none}
+#dlg .box{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px 22px;max-height:90vh;overflow-y:auto}
+#dlg h3{margin:0 0 12px;font-size:20px}
+#dlg .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#dlg .opts button,#dlg .row button{font-size:19px;font-weight:700;padding:16px 8px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
+#dlg .opts button small{display:block;font-size:12.5px;font-weight:600;color:var(--amber)}
+#dlg .row{display:flex;gap:10px;margin-top:14px}#dlg .row button{flex:1}
+#dlg .row button.main{background:var(--blue);color:#fff;border-color:var(--blue)}
+#dlg textarea{width:100%;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.hit.st-pending{border-top:8px solid #CBD3D5}.hit.st-running{border-top:8px solid #4F8FCB}.hit.st-paused{border-top:8px solid var(--amber)}.hit.st-done{border-top:8px solid var(--green)}
+.line1{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line1 .tk,.line1 .cu{font-size:18px;font-weight:700;display:inline;margin:0}
+.rowline{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 8px;margin-top:6px}
+.roll-no{font-size:52px;font-weight:800;line-height:1;white-space:nowrap}
+.rowline .pill{font-size:16px;padding:6px 12px;margin-left:0}
+.lab2{font-size:20px;font-weight:700;margin-top:6px}.lab2 small{font-size:16px;font-weight:600;color:var(--muted)}
+.hit .it{font-size:16px;margin-top:4px}.hit .pos{font-size:16px;margin:0 0 0 6px;vertical-align:middle}
+.ser{margin-top:4px}.ser .kv{margin-top:4px}.ser .kv .k{font-size:12px}
+.emptyhome{text-align:center;padding:36px 14px}.emptyhome .big{font-size:34px;font-weight:800}.emptyhome p{color:var(--muted);margin:8px 0 20px}
+.browse{font-size:19px;font-weight:700;padding:16px 24px;border-radius:14px;border:1px solid var(--line);background:#fff;min-height:60px;cursor:pointer}
+.smsg.ok{background:var(--green);color:#fff}
+.smsg.float{position:fixed;left:12px;right:12px;bottom:12px;z-index:30;margin:0;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14.5px;display:none;z-index:30}
+#jhead .jhint{font-size:13px;color:var(--muted);margin:2px 2px 6px}
+/* Handheld density (approved 2026-11-14): tighter sizes for Zebra screens. Buttons stay at least 44px tall. */
+header{min-height:40px;padding:2px 6px}
+.ib{min-width:36px;height:36px;font-size:18px}
+.ttl{padding:2px 4px}.ttl b{font-size:15px}.ttl span{font-size:11px}
+.sync{font-size:10.5px}
+main{padding:4px 8px 50px}
+.scanbar{top:40px;padding:3px 0 2px;margin:0 0 2px}
+.scanbar input{font-size:14px;padding:6px 9px;border-width:1.5px;border-radius:9px}
+#hint{font-size:12px}
+.hit{padding:8px 10px;border-radius:10px;margin-bottom:6px}
+.hit.st-pending,.hit.st-running,.hit.st-paused,.hit.st-done{border-top-width:4px}
+.line1,.line1 .tk,.line1 .cu{font-size:13px}
+.rowline{margin-top:1px;gap:4px 6px}
+.roll-no{font-size:28px}
+.rowline .pill{font-size:12px;padding:2px 8px}
+.lab2{font-size:14.5px;margin-top:2px}.lab2 small{font-size:12px}
+.hit .it{font-size:12.5px;margin-top:1px}
+.hit .pos{font-size:11px;padding:1px 6px;margin-left:4px}
+.ser{margin-top:1px;gap:0 8px}.ser .kv{margin-top:3px}.ser .kv .k{font-size:10px}.ser .kv .v{font-size:12px}
+.acts{gap:5px;margin:6px 0}
+.acts button{font-size:15px;min-height:44px;padding:6px 6px;border-radius:9px}
+.acts button.main{min-height:46px;font-size:17px}
+.smsg{font-size:13px;padding:7px 9px;border-radius:9px;margin-top:3px}
+.smsg small{font-size:11.5px}
+.emptyhome{padding:18px 8px}.emptyhome .big{font-size:22px}.emptyhome p{font-size:13px;margin:4px 0 12px}
+.browse{font-size:15px;min-height:44px;padding:8px 16px;border-radius:9px}
+#dlg .box{padding:12px 10px 14px;border-radius:16px 16px 0 0}#dlg h3{font-size:16px;margin-bottom:8px}
+#dlg .opts{gap:6px}#dlg .opts button,#dlg .row button{font-size:15px;min-height:44px;padding:6px;border-radius:9px}
+#dlg .opts button small{font-size:11px}#dlg .row{margin-top:10px}
+#dlg textarea{font-size:14px}
+h2.pick{font-size:16px;margin:2px 2px 8px}
+.names{gap:6px}.names button{font-size:16px;min-height:48px;padding:8px;border-radius:10px}
+.card{padding:8px 10px;border-radius:10px;margin-bottom:6px}.jt .tk{font-size:15px}.cu{font-size:14px}.it{font-size:12.5px}.pr{font-size:12px;margin-top:4px}
+.pill{font-size:11.5px;padding:1px 8px}
+.roll{padding:6px 8px;min-height:44px;border-radius:10px;margin-bottom:6px;border-left-width:4px;gap:8px}.roll .n{font-size:22px;flex-basis:34px}.roll .body{font-size:12.5px;gap:1px}
+.sb input{font-size:14px;padding:7px 10px;border-radius:9px;margin-bottom:6px}
+.tbox{padding:10px}.tbox .raw{font-size:14px;padding:6px}.kv .k{font-size:10.5px}.kv .v{font-size:14px}
+.empty{font-size:13px;padding:18px 8px}
+#banner{font-size:12px;padding:6px 10px}
+#jhead .hit{padding:8px 10px}#jhead .tk{font-size:18px;font-weight:800}#jhead .cu{font-size:14px}#jhead .it{font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <button class="ib" id="back" aria-label="Back" hidden>&#8592;</button>
+  <button class="ttl" id="who" aria-label="Change name"><b id="title">Floor</b><span id="sub"></span></button>
+  <div class="sync" id="sync" aria-live="polite"></div>
+  <button class="ib" id="testbtn" aria-label="Scan test">&#9881;</button>
+</header>
+<div id="banner" hidden></div>
+<main>
+  <div class="scanbar" id="scanbar" hidden>
+    <input id="scan" type="text" inputmode="none" enterkeyhint="go" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pull trigger to scan" aria-label="Scan a tag">
+    <div id="hint" aria-live="polite"></div>
+    <div id="smsg" aria-live="assertive"></div>
+  </div>
+  <section id="v-pick" hidden><h2 class="pick">Who is using this scanner?</h2><div id="names"></div></section>
+  <section id="v-home" hidden>
+    <div id="rview"></div>
+    <div id="empty" class="emptyhome" hidden><div class="big">Scan a tag</div><p>Pull the trigger on any tag to see its roll.</p><button id="browse-btn" class="browse">Browse jobs</button></div>
+  </section>
+  <section id="v-browse" hidden><div class="sb"><input id="q" type="search" placeholder="Search ticket or customer" autocomplete="off" autocapitalize="off" aria-label="Search jobs"></div><div id="cards"></div></section>
+  <section id="v-job" hidden><div id="jhead"></div><div id="rolls"></div></section>
+  <section id="v-test" hidden>
+    <div class="tbox">
+      <b>Scan test</b>
+      <p style="color:var(--muted);margin:6px 0 10px">Pull the trigger on a tag. This shows exactly what the scanner sent.</p>
+      <div class="kv"><div class="k">Received</div><div class="raw" id="t-raw">Nothing yet</div></div>
+      <div class="kv"><div class="k">Length</div><div class="v" id="t-len">-</div></div>
+      <div class="kv"><div class="k">Result</div><div class="v" id="t-res" style="font-family:var(--sans)">-</div></div>
+    </div>
+  </section>
+</main>
+<div id="dlg" tabindex="-1" hidden></div>
+<div id="toast" role="status"></div>
+
+<script>
+/* scan-collector:start */
+const BURST_MS = 400, COOLDOWN_MS = 1500, AUTO_MS = 150, STALE_MS = 1000;   // tune on a real device
+/* A trigger pull can send several tags. Reads that arrive close together are one burst: one distinct tag is
+   used, two or more different tags are refused (none used). After a used scan, the same tag is ignored briefly
+   (a held trigger); a different tag is accepted at once. */
+function createScanCollector({burstMs = BURST_MS, cooldownMs = COOLDOWN_MS} = {}) {
+  let tags = [], lastAt = 0, used = {tag: '', until: 0};
+  return {
+    push(raw, now) {
+      const tag = String(raw == null ? '' : raw).trim();
+      if (!tag || (tag === used.tag && now < used.until)) return false;
+      if (!tags.includes(tag)) tags.push(tag);
+      lastAt = now;
+      return true;
+    },
+    activity(now) {                            // a keystroke while a burst is open keeps it open (slow typing, 50 ms per character)
+      if (tags.length) lastAt = now;
+    },
+    due(now) {
+      if (!tags.length || now - lastAt < burstMs) return null;
+      const got = tags; tags = [];
+      if (got.length === 1) { used = {tag: got[0], until: now + cooldownMs}; return {kind: 'one', epc: got[0]}; }
+      return {kind: 'many', epcs: got};
+    },
+  };
+}
+/* A complete read (exactly 24 hex characters) that then stays quiet for idleMs counts as a scan, so a Zebra
+   that does not send Enter still works. Anything else left in the field (a partial read, the same tag typed twice,
+   two tags back to back) is handed over after staleMs so it can never jam the field: a multiple of 24 hex is
+   split into tags, other text goes whole so the server can explain it. */
+function createAutoSubmit({idleMs = AUTO_MS, staleMs = STALE_MS} = {}) {
+  let value = '', at = 0;
+  const exact = v => /^[0-9a-fA-F]{24}$/.test(v);
+  return {
+    input(v, now) { value = String(v == null ? '' : v).trim(); at = now; },
+    due(now) {
+      if (!exact(value) || now - at < idleMs) return null;
+      const t = value; value = ''; return t;
+    },
+    stale(now) {
+      if (!value || exact(value) || now - at < staleMs) return null;
+      const t = value; value = '';
+      return /^[0-9a-fA-F]+$/.test(t) && t.length > 24 && t.length % 24 === 0 ? t.match(/.{24}/g) : [t];
+    },
+  };
+}
+/* scan-collector:end */
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmt = n => (n === null || n === undefined || n === '') ? '-' : Number(n).toLocaleString();
+const OP_KEY = 'jm_floor_operator';
+/* S.cur is the roll on screen: {job, roll, scan}. S.seq numbers lookups so a slow, older one never replaces a newer scan. */
+const S = {jobs: [], d: null, q: '', busy: false, operator: '', cfg: null, picking: false, offline: false, cur: null, seq: 0, lastRaw: null, lastResult: '', lastScanAt: Date.now(), updated: null};
+try { S.operator = localStorage.getItem(OP_KEY) || ''; } catch (e) {}
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
+async function api(url, body) {
+  const opt = body === undefined ? {cache: 'no-store'} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), cache: 'no-store'};
+  let r;
+  try { r = await fetch(url, opt); } catch (e) { const was = S.offline; S.offline = true; setBar(); if (!was) draw(); throw new Error('No connection to the server'); }
+  const was = S.offline; S.offline = false; S.updated = new Date(); setBar(); if (was) draw();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+/* ── feedback ── */
+let audio = null;
+function feedback(good) {
+  try { if (navigator.vibrate) navigator.vibrate(good ? 40 : [120, 70, 120]); } catch (e) {}
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = good ? 880 : 220;
+    g.gain.setValueAtTime(.2, audio.currentTime); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + (good ? .14 : .4));
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + (good ? .14 : .4));
+  } catch (e) {}
+}
+
+/* ── routing: #/ is the scan screen · #/browse · #/browse/12 · #/test ── */
+function route() {
+  const h = location.hash || '#/';
+  if (h === '#/test') return {view: 'test', job: null};
+  if (h === '#/browse') return {view: 'browse', job: null};
+  const m = h.match(/^#\/browse\/(\d+)$/);
+  return m ? {view: 'job', job: +m[1]} : {view: 'scan', job: null};
+}
+function go(h) { if (location.hash === h) render(); else location.hash = h; }
+window.addEventListener('hashchange', () => { if (dialogOpen()) closeDlg(); render(); });
+
+/* ── data ── */
+async function loadList() { S.jobs = (await api('/api/rewind/jobs?view=open')).jobs; }
+async function loadJob(id) {
+  const d = await api('/api/rewind/jobs/' + id), rt = route();
+  if ((rt.view === 'job' ? rt.job : S.cur && S.cur.job) === id) S.d = d;   // ignore a job that is no longer on screen
+}
+async function refresh() {
+  const rt = route();
+  try {
+    if (!S.picking && S.operator) {
+      if (rt.view === 'browse') await loadList();
+      else if (rt.view === 'job') await loadJob(rt.job);
+      else if (rt.view === 'scan' && S.cur) await loadJob(S.cur.job);
+    }
+  } catch (e) {}
+  draw();
+}
+const dialogOpen = () => !$('#dlg').hidden;
+const rstate = r => (r.status === 'complete' || r.status === 'verified') ? 'done' : r.status === 'running' ? 'running' : r.status === 'paused' ? 'paused' : 'pending';
+const RLAB = {done: 'Done', running: 'In progress', paused: 'Left in progress', pending: 'Not started'};
+
+/* ── who is using it ── */
+async function loadCfg() { S.cfg = await api('/api/floor/config'); }
+function setOperator(name) {
+  S.operator = name; S.picking = false;
+  try { localStorage.setItem(OP_KEY, name); } catch (e) {}
+  render();
+}
+function drawNames() {
+  const names = (S.cfg && S.cfg.encoders) || [];
+  $('#names').innerHTML = !S.cfg ? '<div class="empty">Loading names...</div>'
+    : names.length ? '<div class="names">' + names.map(n => `<button class="${n === S.operator ? 'on' : ''}" data-name="${esc(n)}">${esc(n)}</button>`).join('') + '</div>'
+    : '<div class="empty">No encoder names are set up. Ask for names to be added in Settings.</div>';
+  document.querySelectorAll('#names button').forEach(b => b.onclick = () => setOperator(b.dataset.name));
+}
+$('#who').onclick = async () => { S.picking = true; render(); try { await loadCfg(); drawNames(); } catch (e) {} };
+
+/* ── the roll on screen ── */
+function setMsg(kind, msg, extra, ms) {      // ms: a transient message that floats over the screen and clears itself
+  clearTimeout(setMsg.t);
+  $('#smsg').innerHTML = `<div class="smsg ${kind}${ms ? ' float' : ''}">${esc(msg)}${extra ? `<small>${extra}</small>` : ''}</div>`;
+  if (ms) setMsg.t = setTimeout(clearMsg, ms);
+}
+function clearMsg() { clearTimeout(setMsg.t); $('#smsg').innerHTML = ''; }
+function showCard(job, roll, scan) {          // a found tag, or a roll tapped while browsing
+  S.cur = {job, roll, scan}; S.seq++;
+  if (S.d && S.d.job.id !== job) S.d = null;
+  clearMsg(); if (dialogOpen()) closeDlg();
+  go('#/');
+}
+function openJob(id) {                        // no roll card: nothing on screen can act on the roll that was open
+  S.cur = null; S.seq++;
+  if (dialogOpen()) closeDlg();
+  clearMsg();
+  go('#/browse/' + id);
+}
+function rejectScan(text, extra, kind) {       // nothing the encoder could act on: no card, so no buttons
+  S.cur = null; S.d = null; S.seq++;
+  if (dialogOpen()) closeDlg();
+  setMsg(kind || 'bad', text, extra);
+  go('#/');
+}
+
+/* ── scanning: auto-submit when a complete tag has been typed, or Enter; the collector keeps it to one tag ── */
+const collector = createScanCollector(), auto = createAutoSubmit();
+const REJECT = 'More than one tag read. Move closer to the one you want and pull again.';
+function visible(t) { return String(t).replace(/\t/g, '⇥').replace(/ /g, '·').replace(/\r|\n/g, '↵'); }
+function take(v) { S.lastRaw = v; S.lastScanAt = Date.now(); drawTest(); collector.push(v, Date.now()); }
+$('#scan').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = $('#scan').value; $('#scan').value = ''; auto.input('', Date.now());
+  if (dialogOpen() || !v.trim()) return;
+  take(v);
+});
+$('#scan').addEventListener('input', () => { if (dialogOpen()) return; collector.activity(Date.now()); auto.input($('#scan').value, Date.now()); });
+setInterval(() => {
+  const now = Date.now(), a = auto.due(now), st = a === null ? auto.stale(now) : null;
+  if (a !== null) {                            // a complete tag; it may have been typed into the scan field or the search box
+    if ($('#scan').value.trim() === a) $('#scan').value = '';
+    if ($('#q').value.trim() === a) { $('#q').value = ''; S.q = ''; drawList(); }
+    if (!dialogOpen()) take(a);
+  } else if (st) { $('#scan').value = ''; if (!dialogOpen()) st.forEach(take); }
+  const d = collector.due(now);
+  if (!d || dialogOpen()) return;
+  if (d.kind === 'many') { S.lastResult = REJECT; feedback(false); rejectScan(REJECT); drawTest(); return; }
+  lookup(d.epc);
+}, 50);
+async function lookup(raw) {
+  clearMsg();
+  const my = ++S.seq;
+  let r;
+  try { r = await api('/api/rewind/lookup', {raw, job_id: ''}); }
+  catch (e) {                                  // a scan that could not be looked up must not leave an old card with live buttons
+    if (my !== S.seq) return;
+    S.lastResult = e.message; feedback(false); drawTest();
+    if (route().view === 'test') return;
+    rejectScan(e.message === 'No connection to the server' ? 'No connection to the server, so that scan was not looked up. Scan again when it reconnects.' : e.message);
+    return;
+  }
+  if (my !== S.seq) return;                    // a newer scan or a tap replaced this one while it ran
+  S.lastResult = r.result === 'found' ? 'Found: ' + (r.roll.customer || '') + ', roll ' + r.roll.roll_number
+    : r.result === 'job' ? 'Job ticket ' + r.job_ticket + ': ' + (r.customer || '') : r.message;
+  drawTest();
+  if (dialogOpen()) return;
+  if (route().view === 'test') { feedback(r.result === 'found' || r.result === 'job'); return; }   // Scan test only shows the verdict
+  if (r.result === 'found') { feedback(true); showCard(r.roll.job_id, r.roll.roll_number, r); return; }
+  if (r.result === 'job') { feedback(true); openJob(r.job_id); return; }   // a ticket from the traveler's barcode
+  feedback(false);
+  rejectScan(r.message, r.note ? esc(r.note) : (r.epc && r.epc.length === 24 ? `<span class="data">${esc(r.epc)}</span>` : ''),
+             r.result === 'other_job' || r.result === 'ambiguous' ? 'warn' : 'bad');
+}
+
+/* ── drawing ── */
+function setBar() {
+  const el = $('#sync');
+  el.className = 'sync' + (S.offline ? ' off' : '');
+  el.innerHTML = '<i></i>' + (S.offline ? 'Offline' : 'Live') + (S.updated ? '<br>' + S.updated.toTimeString().slice(0, 8) : '');
+  const b = $('#banner'); b.hidden = !S.offline;
+  if (S.offline) b.textContent = 'No connection to the server. It will reconnect by itself.';
+}
+function drawTest() {
+  $('#t-raw').textContent = S.lastRaw == null ? 'Nothing yet' : visible(S.lastRaw);
+  $('#t-len').textContent = S.lastRaw == null ? '-' : String(S.lastRaw.length) + ' characters';
+  $('#t-res').textContent = S.lastResult || '-';
+}
+function drawList() {
+  const q = S.q.toLowerCase().trim();
+  const rows = S.jobs.filter(j => !q || [j.job_ticket, j.customer, j.title, j.job_number, j.upc].join(' ').toLowerCase().includes(q));
+  $('#cards').innerHTML = rows.length ? rows.map(j => `<button class="card" onclick="go('#/browse/${j.id}')">
+      <div class="jt"><span class="tk">${esc(j.job_ticket || j.job_number)}</span><span class="pill ${j.status === 'In Progress' ? 'running' : ''}">${esc(j.status)}</span></div>
+      <div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div>
+      <div class="pr">${j.roll_total ? j.roll_done + ' of ' + j.roll_total + ' rolls done' + (j.roll_running ? ', ' + j.roll_running + ' in progress' : '') : 'No rolls set up yet'}</div></button>`).join('')
+    : `<div class="empty">${q ? 'No jobs match that search.' : 'No open jobs in encoding right now.'}</div>`;
+}
+function who(r, st) { return st === 'done' ? r.completed_by : st === 'running' ? r.started_by : st === 'paused' ? r.paused_by : ''; }
+function drawJob() {
+  if (!S.d || S.d.job.id !== route().job) { $('#jhead').innerHTML = '<div class="empty">Loading job...</div>'; $('#rolls').innerHTML = ''; return; }
+  const {job: j, rolls} = S.d;
+  $('#jhead').innerHTML = `<div class="hit"><div class="tk">${esc(j.job_ticket || j.job_number)}</div><div class="cu">${esc(j.customer)}</div><div class="it">${esc(j.title)}</div></div>
+    <div class="jhint">Scan a tag or tap a roll</div>`;
+  $('#rolls').innerHTML = rolls.length ? rolls.map(r => { const st = rstate(r);
+    return `<button class="roll s-${st}" onclick="showCard(${j.id}, ${r.roll_number}, null)"><span class="n">${r.roll_number}</span><span class="body">
+      <b>${RLAB[st]}${r.printer ? ' on ' + esc(r.printer) : ''}</b><span class="data">${r.serial_start ? fmt(r.serial_start) + ' - ' + fmt(r.serial_end) : ''}</span>
+      <span style="color:var(--muted)">${fmt(r.quantity)} labels${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</span></span></button>`; }).join('')
+    : '<div class="empty">No roll data for this job yet.</div>';
+}
+function drawCard() {
+  $('#empty').hidden = !!S.cur;
+  if (!S.cur) { $('#rview').innerHTML = ''; return; }
+  if (!S.d || S.d.job.id !== S.cur.job) { $('#rview').innerHTML = '<div class="empty">Loading roll...</div>'; return; }
+  const j = S.d.job, r = S.d.rolls.find(x => x.roll_number === S.cur.roll);
+  if (!r) { $('#rview').innerHTML = '<div class="empty">That roll was not found.</div>'; return; }
+  const st = rstate(r), sc = S.cur.scan && S.cur.scan.roll && S.cur.scan.roll.roll_number === r.roll_number ? S.cur.scan.roll : null;
+  const off = S.offline || S.busy, dis = off ? 'disabled' : '';
+  const btn = (label, fn, cls) => `<button class="${cls || ''}" ${dis} onclick="${fn}">${label}</button>`;
+  const acts = st === 'pending' ? btn('Start', 'startRoll()', 'main wide')
+    : st === 'running' ? btn('Complete', 'confirmRoll(\'complete\')', 'main wide') + btn('Pause', 'pauseRoll()') + btn('Change printer', 'startRoll()')
+    : st === 'paused' ? btn('Resume', 'resumeRoll()', 'main wide') + btn('Complete', 'confirmRoll(\'complete\')', 'wide')
+    : btn('Reopen', 'confirmRoll(\'reopen\')', 'main wide');
+  const label = sc && sc.label_no ? `<div class="lab2">Label ${fmt(sc.label_no)} <small>of ${fmt(r.quantity)}</small><span class="pos">${esc(String(sc.position).toUpperCase())}</span></div>` : '';
+  $('#rview').innerHTML = `<div class="hit st-${st}"><div class="line1"><span class="tk">${esc(j.job_ticket || j.job_number)}</span> · <span class="cu">${esc(j.customer)}</span></div>
+    <div class="rowline"><div class="roll-no">Roll ${r.roll_number}</div><span class="pill ${st}">${RLAB[st]}</span></div>
+    ${label}
+    <div class="it">${S.d.rolls.length} rolls · ${r.printer ? 'On ' + esc(r.printer) : 'No printer'}${who(r, st) ? ' · ' + esc(who(r, st)) : ''}</div>
+    <div class="ser"><div class="kv"><div class="k">First serial</div><div class="v">${fmt(r.serial_start)}</div></div>
+      <div class="kv"><div class="k">Last serial</div><div class="v">${fmt(r.serial_end)}</div></div></div></div>
+    ${off ? `<div class="why">${S.offline ? 'No connection to the server, so actions are off.' : 'Working...'}</div>` : ''}
+    <div class="acts">${acts}</div>`;
+}
+function draw() {
+  const rt = route();
+  if (S.picking || !S.operator || rt.view === 'test') return;
+  if (rt.view === 'browse') drawList(); else if (rt.view === 'job') drawJob(); else drawCard();
+}
+
+/* ── roll actions: every one sends the encoder's name; the server's own rules decide ── */
+let DLG = null;   // {job, roll}: the roll a dialog was opened for; its action always uses this, never whatever is on screen later
+function openDlg(html, target) { DLG = target || null; $('#scan').value = ''; auto.input('', Date.now()); const d = $('#dlg'); d.innerHTML = '<div class="box" role="dialog" aria-modal="true">' + html + '</div>'; d.hidden = false; d.setAttribute('data-dialog', ''); d.focus(); }
+function closeDlg() { DLG = null; $('#scan').value = ''; auto.input('', Date.now()); const d = $('#dlg'); d.hidden = true; d.removeAttribute('data-dialog'); d.innerHTML = ''; setTimeout(focusScan, 0); }
+const cancelBtn = '<button onclick="closeDlg()">Cancel</button>';
+async function act(fn, okText) {
+  S.busy = true; draw(); closeDlg();
+  try { await fn(); setMsg('ok', okText, null, 3000); }
+  catch (e) { setMsg('bad', e.message, null, 6000); feedback(false); }
+  S.busy = false; await refresh();
+}
+const here = () => S.cur ? {job: S.cur.job, roll: S.cur.roll} : null;
+const setStatus = (t, status, note) => api(`/api/jobs/${t.job}/rolls/${t.roll}`, {status, operator: S.operator, note: note || ''});
+async function startRoll() {
+  const t = here(); if (!t) return;
+  let pr = {printers: [], busy: []};
+  try { pr = await api('/api/printers'); } catch (e) { return; }
+  if (dialogOpen() || !S.cur || S.cur.job !== t.job || S.cur.roll !== t.roll) return;   // the card changed while the list loaded
+  const cr = S.d && S.d.rolls.find(x => x.roll_number === t.roll), moving = !!cr && rstate(cr) !== 'pending';
+  const busy = {}; pr.busy.forEach(b => busy[b.printer.toLowerCase()] = b);
+  openDlg('<h3>Which printer for roll ' + t.roll + '?</h3><div class="opts">' + pr.printers.map(n => { const b = busy[n.toLowerCase()];
+    return `<button data-printer="${esc(n)}">${esc(n)}${b ? `<small>Running ${esc(b.job_ticket || b.job_number)} roll ${b.roll_number}</small>` : ''}</button>`; }).join('') + '</div><div class="row">' + cancelBtn + '</div>', t);
+  document.querySelectorAll('#dlg [data-printer]').forEach(b => b.onclick = () => act(() => api(`/api/jobs/${t.job}/rolls/${t.roll}/printer`, {printer: b.dataset.printer, operator: S.operator}),
+    (moving ? 'Moved roll ' + t.roll + ' to ' : 'Started roll ' + t.roll + ' on ') + b.dataset.printer + ' as ' + S.operator));
+}
+function pauseRoll() {
+  const t = here(); if (!t) return;
+  openDlg('<h3>Leave roll ' + t.roll + ' in progress</h3><textarea id="pnote" rows="3" maxlength="500" placeholder="Why? (optional)"></textarea><div class="row">' + cancelBtn + '<button class="main" id="pgo">Pause</button></div>', t);
+  $('#pgo').onclick = () => { const note = $('#pnote').value.trim(); act(() => setStatus(t, 'paused', note), 'Paused roll ' + t.roll + ' as ' + S.operator); };
+}
+function resumeRoll() { const t = here(); if (t) act(() => setStatus(t, 'running'), 'Resumed roll ' + t.roll + ' as ' + S.operator); }
+function confirmRoll(kind) {
+  const t = here(); if (!t) return;
+  const word = kind === 'complete' ? 'Complete' : 'Reopen';
+  openDlg(`<h3>${word} roll ${t.roll} as ${esc(S.operator)}?</h3><div class="row">${cancelBtn}<button class="main" id="cgo">${word}</button></div>`, t);
+  $('#cgo').onclick = () => act(() => setStatus(t, kind === 'complete' ? 'complete' : 'running'), (kind === 'complete' ? 'Completed' : 'Reopened') + ' roll ' + t.roll + ' as ' + S.operator);
+}
+document.addEventListener('keydown', e => {   // a scan's Enter must never press a dialog button
+  if (dialogOpen() && e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); $('#scan').value = ''; }
+}, true);
+$('#q').addEventListener('input', e => { S.q = e.target.value; drawList(); if (/^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) auto.input(e.target.value, Date.now()); });
+$('#q').addEventListener('keydown', e => {    // a scan that lands in the search box still counts as a scan
+  if (e.key === 'Enter' && /^[0-9a-fA-F]{24}$/.test(e.target.value.trim())) { e.preventDefault(); take(e.target.value); e.target.value = ''; S.q = ''; drawList(); }
+});
+window.addEventListener('offline', () => { S.offline = true; setBar(); draw(); });
+window.addEventListener('online', () => { S.offline = false; setBar(); refresh(); });
+function render() {
+  const rt = route(), picking = S.picking || !S.operator;
+  $('#v-pick').hidden = !picking; $('#v-test').hidden = picking || rt.view !== 'test';
+  $('#v-home').hidden = picking || rt.view !== 'scan'; $('#v-browse').hidden = picking || rt.view !== 'browse'; $('#v-job').hidden = picking || rt.view !== 'job';
+  $('#scanbar').hidden = picking;
+  $('#back').hidden = picking || rt.view === 'scan';
+  $('#title').textContent = S.operator || 'Floor';
+  $('#sub').textContent = picking ? 'Choose your name' : rt.view === 'test' ? 'Scan test' : rt.view === 'scan' ? 'Tap to change name' : 'Browse jobs';
+  if (rt.view !== 'scan') clearMsg();
+  if (picking) drawNames(); else { drawTest(); draw(); refresh(); setTimeout(focusScan, 60); }
+}
+function focusScan() { if (!$('#scanbar').hidden && !document.querySelector('[data-dialog]')) $('#scan').focus({preventScroll: true}); }
+document.addEventListener('click', e => { if (!e.target.closest('input,textarea,select')) setTimeout(focusScan, 0); });
+$('#back').onclick = () => { go(route().view === 'job' ? '#/browse' : '#/'); window.scrollTo(0, 0); };
+$('#testbtn').onclick = () => go(route().view === 'test' ? '#/' : '#/test');
+$('#browse-btn').onclick = () => go('#/browse');
+setInterval(() => { const h = $('#hint'); h.textContent = (!$('#scanbar').hidden && !S.cur && Date.now() - S.lastScanAt > 20000) ? 'No scan yet. Pull the trigger, or open Scan test (gear icon).' : ''; }, 1000);
+setInterval(async () => { if (dialogOpen() || S.busy) return; try { await api('/api/stamp'); } catch (e) {} refresh(); }, 8000);
+
+(async () => { try { await loadCfg(); } catch (e) {} render(); })();
+</script>
+</body>
+</html>

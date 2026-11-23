@@ -1,8 +1,12 @@
-# Job Manager 3.3 — encoding team edition
+# Job Manager 3.4 — encoding team edition
 
 One host PC runs the app. Everyone else uses it in a browser at `http://<host-ip>:5050`.
 The full guide (how it works, where everything is stored, how it compares with the old
 app, and a test checklist) is the separate **Job Manager 3.0 documentation**.
+
+## Proof Library integration (3.4)
+
+See [PROOF_WORKFLOW_SETUP.md](PROOF_WORKFLOW_SETUP.md) for setup, permissions, tests and rollback. The integrated Proof Library adds native QA search, monitored review, registration, revision management and job proof capture.
 
 ## Start it
 

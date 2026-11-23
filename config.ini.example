@@ -15,3 +15,13 @@ z_drive_base    =
 [server]
 host = 0.0.0.0
 port = 5050
+
+[proofs]
+# Set root to Z:\Proofs or the corresponding UNC Proofs folder on the host.
+# Blank disables the workspace's network access and monitoring.
+root =
+# Blank uses root\_Proof_Registry\Proof_Registry.xlsx. Never falls back to bundled data.
+workbook =
+interval = 60
+# Generate with python setup_proof_admin.py; paste the SHA-256 digest here.
+admin_key_sha256 =
