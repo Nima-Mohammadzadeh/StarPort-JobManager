@@ -152,7 +152,7 @@ NO_PRINTER_HELP = ("Windows has no PDF program set up to print. Install SumatraP
 
 def print_pdf(path):
     """Send the PDF to the host PC's default printer. Returns an error message, or None when it was handed to the printer.
-    Order: the print_command from config.ini, then Windows' own Print for PDFs, then SumatraPDF or Adobe if installed."""
+    Order: the print_command from config.ini, then an installed SumatraPDF (silent) or Adobe, then Windows' own Print for PDFs."""
     try:
         if PROOF_PRINT_COMMAND:
             subprocess.Popen(PROOF_PRINT_COMMAND.replace("{file}", path), shell=(SYSTEM == "Windows"))
@@ -160,17 +160,17 @@ def print_pdf(path):
         if SYSTEM != "Windows":
             subprocess.Popen(["lp", path])
             return None
+        build = _find_pdf_printer()                           # SumatraPDF prints with no window at all, so try it first
+        if build:
+            subprocess.Popen(build(path))
+            return None
         try:
             os.startfile(path, "print")                       # the PDF app's own Print verb: default printer
             return None
         except OSError as first:
             if getattr(first, "winerror", None) != 1155:      # 1155 = no app has a Print command for PDFs
                 raise
-            build = _find_pdf_printer()
-            if not build:
-                return f"The proof was copied but not printed. {NO_PRINTER_HELP}"
-            subprocess.Popen(build(path))
-            return None
+            return f"The proof was copied but not printed. {NO_PRINTER_HELP}"
     except Exception as e:
         return f"The proof was copied but could not be sent to the printer: {e}"
 
