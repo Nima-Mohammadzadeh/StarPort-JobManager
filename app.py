@@ -31,7 +31,7 @@ from types import SimpleNamespace
 from flask import Flask, jsonify, render_template, request, send_file, abort, Response
 
 from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, THUMBNAIL_DIR, CONFIG_INI,
-                    HOST, PORT, SYSTEM, validate_and_prepare)
+                    HOST, PORT, SYSTEM, PROOF_AUTO_PRINT, validate_and_prepare)
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
@@ -44,6 +44,7 @@ import serial_registry as R
 import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
+import proofs as PROOFS
 from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
@@ -308,7 +309,10 @@ def create_job(data: dict) -> tuple[dict, int]:
         s.rolls = _roll_plan(s.kind, s.upc, s.start_serial, s.total_qty, s.lpr)
         _write_new_job_files(build, s)
         _copy_job_template(build, s)
-        return _save_new_job(build, s)
+        _copy_proof(build, s)
+        result = _save_new_job(build, s)
+        _print_proof(s, result)
+        return result
     except Stop as stop:
         return stop.answer
     except Exception:
@@ -555,6 +559,39 @@ def _copy_job_template(build, s):
         if res.get("error"):
             build.warn(f"Template not copied: {res['error']}")
         s.template_path = res.get("dest_path")
+
+
+def _copy_proof(build, s):
+    """Standard (UPC) jobs: copy the customer's approved proof from the proof library into the job's Proof folder.
+    Never stops the job: anything wrong becomes a warning. Printing waits until the job is saved."""
+    s.proof = None
+    if s.kind == "standard" and s.upc:
+        s.proof = PROOFS.attach(s.upc, s.customer, s.job_dir, print_it=False)
+        for w in s.proof["warnings"]:
+            build.warn(w)
+
+
+def _print_proof(s, result):
+    """After the job is saved (201): print the copied proof on this PC's default printer."""
+    body, code = result
+    p = getattr(s, "proof", None)
+    if code != 201 or not (p and p["found"]):
+        return                                  # no proof: the answer is exactly what it was before proofs existed
+    body["proof"] = {"proof_id": p["proof_id"], "file": p["file"], "printed": False}
+    if not p["file"] or not PROOF_AUTO_PRINT:
+        return
+    err = PROOFS.print_pdf(p["file"])
+    if err:
+        body["warnings"].append(err)
+    else:
+        body["proof"]["printed"] = True
+    try:
+        with DB.connect() as conn:
+            log_activity(conn, "proof", s.job_id, f"Proof {p['proof_id']} copied to the job"
+                         + (" and sent to the printer" if body["proof"]["printed"] else ""), s.created_by)
+            conn.commit()
+    except Exception:
+        pass
 
 
 def _save_new_job(build, s):
