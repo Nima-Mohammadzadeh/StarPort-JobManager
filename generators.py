@@ -302,11 +302,38 @@ def venture_epc(serial: int) -> str:
     return VENTURE_PREFIX + venture_serial(serial)
 
 
+# Excelta Corporation orders a sheet with five columns: leading | filler | serial | barcode hr | rfid & barcode.
+# Their proof (one row) was serial 00015034: leading 2853, filler "-0000-0000-0000-", serial as 8 digits,
+# "barcode hr" = leading + filler + first 4 and last 4 serial digits joined by "-"
+#     (=A&B&LEFT(C,4)&"-"&RIGHT(C,4)  ->  2853-0000-0000-0000-0001-5034)
+# "rfid & barcode" = leading + 12 zeros + serial (=A&"000000000000"&C -> 285300000000000000015034, 24 chars).
+# The old sheet's formulas are written here as plain values.
+EXCELTA_SHEET = "excelta_seq"
+EXCELTA_LEADING = 2853
+EXCELTA_FILLER = "-0000-0000-0000-"
+EXCELTA_SERIAL_LEN = 8
+
+
+def excelta_serial(serial: int) -> str:
+    return str(int(serial)).zfill(EXCELTA_SERIAL_LEN)
+
+
+def excelta_epc(serial: int) -> str:
+    return f"{EXCELTA_LEADING}{'0' * 12}{excelta_serial(serial)}"
+
+
+def excelta_row(serial: int) -> list:
+    s = excelta_serial(serial)
+    return [EXCELTA_LEADING, EXCELTA_FILLER, s, f"{EXCELTA_LEADING}{EXCELTA_FILLER}{s[:4]}-{s[-4:]}", excelta_epc(serial)]
+
+
 # What each sequential sheet writes: its header, one row for a serial, and the roll EPC for a serial.
 SEQ_FORMATS = {
     CDO_SHEET: {"header": ["Serial", "EPC"], "row": lambda n: [n, cdo_epc(n)], "epc": cdo_epc},
     VENTURE_SHEET: {"header": ["Prefix", "Serial", "EPC"],
                     "row": lambda n: [VENTURE_PREFIX, venture_serial(n), venture_epc(n)], "epc": venture_epc},
+    EXCELTA_SHEET: {"header": ["leading", "filler", "serial", "barcode hr", "rfid & barcode"],
+                    "row": excelta_row, "epc": excelta_epc},
 }
 
 
@@ -375,6 +402,11 @@ def verify_cdo_file(path: str, start_serial: int, expected_rows: int) -> None:
     _verify_seq_file(CDO_SHEET, path, start_serial, expected_rows)
 
 
+def generate_seq_files(sheet: str, job_dir: str, label: str, start_serial: int, total_qty: int, qty_db) -> dict:
+    """Any sequential data sheet (CDO, Venture Research, Excelta), written and verified."""
+    return _generate_seq_files(sheet, lambda *a: _verify_seq_file(sheet, *a), job_dir, label, start_serial, total_qty, qty_db)
+
+
 def generate_venture_files(job_dir: str, label: str, start_serial: int, total_qty: int, qty_db: int | None) -> dict:
     return _generate_seq_files(VENTURE_SHEET, lambda *a: verify_venture_file(*a), job_dir, label, start_serial, total_qty, qty_db)
 
@@ -412,6 +444,9 @@ DATA_SHEETS = {
     VENTURE_SHEET: {"customer": "Venture Research", "label": "Venture Research: prefix + 10-digit serial, counts up, never repeats",
                     "detail": "Venture Research sequential prefix + 10-digit serial", "sequential": True,
                     "epc_note": f"Prefix {VENTURE_PREFIX} + 10-digit serial"},
+    EXCELTA_SHEET: {"customer": "Excelta Corporation", "label": "Excelta Corporation: 8-digit serial, barcode + RFID columns, counts up, never repeats",
+                    "detail": "Excelta Corporation sequential 8-digit serial", "sequential": True,
+                    "epc_note": "8-digit serial, barcode text and RFID EPC from it"},
 }
 SEQ_SHEET_KEYS = tuple(SEQ_FORMATS)       # data sheets that count up in one running series
 

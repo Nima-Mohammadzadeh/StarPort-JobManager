@@ -33,6 +33,9 @@ SEQ_SHEETS = {
 #   venture_seq: the last Venture Research sheet ended at serial 0000380020 (prefix
 #   34083328448A2E), so the series continues at 380021. The serial is 10 decimal digits.
     "venture_seq": {"first": 380_021, "max": 9_999_999_999, "limit": "a 10-digit serial holds"},
+#   excelta_seq: Excelta's proof sheet had one row, serial 00015034. That number went out on the
+#   proof, so it counts as used and the series starts at 15035. The serial is 8 decimal digits.
+    "excelta_seq": {"first": 15_035, "max": 99_999_999, "limit": "an 8-digit serial holds"},
 }
 
 _lock = threading.Lock()

@@ -35,7 +35,7 @@ from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, TH
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
-                        generate_db_files, generate_go2_files, generate_cdo_files, generate_venture_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET, SEQ_SHEET_KEYS,
+                        generate_db_files, generate_go2_files, generate_cdo_files, generate_seq_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET, SEQ_SHEET_KEYS,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
 from job_build import Build, Stop, refuse
@@ -482,7 +482,7 @@ def _generate_data_files(kind, folder, upc, label, start, qty, qty_db, **opts):
     if kind == CDO_SHEET:
         return generate_cdo_files(folder, label, start, qty, qty_db)
     if kind in SEQ_SHEET_KEYS:
-        return generate_venture_files(folder, label, start, qty, qty_db)
+        return generate_seq_files(kind, folder, label, start, qty, qty_db)
     return generate_go2_files(folder, label, qty, qty_db, **opts)
 
 
