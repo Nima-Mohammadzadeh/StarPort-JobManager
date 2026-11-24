@@ -25,3 +25,11 @@ auto_print    = 1
 # Blank = the PDF app's own Print command. For no flash of a viewer window, install SumatraPDF and use:
 # print_command = "C:\Program Files\SumatraPDF\SumatraPDF.exe" -print-to-default -silent "{file}"
 print_command =
+
+[printing]
+# Who prints the roll tracking sheet when a job is created:
+#   host    = this PC, silently, to its default printer (needs Edge or Chrome; the proof prints the same way)
+#   browser = each operator's own browser (a print dialog unless that PC uses the Job Manager shortcut)
+roll_sheet = host
+# Blank = find Microsoft Edge or Chrome by itself.
+browser =

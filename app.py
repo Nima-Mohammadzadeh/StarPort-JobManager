@@ -36,7 +36,7 @@ from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
                         generate_db_files, generate_go2_files, generate_cdo_files, generate_seq_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET, SEQ_SHEET_KEYS,
-                        sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
+                        sheet_customer, qc_file_name, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
 from job_build import Build, Stop, refuse
 import migrations as MIG
@@ -45,6 +45,7 @@ import serial_store as SS
 import sheet_serials as SHEETS_SEQ
 import backup
 import proofs as PROOFS
+import rollprint as ROLLPRINT
 from generators import decode_epc
 from checklist_generator import generate_checklist_html
 from lists import CUSTOMERS, LABEL_SIZES
@@ -312,6 +313,7 @@ def create_job(data: dict) -> tuple[dict, int]:
         _copy_proof(build, s)
         result = _save_new_job(build, s)
         _print_proof(s, result)
+        _print_roll_sheet(s, result)
         return result
     except Stop as stop:
         return stop.answer
@@ -592,6 +594,28 @@ def _print_proof(s, result):
             conn.commit()
     except Exception:
         pass
+
+
+def _print_roll_sheet(s, result):
+    """Host PC prints the new job's roll tracking sheet (queued; the job never waits for the printer)."""
+    body, code = result
+    if code != 201 or not s.rolls or not ROLLPRINT.host_prints():
+        return
+    html = os.path.join(s.job_dir, qc_file_name({**body["job"], "po_clean": clean_po(body["job"].get("po_number"))}))
+    if not os.path.isfile(html):
+        body["warnings"].append("The roll sheet file is missing, so it was not printed.")
+        return
+    job_id, who, label = s.job_id, s.created_by, s.ticket or s.job_number
+
+    def note(message, failed):
+        try:
+            with DB.connect() as conn:
+                log_activity(conn, "print_failed" if failed else "print", job_id, message, who)
+                conn.commit()
+        except Exception:
+            pass
+    ROLLPRINT.submit(html, s.job_dir, label, note)
+    body["roll_sheet_printing"] = "host"
 
 
 def _save_new_job(build, s):
@@ -935,6 +959,7 @@ def api_meta():
         "data_sheets": [{"key": k, "customer": c["customer"], "label": c["label"], "detail": c["detail"],
                          "sequential": c["sequential"], "epc_note": c["epc_note"]} for k, c in DATA_SHEETS.items()],
         "cdo_next": SHEETS_SEQ.next_start(CDO_SHEET),
+        "roll_print_host": ROLLPRINT.host_prints(),
         "seq_next": {k: SHEETS_SEQ.next_start(k) for k in SEQ_SHEET_KEYS},
     })
 

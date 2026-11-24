@@ -105,11 +105,14 @@ a second, empty one. A database newer than the app is refused the same way.
   default printer. If the UPC has several proofs, this customer's newest is used and the job shows a warning. No match,
   an unreachable `Z:` or a missing PDF never stops a job; it just adds a warning. The registry is only read, never changed.
   `auto_print = 0` copies without printing; `print_command` can name SumatraPDF for a silent print.
-- **Roll sheet prints by itself**: creating a job that has rolls (one job or a batch) prints its roll tracking
-  sheet on the PC that made it. For no print dialog at all, run the one-time setup in Settings, This PC,
-  **Download shortcut setup for this PC**: it puts a **Job Manager** shortcut on the desktop that opens the app in its
-  own Edge (or Chrome) window with silent printing, so sheets go straight to that PC's default printer. In an ordinary
-  browser window the print dialog opens instead. Each PC can switch it off in the same panel.
+- **Roll sheet and proof print silently on the host PC**: when a job with rolls is created, the host PC turns its roll
+  tracking sheet into a PDF with Edge or Chrome running without a window (saved as `Print\Roll sheet.pdf` in the job
+  folder) and prints it on its default printer, then prints the proof the same way. Nobody needs a shortcut or any setup
+  on their own PC. Printing uses SumatraPDF if it is installed (no window at all), else Adobe Reader, else Windows' own
+  Print. Sheets print one after another in the background, so creating a job never waits for the printer. A sheet that
+  fails to print is recorded in the job's activity log; the job and its files are unaffected. `config.ini` `[printing]`
+  `roll_sheet = browser` goes back to each PC's own browser printing (the old shortcut method). If the host PC has
+  neither Edge nor Chrome, the browser method is used automatically.
 - **Roll tracking**: pick any roll; Complete, Left in progress (with a note), Reopen.
   The app asks who did it at that moment. Nobody signs in.
 - **Tools**: roll tracker sheet, checklist, encoding database, serial lookup.

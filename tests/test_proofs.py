@@ -134,14 +134,20 @@ def _win(monkeypatch, proofs, startfile):
     monkeypatch.setattr(proofs.os, "startfile", startfile, raising=False)
 
 
-def test_no_print_verb_falls_back_to_an_installed_pdf_program(lib, monkeypatch):
-    p = lib.proofs; ran = []
-    def no_app(path, verb):
-        e = OSError(); e.winerror = 1155; raise e
-    _win(monkeypatch, p, no_app)
+def test_installed_pdf_program_is_used_first_and_silently(lib, monkeypatch):
+    p = lib.proofs; ran, verb = [], []
+    _win(monkeypatch, p, lambda path, v: verb.append(path))
     monkeypatch.setattr(p, "_find_pdf_printer", lambda: (lambda f: ["Sumatra.exe", "-print-to-default", "-silent", f]))
     monkeypatch.setattr(p.subprocess, "Popen", lambda cmd, **k: ran.append(cmd))
-    assert lib.real_print("a.pdf") is None and ran == [["Sumatra.exe", "-print-to-default", "-silent", "a.pdf"]]
+    assert lib.real_print("a.pdf") is None
+    assert ran == [["Sumatra.exe", "-print-to-default", "-silent", "a.pdf"]] and verb == []
+
+
+def test_without_one_windows_own_print_is_used(lib, monkeypatch):
+    p = lib.proofs; verb = []
+    _win(monkeypatch, p, lambda path, v: verb.append((path, v)))
+    monkeypatch.setattr(p, "_find_pdf_printer", lambda: None)
+    assert lib.real_print("a.pdf") is None and verb == [("a.pdf", "print")]
 
 
 def test_no_print_verb_and_no_pdf_program_says_what_to_install(lib, monkeypatch):
@@ -157,4 +163,5 @@ def test_other_print_errors_are_reported_as_before(lib, monkeypatch):
     p = lib.proofs
     def boom(path, verb): raise OSError("offline")
     _win(monkeypatch, p, boom)
+    monkeypatch.setattr(p, "_find_pdf_printer", lambda: None)
     assert "offline" in lib.real_print("a.pdf")
