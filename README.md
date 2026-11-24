@@ -99,6 +99,12 @@ a second, empty one. A database newer than the app is refused the same way.
   files and rolls are never changed. A completed job reopens. The job's own quantity and start serial stay
   as ordered; each addition is kept in the `job_additions` table, which the serial safety nets, backups
   and the restore tool all read.
+- **Proofs come with the job**: a new job with a UPC looks the UPC up in the proof registry (`Proof_Registry.xlsx`,
+  sheet Proof Registry, column UPC / Item Number; path set in `config.ini` under `[proofs]`), copies the approved
+  PDF into the job's `Proof` folder, checks the copy against the registry's SHA-256, and prints it on the **host PC's**
+  default printer. If the UPC has several proofs, this customer's newest is used and the job shows a warning. No match,
+  an unreachable `Z:` or a missing PDF never stops a job; it just adds a warning. The registry is only read, never changed.
+  `auto_print = 0` copies without printing; `print_command` can name SumatraPDF for a silent print.
 - **Roll sheet prints by itself**: creating a job that has rolls (one job or a batch) prints its roll tracking
   sheet on the PC that made it. For no print dialog at all, run the one-time setup in Settings, This PC,
   **Download shortcut setup for this PC**: it puts a **Job Manager** shortcut on the desktop that opens the app in its

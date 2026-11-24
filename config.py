@@ -42,6 +42,11 @@ DB_PATH             = _db  or os.path.join(HERE, "local.db")
 SERIAL_REGISTRY_DIR = _reg or os.path.join(HERE, "serial_registry")
 Z_DRIVE_BASE        = _zdr or os.path.join(str(Path.home()), "Documents", "JobManager", "Customers")
 THUMBNAIL_DIR       = os.path.join(HERE, "template_thumbnails")
+
+# Proof library: new jobs with a UPC copy their approved proof into the job's Proof folder and print it.
+PROOF_REGISTRY      = _norm(_get("proofs", "registry", r"Z:\Proofs\_Proof_Registry\Proof_Registry.xlsx"))
+PROOF_AUTO_PRINT    = _get("proofs", "auto_print", "1").lower() not in ("0", "no", "false", "off")
+PROOF_PRINT_COMMAND = _get("proofs", "print_command")      # blank = the PDF app's own Print; else e.g. SumatraPDF with {file}
 Z_IS_DEFAULT        = not _zdr          # no job-folder location set: folders stay on this PC
 
 HOST = _get("server", "host", "0.0.0.0")
