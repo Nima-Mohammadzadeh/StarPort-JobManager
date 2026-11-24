@@ -35,7 +35,7 @@ from config import (DB_PATH, Z_DRIVE_BASE, Z_IS_DEFAULT, SERIAL_REGISTRY_DIR, TH
 from serial_registry import (allocate_serials, peek_next_start, get_upc_history,
                              SERIAL_START_DEFAULT)
 from generators import (validate_upc, production_qty, roll_plan, roll_plan_plain, db_file_split,
-                        generate_db_files, generate_go2_files, generate_cdo_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET,
+                        generate_db_files, generate_go2_files, generate_cdo_files, generate_venture_files, DATA_SHEETS, GO2_SHEET, CDO_SHEET, SEQ_SHEET_KEYS,
                         sheet_customer, roll_plan_seq, read_go2_epcs, go2_file_names, sheet_size_error, generate_qc_sheet, qc_html, _safe_name, safe_folder_name)
 import db as DB
 from job_build import Build, Stop, refuse
@@ -460,8 +460,8 @@ def _reserve_numbers(build, kind, upc, job_number, qty, note, who, **serial_opts
         build.took("serials")
         build.keep()
         return alloc
-    if kind == CDO_SHEET:
-        alloc = SHEETS_SEQ.reserve(CDO_SHEET, job_number, qty, who=who, note=note)
+    if kind in SEQ_SHEET_KEYS:
+        alloc = SHEETS_SEQ.reserve(kind, job_number, qty, who=who, note=note)
         build.took("sheet numbers", undo=lambda why: SHEETS_SEQ.void(alloc, why))
         return alloc
     return None
@@ -470,8 +470,8 @@ def _reserve_numbers(build, kind, upc, job_number, qty, note, who, **serial_opts
 def _roll_plan(kind, upc, start, qty, lpr, first_roll=1):
     if kind == "standard":
         return roll_plan(upc, start, qty, lpr, first_roll)
-    if kind == CDO_SHEET:
-        return roll_plan_seq(start, qty, lpr, first_roll)
+    if kind in SEQ_SHEET_KEYS:
+        return roll_plan_seq(start, qty, lpr, first_roll, kind)
     return roll_plan_plain(qty, lpr, first_roll)
 
 
@@ -481,6 +481,8 @@ def _generate_data_files(kind, folder, upc, label, start, qty, qty_db, **opts):
         return generate_db_files(folder, upc, start, qty, qty_db, **opts)
     if kind == CDO_SHEET:
         return generate_cdo_files(folder, label, start, qty, qty_db)
+    if kind in SEQ_SHEET_KEYS:
+        return generate_venture_files(folder, label, start, qty, qty_db)
     return generate_go2_files(folder, label, qty, qty_db, **opts)
 
 
@@ -506,13 +508,13 @@ def _take_new_job_numbers(build, s):
         if not s.alloc["journaled"] and SS.journal_path():
             build.warn("The serial journal (backup folder) couldn't be written. The range is still "
                        "saved in the registry and the app database.")
-    elif s.kind == CDO_SHEET:
+    elif s.kind in SEQ_SHEET_KEYS:
         try:
-            s.seq_alloc = _reserve_numbers(build, CDO_SHEET, None, s.job_number, s.total_qty, base, s.created_by)
+            s.seq_alloc = _reserve_numbers(build, s.kind, None, s.job_number, s.total_qty, base, s.created_by)
         except SHEETS_SEQ.SheetSerialError as e:
             raise build.stop(f"{e} Nothing was created.", 400)
         except Exception as e:
-            raise build.stop(f"CDO serial allocation failed, job not created: {e}", 500)
+            raise build.stop(f"{DATA_SHEETS[s.kind]['customer']} serial allocation failed, job not created: {e}", 500)
     s.start_serial = s.alloc["start"] if s.alloc else (s.seq_alloc["start"] if s.seq_alloc else None)
 
 
@@ -708,8 +710,8 @@ def _preview_addition(a) -> dict:
                    files=[f"{job['upc']}{a.tag}{suffix(i)}.xlsx" for i in range(1, n_files + 1)])
         if nxt + qty - 1 > SS.MAX_SERIAL:
             raise refuse("That range runs past the largest serial an EPC can hold.", 400)
-    elif a.kind == CDO_SHEET:
-        nxt = SHEETS_SEQ.next_start(CDO_SHEET)
+    elif a.kind in SEQ_SHEET_KEYS:
+        nxt = SHEETS_SEQ.next_start(a.kind)
         out.update(serial_start=nxt, serial_end=nxt + qty - 1, files=go2_file_names(a.label, n_files))
     else:
         out.update(serial_start=None, serial_end=None, files=go2_file_names(a.label, n_files))
@@ -740,7 +742,7 @@ def _write_addition_files(build, a):
     a.rolls = _roll_plan(a.kind, job["upc"], start, a.qty, a.lpr, a.first_roll) if a.lpr else []
     try:
         opts = ({"tag": a.tag} if a.kind == "standard"
-                else {"exclude": read_go2_epcs(a.folder)} if a.kind != CDO_SHEET else {})
+                else {"exclude": read_go2_epcs(a.folder)} if a.kind not in SEQ_SHEET_KEYS else {})
         gen = _generate_data_files(a.kind, a.folder, job["upc"], a.label, start, a.qty, a.qty_db, **opts)
     except Exception as e:
         raise build.stop(f"The data files could not be written, so nothing was added: {e}"
@@ -894,8 +896,9 @@ def api_meta():
         "names": _recent_names(), "serials": {**SS.health(), "registry_gaps": _registry_gap_count["n"]},
         "settings": get_settings(), "backup": backup_health(),
         "data_sheets": [{"key": k, "customer": c["customer"], "label": c["label"], "detail": c["detail"],
-                         "sequential": c["sequential"]} for k, c in DATA_SHEETS.items()],
+                         "sequential": c["sequential"], "epc_note": c["epc_note"]} for k, c in DATA_SHEETS.items()],
         "cdo_next": SHEETS_SEQ.next_start(CDO_SHEET),
+        "seq_next": {k: SHEETS_SEQ.next_start(k) for k in SEQ_SHEET_KEYS},
     })
 
 

@@ -45,6 +45,10 @@ a second, empty one. A database newer than the app is refused the same way.
   ended, so a number is never used twice. The series is kept in the database, `serial_registry/data_sheets/cdo_seq.txt`
   and `sheet_serial_journal.csv` in the backup folder; the next number is past the highest of the three. A job
   that fails after taking numbers leaves a marked gap, never a repeat. It stops at `FFFFFFFF`.
+- **Venture Research data sheet** (customer Venture Research only): `Prefix` + `Serial` + `EPC`, the same columns as the
+  last sheet we ran. Prefix is always `34083328448A2E`, Serial is 10 digits with leading zeros, EPC is prefix + serial
+  (24 characters, written as values, not the old `=A&B` formula). One running series like CDO, kept in the same three
+  places (`venture_seq`). The last sheet ended at `0000380020`, so the first job starts at 380,021. It stops at 9,999,999,999.
 - **Picking a sheet**: the Customer data sheet box always shows on Special jobs. Typing a customer that has a sheet
   (GO2, CDO, any capitalization) switches to Special and selects it; a sheet only works for its own customer.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel
