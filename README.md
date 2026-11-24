@@ -45,6 +45,16 @@ a second, empty one. A database newer than the app is refused the same way.
   ended, so a number is never used twice. The series is kept in the database, `serial_registry/data_sheets/cdo_seq.txt`
   and `sheet_serial_journal.csv` in the backup folder; the next number is past the highest of the three. A job
   that fails after taking numbers leaves a marked gap, never a repeat. It stops at `FFFFFFFF`.
+- **Venture Research data sheet** (customer Venture Research only): `Prefix` + `Serial` + `EPC`, the same columns as the
+  last sheet we ran. Prefix is always `34083328448A2E`, Serial is 10 digits with leading zeros, EPC is prefix + serial
+  (24 characters, written as values, not the old `=A&B` formula). One running series like CDO, kept in the same three
+  places (`venture_seq`). The last sheet ended at `0000380020`, so the first job starts at 380,021. It stops at 9,999,999,999.
+- **Excelta Corporation data sheet** (customer Excelta Corporation only): `leading | filler | serial | barcode hr | rfid & barcode`,
+  the layout of their proof. Leading is `2853`, filler `-0000-0000-0000-`, serial is 8 digits with leading zeros,
+  barcode hr is `2853-0000-0000-0000-` + first 4 + `-` + last 4 serial digits, and rfid & barcode is `2853` + 12 zeros + serial
+  (24 characters). Written as values, not the old formulas. One running series (`excelta_seq`), recorded like CDO and
+  Venture, never repeated, and a job that fails leaves a marked gap. The proof used serial 00015034, so the first job
+  starts at 15,035. It stops at 99,999,999.
 - **Picking a sheet**: the Customer data sheet box always shows on Special jobs. Typing a customer that has a sheet
   (GO2, CDO, any capitalization) switches to Special and selects it; a sheet only works for its own customer.
 - **One job per ticket**: a ticket that already has a job can't be used again (cancel

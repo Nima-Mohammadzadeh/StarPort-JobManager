@@ -2095,6 +2095,7 @@ function setJobType(t) {
 const sheetDefs = () => (META && META.data_sheets) || [];
 const sheetForCustomer = () => { const n = N('customer').value.trim().toLowerCase(); const d = sheetDefs().find(x => x.customer.toLowerCase() === n); return d ? d.key : ''; };
 const sheetDef = k => sheetDefs().find(x => x.key === k);
+const seqNext = k => ((META && META.seq_next) || {})[k] || 0;
 let N_SHEET_AUTO = '', N_AUTO_SPECIAL = false;
 function fillSheetOptions() {
   N('sheet').innerHTML = sheetDefs().map(d => `<option value="${esc(d.key)}">${esc(d.label)}</option>`).join('') + '<option value="">None</option>';
@@ -2123,7 +2124,7 @@ function sheetChanged() {
   $('#n-qtydb-wrap').style.visibility = (N_TYPE === 'standard' || v) ? '' : 'hidden';
   $('#n-sheet-hint').style.color = prob ? 'var(--red)' : '';
   $('#n-sheet-hint').textContent = prob || (!d ? 'No data sheet will be written for this job.'
-    : d.sequential ? `Serial counts up in one running series and is never reused. The EPC is the serial as 8 hex digits. Next free serial: ${fmt(META.cdo_next)}.`
+    : d.sequential ? `Serial counts up in one running series and is never reused. ${d.epc_note}. Next free serial: ${fmt(seqNext(v))}.`
     : 'Every EPC starts with E2004 and is unique. The numbers are written as fixed values and never change.');
   updateSummary();
 }
@@ -2139,7 +2140,7 @@ function openNewJob() {
   N('files').value = ''; N('by').value = operator(); N_TICKET_DUP = null; $('#n-ticket-msg').textContent = ''; setJobType('standard');
   renderTemplateMatch();
   updateSummary(); openOv('ov-new'); setTimeout(() => N('ticket').focus(), 30);
-  api('/api/meta').then(m => { META.cdo_next = m.cdo_next; sheetChanged(); }).catch(() => {});   // the CDO series moves as jobs are made
+  api('/api/meta').then(m => { META.cdo_next = m.cdo_next; META.seq_next = m.seq_next; sheetChanged(); }).catch(() => {});   // the CDO series moves as jobs are made
 }
 function updateSummary() {
   const qty = +N('qty').value || 0, ov = +N('ov').value || 0, lpr = +N('lpr').value || 0, per = +N('qtydb').value || 0;
@@ -2157,7 +2158,7 @@ function updateSummary() {
   const sheet = N('sheet').value;
   if (N_TYPE === 'special' && qty && !sheet) rows.push(['Serials', 'None (special job)']);
   const sd = sheetDef(sheet);
-  if (sd && qty) rows.push(sd.sequential ? ['Serials', `${fmt(META.cdo_next)} – ${fmt(META.cdo_next + total - 1)} (EPC = 8 hex digits)`]
+  if (sd && qty) rows.push(sd.sequential ? ['Serials', `${fmt(seqNext(sheet))} – ${fmt(seqNext(sheet) + total - 1)} (${sd.epc_note})`]
                                          : ['EPCs', `${fmt(total)} random, all E2004…`]);
   if (sheet && qty) rows.push(['Data files', dbSplit(total, per).map(fmt).join(' + ')]);
   if (qty && N('upc').value) {

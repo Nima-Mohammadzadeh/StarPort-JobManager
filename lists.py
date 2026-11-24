@@ -35,7 +35,7 @@ CUSTOMERS = [
     "Central (MCC)","Core Pacific","Dakota Stone","Decision Point",
     "Desoto Mill","Diamond Wipes","Direct Packaging","Dyagram",
     "Dyagram (LSC Communations)","EasySoft","Ecartes",
-    "Enterprise Marketing Products","Expert Gardener","Fabry Industries",
+    "Enterprise Marketing Products","Excelta Corporation","Expert Gardener","Fabry Industries",
     "Fas Pak","First Label","Forestry Systems","Fortis Solutions Group",
     "FS Label - Clear Wets","FuerzGrafica","G2 ID Source","Go2Partners",
     "Goodwin Ammonia Company","Grace Label","H3 SOLUTIONS","Harmoni",
