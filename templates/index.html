@@ -3214,6 +3214,7 @@ const autoPrintOn = () => lsGet('jm_autoprint') !== '0';
 const silentPrint = () => lsGet('jm_silentprint') === '1';
 const PRINT_Q = []; let PRINT_BUSY = false;
 function printRollSheets(jobs) {
+  if (META && META.roll_print_host) return;          // the host PC prints it, silently
   if (!autoPrintOn() || !jobs.length) return;
   PRINT_Q.push(...jobs); pumpPrint();
 }
@@ -3238,6 +3239,8 @@ function pumpPrint() {
   document.body.appendChild(f);
 }
 function showPrintState() {
+  if (META && META.roll_print_host) { $('#s-autoprint').checked = false; $('#s-autoprint').disabled = true;
+    $('#print-state').innerHTML = '<span class="pill st-complete">Host PC prints</span> New roll sheets and proofs print silently on the host PC. Nothing to set up on this PC.'; return; }
   $('#s-autoprint').checked = autoPrintOn();
   $('#print-state').innerHTML = !autoPrintOn()
     ? '<span class="pill st-cancelled">Off on this PC</span> Print roll sheets from the job when you need them.'

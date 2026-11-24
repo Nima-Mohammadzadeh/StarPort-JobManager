@@ -46,6 +46,10 @@ THUMBNAIL_DIR       = os.path.join(HERE, "template_thumbnails")
 # Proof library: new jobs with a UPC copy their approved proof into the job's Proof folder and print it.
 PROOF_REGISTRY      = _norm(_get("proofs", "registry", r"Z:\Proofs\_Proof_Registry\Proof_Registry.xlsx"))
 PROOF_AUTO_PRINT    = _get("proofs", "auto_print", "1").lower() not in ("0", "no", "false", "off")
+# Roll tracking sheets: "host" = printed silently by this PC when a job is created (needs Edge or Chrome here);
+# "browser" = each operator's own browser prints it (needs the per-PC shortcut for no dialog).
+ROLL_SHEET_PRINT    = "browser" if _get("printing", "roll_sheet", "host").lower() == "browser" else "host"
+PRINT_BROWSER       = _norm(_get("printing", "browser"))       # blank = find Edge or Chrome by itself
 PROOF_PRINT_COMMAND = _get("proofs", "print_command")      # blank = the PDF app's own Print; else e.g. SumatraPDF with {file}
 Z_IS_DEFAULT        = not _zdr          # no job-folder location set: folders stay on this PC
 
