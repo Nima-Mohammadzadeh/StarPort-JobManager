@@ -126,19 +126,53 @@ def copy_into(proof, job_dir):
     return dest, warn
 
 
+def _find_pdf_printer():
+    """A PDF program that can print to the default printer without the Windows "print" verb (which only exists
+    when the PDF app registers one; Edge and some Reader installs don't). Returns an argv list builder or None."""
+    pf = [os.environ.get(k) for k in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA")]
+    pf = [p for p in pf if p]
+    for base in pf:
+        for rel in (r"SumatraPDF\SumatraPDF.exe", r"Programs\SumatraPDF\SumatraPDF.exe"):
+            exe = os.path.join(base, rel)
+            if os.path.isfile(exe):
+                return lambda f, exe=exe: [exe, "-print-to-default", "-silent", f]
+    for base in pf:
+        for rel in (r"Adobe\Acrobat DC\Acrobat\Acrobat.exe", r"Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+                    r"Adobe\Acrobat Reader\Reader\AcroRd32.exe", r"Adobe\Acrobat Reader\Acrobat.exe",
+                    r"Adobe\Reader 11.0\Reader\AcroRd32.exe"):
+            exe = os.path.join(base, rel)
+            if os.path.isfile(exe):
+                return lambda f, exe=exe: [exe, "/t", f]            # Acrobat: print to the default printer, then close
+    return None
+
+
+NO_PRINTER_HELP = ("Windows has no PDF program set up to print. Install SumatraPDF (free) on this PC, or Adobe Reader, "
+                   "and Job Manager will use it by itself. The proof is already in the job's Proof folder.")
+
+
 def print_pdf(path):
-    """Send the PDF to the host PC's default printer. Returns an error message, or None when it was handed to the printer."""
+    """Send the PDF to the host PC's default printer. Returns an error message, or None when it was handed to the printer.
+    Order: the print_command from config.ini, then Windows' own Print for PDFs, then SumatraPDF or Adobe if installed."""
     try:
         if PROOF_PRINT_COMMAND:
-            cmd = PROOF_PRINT_COMMAND.replace("{file}", path)
-            subprocess.Popen(cmd, shell=(SYSTEM == "Windows"))
-        elif SYSTEM == "Windows":
-            os.startfile(path, "print")                       # the PDF app's own Print verb: default printer
-        else:
+            subprocess.Popen(PROOF_PRINT_COMMAND.replace("{file}", path), shell=(SYSTEM == "Windows"))
+            return None
+        if SYSTEM != "Windows":
             subprocess.Popen(["lp", path])
+            return None
+        try:
+            os.startfile(path, "print")                       # the PDF app's own Print verb: default printer
+            return None
+        except OSError as first:
+            if getattr(first, "winerror", None) != 1155:      # 1155 = no app has a Print command for PDFs
+                raise
+            build = _find_pdf_printer()
+            if not build:
+                return f"The proof was copied but not printed. {NO_PRINTER_HELP}"
+            subprocess.Popen(build(path))
+            return None
     except Exception as e:
         return f"The proof was copied but could not be sent to the printer: {e}"
-    return None
 
 
 def attach(upc, customer, job_dir, print_it=None, printer=None):

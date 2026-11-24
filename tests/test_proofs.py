@@ -31,12 +31,13 @@ def _row(pid, cust, item, pdf, sha="", date="2026-01-01"):
 def lib(jm, tmp_path, monkeypatch):
     import proofs
     printed = []
+    real_print = proofs.print_pdf
     reg = str(tmp_path / "Proof_Registry.xlsx")
     monkeypatch.setattr(proofs, "PROOF_REGISTRY", reg)
     monkeypatch.setattr(proofs, "print_pdf", lambda p: printed.append(p))
     monkeypatch.setattr(jm.app, "PROOF_AUTO_PRINT", True)
     class L: pass
-    l = L(); l.reg, l.printed, l.dir, l.proofs = reg, printed, tmp_path, proofs
+    l = L(); l.reg, l.printed, l.dir, l.proofs, l.real_print = reg, printed, tmp_path, proofs, real_print
     return l
 
 
@@ -126,3 +127,34 @@ def test_failed_job_prints_nothing(jm, lib):
     _registry(lib.reg, [_row("PF-F", "Acme", upc, pdf)])
     res, code = jm.app.create_job({"customer": "Acme", "title": "", "job_ticket": "PF1", "upc": upc, "quantity": 100, "lpr": 50})
     assert code == 400 and lib.printed == []
+
+
+def _win(monkeypatch, proofs, startfile):
+    monkeypatch.setattr(proofs, "SYSTEM", "Windows"); monkeypatch.setattr(proofs, "PROOF_PRINT_COMMAND", "")
+    monkeypatch.setattr(proofs.os, "startfile", startfile, raising=False)
+
+
+def test_no_print_verb_falls_back_to_an_installed_pdf_program(lib, monkeypatch):
+    p = lib.proofs; ran = []
+    def no_app(path, verb):
+        e = OSError(); e.winerror = 1155; raise e
+    _win(monkeypatch, p, no_app)
+    monkeypatch.setattr(p, "_find_pdf_printer", lambda: (lambda f: ["Sumatra.exe", "-print-to-default", "-silent", f]))
+    monkeypatch.setattr(p.subprocess, "Popen", lambda cmd, **k: ran.append(cmd))
+    assert lib.real_print("a.pdf") is None and ran == [["Sumatra.exe", "-print-to-default", "-silent", "a.pdf"]]
+
+
+def test_no_print_verb_and_no_pdf_program_says_what_to_install(lib, monkeypatch):
+    p = lib.proofs
+    def no_app(path, verb):
+        e = OSError(); e.winerror = 1155; raise e
+    _win(monkeypatch, p, no_app)
+    monkeypatch.setattr(p, "_find_pdf_printer", lambda: None)
+    assert "SumatraPDF" in lib.real_print("a.pdf")
+
+
+def test_other_print_errors_are_reported_as_before(lib, monkeypatch):
+    p = lib.proofs
+    def boom(path, verb): raise OSError("offline")
+    _win(monkeypatch, p, boom)
+    assert "offline" in lib.real_print("a.pdf")
