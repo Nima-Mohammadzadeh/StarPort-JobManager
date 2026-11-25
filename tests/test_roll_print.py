@@ -91,3 +91,23 @@ def test_to_pdf_runs_headless_with_its_own_profile(monkeypatch, tmp_path):
     cmd = seen["cmd"]
     assert "--headless=new" in cmd and any(c.startswith("--user-data-dir=") for c in cmd) and cmd[-1].startswith("file://")
     assert not (tmp_path / "Roll sheet.pdf.part").exists()
+
+
+def test_create_from_another_pc_is_printed_by_the_host_and_says_so(jm, host):
+    """The server runs on the host, so a job made from any PC prints there; the answer tells that PC's page not to print it."""
+    c = jm.app.app.test_client()
+    row = {"customer": "Acme", "title": "Remote", "job_ticket": "RM1", "upc": jm.upc(20), "quantity": 100, "lpr": 50}
+    out = c.post("/api/jobs/batch", json={"jobs": [row]}, environ_overrides={"REMOTE_ADDR": "10.1.2.3"}).get_json()
+    host.rollprint.wait_idle()
+    assert out["results"][0]["roll_sheet_printing"] == "host" and len(host.printed) == 1
+
+
+def test_browser_mode_answer_does_not_claim_host_printing(jm, host, monkeypatch):
+    monkeypatch.setattr(host.rollprint, "ROLL_SHEET_PRINT", "browser")
+    out = jm.app.app.test_client().post("/api/jobs/batch", json={"jobs": [
+        {"customer": "Acme", "title": "B", "job_ticket": "RM2", "upc": jm.upc(21), "quantity": 100, "lpr": 50}]}).get_json()
+    assert out["results"][0]["roll_sheet_printing"] is None
+
+
+def test_page_is_never_cached(jm):
+    assert jm.app.app.test_client().get("/").headers["Cache-Control"] == "no-store"

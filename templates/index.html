@@ -2318,7 +2318,7 @@ async function submitNewJob(allowDup = false, offline = null) {
     }
     toast(`${r.job_number} created` + (r.serial_alloc ? ` — serials ${fmt(r.serial_alloc.start)}–${fmt(r.serial_alloc.end)}` : ''));
     r.warnings.forEach(w => toast(w, true));
-    if (r.rolls) printRollSheets([{id: r.job.id, number: r.job_number}]);
+    if (r.rolls && !r.roll_sheet_printing) printRollSheets([{id: r.job.id, number: r.job_number}]);   // the host PC prints it itself when it says so
     STATUS_FILTER = 'all'; if (!$('#v-rolls').classList.contains('on')) { showView('jobs'); await loadJobs(); openJob(r.job.id); } else loadFloor();
     loadMeta();
   } catch (e) {
@@ -2402,7 +2402,7 @@ async function submitBatch() {
     });
     $('#b-msg').textContent = `${d.created} created` + (d.failed ? `, ${d.failed} not created` : '');
     if (d.created) { loadJobs(); loadMeta(); }
-    printRollSheets(d.results.filter(res => res.ok && res.rolls && res.job_id).map(res => ({id: res.job_id, number: res.job_number})));
+    printRollSheets(d.results.filter(res => res.ok && res.rolls && res.job_id && !res.roll_sheet_printing).map(res => ({id: res.job_id, number: res.job_number})));
   } catch (e) { $('#b-msg').textContent = e.message; }
   finally { btn.textContent = 'Create jobs'; validateBatch(true); }
 }

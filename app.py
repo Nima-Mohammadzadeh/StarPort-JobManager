@@ -909,7 +909,11 @@ def ensure_rolls(conn, job: dict) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/")
 def index():
-    return render_template("index.html", version=APP_VERSION)
+    # Never cached: a PC that keeps an old copy of the page would keep printing roll sheets itself
+    # (a dialog in Edge) after the host PC took over printing.
+    resp = Response(render_template("index.html", version=APP_VERSION), mimetype="text/html")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/favicon.ico")
@@ -1105,6 +1109,7 @@ def api_batch_create():
         results.append({"row": i, "ok": made, "job_number": res.get("job_number"),
                         "job_id": (res.get("job") or {}).get("id") if made else None,
                         "rolls": res.get("rolls", 0) if made else 0,
+                        "roll_sheet_printing": res.get("roll_sheet_printing") if made else None,
                         "template": picked if code == 201 and (res.get("job") or {}).get("template_path") else None,
                         "error": res.get("error"), "duplicate_of": res.get("duplicate_of"),
                         "warnings": res.get("warnings", [])})
